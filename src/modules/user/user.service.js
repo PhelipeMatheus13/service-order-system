@@ -1,0 +1,37 @@
+const userRepository = require("./user.repository");
+const hashService = require("../../shared/services/hash.service");
+const {alreadyExists, notFound} = require("../../shared/errors/errors");
+const logger = require("../../shared/utils/logger");
+
+const createUser = async (data) => {
+    const exists = await userRepository.existsByEmail(data.email);
+    if (exists) throw alreadyExists({message: "Email already in use, please choose another"});
+
+    // Hash the password before saving the user
+    const hashedPassword = await hashService.hashPassword(data.password);
+
+    return userRepository.create({
+        ...data,
+        password: hashedPassword
+    });
+};
+
+const getUserById = async (id) => {
+    const user = await userRepository.findById(id);
+    if (!user) throw notFound({ message: "User not found" });
+    return user;
+};
+
+const deleteUserById = async (id) => {
+    const deletedRows = await userRepository.deleteById(id);
+
+    if (deletedRows === 0) {
+        throw notFound({ message: "User not found" });
+    }
+};
+
+module.exports =  {
+    createUser,
+    getUserById,
+    deleteUserById
+};

@@ -1,0 +1,56 @@
+components:
+    responses:
+        InternalError:
+            description: Internal error
+            content:
+                application/json:
+                    schema:
+                        allOf:
+                            - $ref: '#/components/schemas/Error'
+                            - type: object
+                              properties:
+                                  error:
+                                      properties:
+                                          code:
+                                              example: "INTERNAL_ERROR"
+                                          message:
+                                              example: "Internal server error"
+        RegisterValidationError:
+            description: Register validation error
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ValidationError'
+                    example:
+                        success: false
+                        error:
+                            code: "VALIDATION_ERROR"
+                            message: "Validation failed"
+                            details: [
+                                {"field":"name","message":"Name is required"},
+                                {"field":"email","message":"Please provide a valid email address"},
+                                {"field":"password","message":"Password must contain at least one special character"},
+                                {"field":"confirmPassword","message":"Passwords do not match"}
+                            ]
+        MissingUserIdError:
+            description: Invalid request, missing user id
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/Error'
+                    example:
+                        success: false
+                        error:
+                            code: "BAD_REQUEST"
+                            message: "User ID is required"
+        UserNotFoundError:
+            description: User not found or does not exist
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/Error'
+                    example:
+                        success: false
+                        error:
+                            code: "NOT_FOUND"
+                            message: "User not found"
