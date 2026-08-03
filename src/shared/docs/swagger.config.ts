@@ -38,7 +38,7 @@ const options: OAS3Options = {
     	security: [{ BearerAuth: [] }],
   	},
 	apis: [
-		"./src/modules/**/*.routes.js", // When the domain is migrated, these files change to router.ts.
+		"./src/modules/**/*.routes.ts",
     	"./src/shared/docs/components/*.yaml",
 	], 
 };
