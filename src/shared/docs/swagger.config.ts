@@ -1,6 +1,7 @@
-const swaggerJsdoc = require("swagger-jsdoc");
+import swaggerJsdoc, { type OAS3Options } from "swagger-jsdoc";
 
-const options = {
+
+const options: OAS3Options = {
   	definition: {
     	openapi: "3.0.0",
 		info: {
@@ -42,4 +43,4 @@ const options = {
 	], 
 };
 
-module.exports = swaggerJsdoc(options);
+export default swaggerJsdoc(options);
