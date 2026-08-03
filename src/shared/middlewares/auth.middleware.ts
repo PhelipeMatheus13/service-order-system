@@ -8,6 +8,9 @@ interface AuthenticatedUser {
     role: string;
 }
 
+// For now, we are extending this interface only within this file, 
+// as we consider it the responsibility of this authorization mechanism; 
+// however, if this class needs to be declared elsewhere, it would be worth making it global.
 interface AuthenticatedRequest extends Request {
     user: AuthenticatedUser;
 }
