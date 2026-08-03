@@ -1,16 +1,25 @@
-const rateLimit = require("express-rate-limit");
+import rateLimit from 'express-rate-limit';
+import type { RequestHandler } from "express";
+
+interface RateLimiterOptions {
+    identifier: string;
+    windowMs: number;
+    maxRequests: number;
+    errorMessage?: string;
+}
+
 
 /**
  * Creates and configures an Express rate limiter middleware.
  *
- * @param {Object} options - Rate limiter configuration.
- * @param {string} options.identifier - Name of the rate limiting policy exposed in the `RateLimit-Policy` header.
- * @param {number} options.windowMs - Time window in milliseconds.
- * @param {number} options.maxRequests - Maximum number of requests allowed within the time window.
- * @param {string} [options.errorMessage] - Custom error message returned when the rate limit is exceeded.
- * @returns {import("express").RequestHandler} Configured Express middleware.
+ * @param options - Rate limiter configuration.
+ * @param options.identifier - Name of the rate limiting policy exposed in the `RateLimit-Policy` header.
+ * @param options.windowMs - Time window in milliseconds.
+ * @param options.maxRequests - Maximum number of requests allowed within the time window.
+ * @param options.errorMessage - Custom error message returned when the rate limit is exceeded.
+ * @returns Configured Express middleware.
  */
-function createRateLimiter({ identifier, windowMs, maxRequests, errorMessage }) {
+const createRateLimiter = ({ identifier, windowMs, maxRequests, errorMessage }: RateLimiterOptions): RequestHandler => {
     return rateLimit({
         identifier,
         windowMs,
@@ -21,11 +30,11 @@ function createRateLimiter({ identifier, windowMs, maxRequests, errorMessage }) 
             success: false,
             error: {
                 code: "TOO_MANY_REQUESTS",
-                message: errorMessage || "Too many requests, please try again later",
+                message: errorMessage ?? "Too many requests, please try again later",
             },
         },
     });
-}
+};
 
 const globalLimiter = createRateLimiter({
     identifier: "global",
@@ -40,7 +49,7 @@ const registerLimiter = createRateLimiter({
     errorMessage: "Too many register attempts, please try again in a minute",
 });
 
-module.exports = {
+export {
     globalLimiter,
     registerLimiter,
 };

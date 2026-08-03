@@ -1,4 +1,6 @@
-const logger = require("../utils/logger");
+import type { ErrorRequestHandler } from "express";
+import logger from "../utils/logger.js";
+import { AppError } from "../errors/errors.js";
 
 /**
  * Global error handling middleware.
@@ -6,8 +8,9 @@ const logger = require("../utils/logger");
  * Handles operational errors and returns standardized error responses.
  * Unexpected errors are logged and returned as a 500 Internal Server Error.
  */
-const errorHandler = (err, req, res, next) => {
-    if (err.isOperational) {
+const errorHandler: ErrorRequestHandler =  (err, _req, res, _next) => {
+    // check if the object is an AppError.
+    if (err instanceof AppError) {
         return res.status(err.statusCode).json(err.toJSON());
     }
 
@@ -21,4 +24,4 @@ const errorHandler = (err, req, res, next) => {
     });
 };
 
-module.exports = errorHandler;
+export default errorHandler;
