@@ -1,8 +1,8 @@
-const express = require("express");
+import express  from "express";
 const router = express.Router();
-const userController = require("./user.controller");
-const { validateRegister } = require("./user.validators");
-const { registerLimiter } = require("../../shared/middlewares/rate-limiter.middleware");
+import userController from "./user.controller.js";
+import { validateRegister } from "./user.validators.js";
+import { registerLimiter } from "../../shared/middlewares/rate-limiter.middleware.js";
 
 /**
  *  @swagger
@@ -142,4 +142,4 @@ router.get("/:id", userController.getUser);
  */
 router.delete("/:id", userController.deleteUser);
 
-module.exports = router;
+export default router;

@@ -1,14 +1,15 @@
-const userRepository = require("./user.repository");
-const hashService = require("../../shared/services/hash.service");
-const {alreadyExists, notFound} = require("../../shared/errors/errors");
-const logger = require("../../shared/utils/logger");
+import type { RegisterInput, UserRecord } from "./user.types.js";
+import userRepository from "./user.repository.js";
+import { hashPassword } from "../../shared/services/hash.service.js";
+import { alreadyExists, notFound } from "../../shared/errors/errors.js";
 
-const createUser = async (data) => {
+
+const createUser = async (data: RegisterInput): Promise<string> => {
     const exists = await userRepository.existsByEmail(data.email);
     if (exists) throw alreadyExists({message: "Email already in use, please choose another"});
 
     // Hash the password before saving the user
-    const hashedPassword = await hashService.hashPassword(data.password);
+    const hashedPassword = await hashPassword(data.password);
 
     return userRepository.create({
         ...data,
@@ -16,13 +17,13 @@ const createUser = async (data) => {
     });
 };
 
-const getUserById = async (id) => {
+const getUserById = async (id: string): Promise<UserRecord> => {
     const user = await userRepository.findById(id);
     if (!user) throw notFound({ message: "User not found" });
     return user;
 };
 
-const deleteUserById = async (id) => {
+const deleteUserById = async (id:string): Promise<void> => {
     const deletedRows = await userRepository.deleteById(id);
 
     if (deletedRows === 0) {
@@ -30,8 +31,8 @@ const deleteUserById = async (id) => {
     }
 };
 
-module.exports =  {
+export default {
     createUser,
     getUserById,
-    deleteUserById
+    deleteUserById,
 };
