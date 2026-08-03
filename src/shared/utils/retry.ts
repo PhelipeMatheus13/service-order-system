@@ -1,6 +1,11 @@
-// Delays execution asynchronously without blocking the event loop
-function sleep(ms) {
+const sleep = (ms: number): Promise<void> => {
     return new Promise((resolve) => setTimeout(resolve, ms));
+};
+
+interface RetryOptions {
+    maxAttempts?: number;
+    delayMs?: number;
+    backoff?: number;
 }
 
 /**
@@ -8,16 +13,13 @@ function sleep(ms) {
  * Intermediate failures are silent — only the last error (after exhausting
  * all attempts) is thrown, so the caller decides how/whether to log it.
  *
- * @template T
- * @param {() => Promise<T>} fn - Async function to execute.
- * @param {Object} [options]
- * @param {number} [options.maxAttempts=3] - Total number of attempts (not retries after the first).
- * @param {number} [options.delayMs=1000] - Initial delay in ms before the first retry.
- * @param {number} [options.backoff=2] - Multiplier applied to the delay after each failed attempt.
- * @returns {Promise<T>} Resolves with fn's result on success.
- * @throws Re-throws the error from the last attempt if all attempts fail.
+ * @param fn - Async function to execute.
+ * @param options - Optional configuration.
+ * @param options.maxAttempts - Total number of attempts (not retries after the first). Defaults to `3`.
+ * @param options.delayMs - Initial delay in milliseconds before the first retry. Defaults to `1000`.
+ * @param options.backoff - Multiplier applied to the delay after each failed attempt. Defaults to `2`.
  */
-const withRetry = async (fn, options = {}) => {
+async function withRetry<TfnResult>(fn: () => Promise<TfnResult>, options: RetryOptions = {}): Promise<TfnResult> {
     const {
         maxAttempts = 3,
         delayMs = 1000,
@@ -25,7 +27,7 @@ const withRetry = async (fn, options = {}) => {
     } = options;
 
     let currentDelay = delayMs;
-    let lastError;
+    let lastError: unknown;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         try {
@@ -43,6 +45,4 @@ const withRetry = async (fn, options = {}) => {
     throw lastError;
 }
 
-module.exports = {
-    withRetry,
-};
+export { withRetry };

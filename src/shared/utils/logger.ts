@@ -1,5 +1,5 @@
-const pino = require("pino");
-const { getContext } = require("./request-context");
+import pino from "pino";
+import { getContext } from "./request-context.js";
 
 const isTest = process.env.NODE_ENV === "test";
 const isDevelopment = process.env.NODE_ENV === "development";
@@ -28,7 +28,7 @@ const logger = pino({
             },
         }
         // If it's not development, then just raw JSON
-        : undefined,
+        :undefined,
 
     // Redact sensitive information from logs, including passwords and tokens
     redact: {
@@ -41,16 +41,13 @@ const logger = pino({
             "*.password",
         ],
         censor: "**REDACTED**",
-    }, 
+    },
     
     // Must return a NEW object (not the live context reference) 
-    // mixinMergeStrategy mutates whatever mixin returns, which would permanently
-    // pollute the AsyncLocalStorage store with fields from any single log call. 
-    // Now returns a fresh copy on each log call (dies shortly after being used in that specific log)
     mixin: () => {
         const context = getContext();
         return context ? { ...context } : {};
     },
 });
 
-module.exports = logger;
+export default logger;
