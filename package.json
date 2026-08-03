@@ -14,9 +14,9 @@
   },
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "cross-env NODE_ENV=development tsx watch src/server.ts",
     "build": "tsc",
-    "start": "node dist/server.js",
+    "start": "cross-env NODE_ENV=production node dist/server.js",
     "test": "cross-env NODE_ENV=test jest --coverage --watchAll --detectOpenHandles",
     "test:ci": "cross-env NODE_ENV=test jest --coverage --forceExit --detectOpenHandles",
     "test:unit": "cross-env NODE_ENV=test jest --testPathPatterns=tests/unit --forceExit --detectOpenHandles",
