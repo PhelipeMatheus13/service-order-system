@@ -4,3 +4,4 @@ coverage/
 .txt
 .vscode/
 dist/
+/src/generated/prisma
