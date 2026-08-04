@@ -24,11 +24,8 @@ const getUserById = async (id: string): Promise<UserRecord> => {
 };
 
 const deleteUserById = async (id:string): Promise<void> => {
-    const deletedRows = await userRepository.deleteById(id);
-
-    if (deletedRows === 0) {
-        throw notFound({ message: "User not found" });
-    }
+    const deleted = await userRepository.deleteById(id);
+    if (!deleted) throw notFound({ message: "User not found" });
 };
 
 export default {
