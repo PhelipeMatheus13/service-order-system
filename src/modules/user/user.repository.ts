@@ -1,7 +1,8 @@
-const { getKnex } = require("../../shared/config/database");
+import { getKnex } from "../../shared/config/database.js";
+import type { RegisterInput, UserRecord } from "./user.types.js";
 
 // Writer
-const create = async (userData) => {
+const create = async (userData: RegisterInput): Promise<string> => {
     const knex = getKnex();
     const [response] = await knex("users")
         .insert({
@@ -14,7 +15,7 @@ const create = async (userData) => {
     return response.id;
 };
 
-const deleteById = async (id) => {
+const deleteById = async (id: string): Promise<number> => {
     const knex = getKnex();
     return knex("users")
         .where({ id })
@@ -22,7 +23,7 @@ const deleteById = async (id) => {
 };
 
 // Reader
-const existsByEmail = async(email) => {
+const existsByEmail = async(email: string): Promise<boolean>  => {
     const knex = getKnex();
     const result = await knex("users")
         .select("id")
@@ -32,19 +33,19 @@ const existsByEmail = async(email) => {
     return !!result;
 };
 
-const findById = async(id) => {
+const findById = async(id: string): Promise<UserRecord> => {
     const knex = getKnex();
     return knex("users")
         .select("id", "name", "email", "password", "created_at", "updated_at")
         .where({id: id})
         .first();
-};
+}; 
 
-module.exports = {
+export default {
     // Writer
     create,
     deleteById,
     // Reader
     existsByEmail,
-    findById
+    findById,
 };

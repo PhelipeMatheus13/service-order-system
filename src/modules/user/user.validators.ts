@@ -1,5 +1,6 @@
-const { body, validationResult } = require("express-validator");
-const { unprocessable } = require("../../shared/errors/errors");
+import { body, validationResult }  from "express-validator";
+import type { Request, Response, NextFunction } from "express";
+import { unprocessable } from "../../shared/errors/errors.js";
 
 /**
  * Request validation middleware for user registration.
@@ -28,19 +29,22 @@ const validateRegister = [
         .notEmpty().withMessage("Password confirmation is required").bail()
         .custom((value, { req }) => value === req.body.password).withMessage("Passwords do not match"),
 
-    (req, res, next) => {
-        const errors = validationResult(req);
+    (req: Request, _res: Response, next: NextFunction) => {
+        const errors = validationResult(req).formatWith(error => ({
+            field: error.type === "field" ? error.path : "",
+            message: error.msg,
+        }));
+
         if (!errors.isEmpty()) {
-            return next(unprocessable({
-                message: "Validation failed",
-                details: errors.array().map(error => ({
-                    field: error.path,
-                    message: error.msg,
-                })),
-            }));
+            return next(
+                unprocessable({
+                    message: "Validation failed",
+                    details: errors.array(),
+                }),
+            );
         }
         next();
     }
 ];
 
-module.exports = { validateRegister };
+export { validateRegister };

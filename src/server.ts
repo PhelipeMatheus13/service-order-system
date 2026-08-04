@@ -1,13 +1,13 @@
-// starting point
-// when running the command npm start, the package.json file that is already configured will run this file and start the server
-require("dotenv").config({ quiet: true });
-const app = require("./app");
-const { checkConnection } = require("./shared/config/database");
-const logger  = require("./shared/utils/logger");
+import dotenv from "dotenv";
+dotenv.config({ quiet: true });
 
-const PORT = process.env.PORT || 3000;
+import app from "./app.js";
+import { checkConnection } from "./shared/config/database.js";
+import logger from "./shared/utils/logger.js";
 
-const startServer = async () => {
+const PORT = Number(process.env.PORT) || 3000;
+
+const startServer = async (): Promise<void> => {
     logger.info("Connecting to database...");
     const isConnected = await checkConnection();
 
@@ -29,7 +29,7 @@ const startServer = async () => {
     app.listen(PORT, () => {
         logger.info(`🚀 Server running on port ${PORT}`);
     });
-};
+}
 
 // execute the function 
 startServer(); 

@@ -1,9 +1,8 @@
-const pinoHttp = require("pino-http");
-const logger  = require("../utils/logger");
+import { pinoHttp } from "pino-http";
+import logger from "../utils/logger.js";
 
-// easy to expand the list of ignored routes in the future
 const IGNORED_ROUTES = ["/"];
- 
+
 /**
  * Express middleware that automatically logs every HTTP request/response,
  * reusing the application's shared Pino instance and its environment-based
@@ -15,10 +14,10 @@ const httpLogger = pinoHttp({
 
     // ignore "IGNORED_ROUTES" for logging
     autoLogging: {
-        ignore: (req) => IGNORED_ROUTES.includes(req.url),
+        ignore: (req) => IGNORED_ROUTES.includes(req.url ?? ""), // harmless fallback to satisfy the compiler
     },
 
-    customLogLevel: (req, res, err) => {
+    customLogLevel: (_req, res, err) => {
         if (res.statusCode >= 500 || err) return "error";
         if (res.statusCode >= 400) return "warn";
         return "info";
@@ -36,4 +35,4 @@ const httpLogger = pinoHttp({
     },
 });
 
-module.exports = httpLogger;
+export default httpLogger;

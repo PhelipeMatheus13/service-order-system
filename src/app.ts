@@ -1,14 +1,13 @@
-const express = require("express");
-const helmet = require("helmet");
-const httpLogger = require("./shared/middlewares/http-logger.middleware");
-const errorHandler = require("./shared/middlewares/error.middleware");
-const requestContextMiddleware = require("./shared/middlewares/request-context.middleware");
-const { globalLimiter } = require("./shared/middlewares/rate-limiter.middleware");
+import express from "express";
+import helmet from "helmet";
+import httpLogger from "./shared/middlewares/http-logger.middleware.js";
+import errorHandler from "./shared/middlewares/error.middleware.js";
+import requestContextMiddleware from "./shared/middlewares/request-context.middleware.js";
+import { globalLimiter } from "./shared/middlewares/rate-limiter.middleware.js";
 
 // Import routes
-const swaggerRoutes = require("./shared/docs/swagger.routes");
-const userRoutes = require("./modules/user/user.routes")
-
+import swaggerRoutes from "./shared/docs/swagger.routes.js";
+import userRoutes from "./modules/user/user.routes.js";
 
 const app = express();
 
@@ -43,4 +42,4 @@ app.use("/api-docs", swaggerRoutes);
 // handler for error
 app.use(errorHandler); 
 
-module.exports = app; // Export the app for testing
+export default app;

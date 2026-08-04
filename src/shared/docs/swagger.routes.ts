@@ -1,7 +1,7 @@
-const express = require("express");
-const helmet = require("helmet");
-const swaggerUi = require("swagger-ui-express");
-const swaggerSpec = require("./swagger.config");
+import express  from "express";
+import helmet from "helmet";
+import swaggerUi from "swagger-ui-express";
+import swaggerSpec from "./swagger.config.js"
 
 const router = express.Router();
 
@@ -18,7 +18,6 @@ router.use(
     })
 );
 
-
 // Provides access to the static files for Swagger UI (CSS, JS, images...)
 router.use("/", swaggerUi.serve);
 // Renders the documentation page using the generated OpenAPI specification
@@ -29,4 +28,4 @@ router.get("/", swaggerUi.setup(swaggerSpec, {
     },
 }));
 
-module.exports = router;
+export default router;

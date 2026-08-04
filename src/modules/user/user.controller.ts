@@ -1,8 +1,7 @@
-const asyncHandler = require("../../shared/utils/async.util");
-const userService = require("./user.service");
-const { badRequest, forbidden } = require("../../shared/errors/errors");
-const { registerInputDTO, userOutputDTO } = require("./user.dtos");
-
+import asyncHandler from "../../shared/utils/async.util.js";
+import userService from "./user.service.js";
+import { badRequest } from "../../shared/errors/errors.js";
+import { registerInputDTO, userOutputDTO } from "./user.dtos.js";
 
 const register = asyncHandler(async (req, res) => {
     const input = registerInputDTO(req.body);
@@ -10,33 +9,31 @@ const register = asyncHandler(async (req, res) => {
     res.status(201).json({
         success: true,
         message: "User created successfully"
-    });
+    });    
 });
 
 const getUser = asyncHandler(async (req, res) => {
     const { id } = req.params;
     if (!id) throw badRequest({ message: "User ID is required" });
-
-    const user = await userService.getUserById(id);
-
+    const user = await userService.getUserById(String(id));
     res.status(200).json({
         success: true,
         data: userOutputDTO(user),
     });
 });
+
 const deleteUser = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    if (!id) throw badRequest({ message: "User ID is required" });
-
-    await userService.deleteUserById(id);
+    if (!id) throw badRequest({message: "User ID is required"})
+    await userService.deleteUserById(String(id));
     res.status(200).json({
         success: true,
         message: "User deleted successfully"
     });
 });
 
-module.exports = {
+export default {
     register,
     getUser,
-    deleteUser
-}
+    deleteUser,
+};
