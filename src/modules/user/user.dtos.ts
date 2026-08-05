@@ -1,6 +1,8 @@
+import type { RegisterRequest } from "./user.schemas.js";
 import type { RegisterInput, UserRecord, UserOutput } from "./user.types.js";
 
-const registerInputDTO = (body: RegisterInput): RegisterInput => ({
+
+const registerInputDTO = (body: RegisterRequest): RegisterInput => ({
     name: body.name,
     email: body.email,
     password: body.password,

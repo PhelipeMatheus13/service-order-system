@@ -1,7 +1,8 @@
-import express  from "express";
+import express from "express";
 const router = express.Router();
 import userController from "./user.controller.js";
-import { validateRegister } from "./user.validators.js";
+import validate from "../../shared/middlewares/validate.js";
+import { registerSchema } from "./user.schemas.js";
 import { registerLimiter } from "../../shared/middlewares/rate-limiter.js";
 
 /**
@@ -45,7 +46,7 @@ import { registerLimiter } from "../../shared/middlewares/rate-limiter.js";
  *              500:
  *                  $ref: '#/components/responses/InternalError'
  */
-router.post("/register", registerLimiter, validateRegister, userController.register);
+router.post("/register", registerLimiter, validate(registerSchema), userController.register);
 
 /**
  *  @swagger
