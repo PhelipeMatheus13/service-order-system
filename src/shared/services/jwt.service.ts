@@ -1,15 +1,10 @@
 import jwt from "jsonwebtoken";
 import logger from "../utils/logger.js";
-import { internal, unauthorized } from "../errors/errors.js";
+import { unauthorized } from "../errors/errors.js";
+import { getRequiredEnv } from "../utils/env.js";
 
 const generateAccessToken = (userId: string, role: string): string => {
-    const secret = process.env.SECRET;
-
-    if (!secret) {
-        logger.error("SECRET environment variable is missing");
-        throw internal();
-    }
-
+    const secret = getRequiredEnv("SECRET");
     return jwt.sign({id: userId, role: role}, secret, { expiresIn: "15m" });
 };
 
@@ -20,13 +15,7 @@ interface AccessTokenPayload {
 }
 
 const decodeAccessToken = (token: string): AccessTokenPayload  => {
-    const secret = process.env.SECRET;
-
-    if (!secret) {
-        logger.error("SECRET environment variable is missing");
-        throw internal();
-    }
-
+    const secret = getRequiredEnv("SECRET");
     try {
         const decoded = jwt.verify(token, secret);
         if (typeof decoded === "string") {
@@ -54,13 +43,7 @@ const decodeAccessToken = (token: string): AccessTokenPayload  => {
 };
 
 const generateRefreshToken = (userId: string, role: string, jti: string): string => {
-    const secret = process.env.REFRESH_SECRET || process.env.SECRET;
-
-    if (!secret) {
-        logger.error("SECRET environment variable is missing");
-        throw internal();
-    }
-
+    const secret = getRequiredEnv("REFRESH_SECRET");
     return jwt.sign({ id: userId, role: role, jti: jti }, secret, { expiresIn: "7d" });
 };
 
@@ -72,12 +55,7 @@ interface RefreshTokenPayload {
 }
 
 const decodeRefreshToken = (token: string): RefreshTokenPayload  => {
-    const secret = process.env.REFRESH_SECRET || process.env.SECRET;
-
-    if (!secret) {
-        logger.error("SECRET environment variable is missing");
-        throw internal();
-    }
+    const secret = getRequiredEnv("REFRESH_SECRET");
 
     try {
         const decoded = jwt.verify(token, secret);

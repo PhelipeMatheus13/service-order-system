@@ -1,8 +1,11 @@
 import pino from "pino";
 import { getContext } from "./request-context.js";
+import { getRequiredEnv, getEnv } from "./env.js";
 
-const isTest = process.env.NODE_ENV === "test";
-const isDevelopment = process.env.NODE_ENV === "development";
+const nodeEnv = getRequiredEnv("NODE_ENV") 
+
+const isTest = nodeEnv === "test";
+const isDevelopment = nodeEnv === "development";
 
 /**
  * Application-wide Pino logger instance.
@@ -13,7 +16,7 @@ const isDevelopment = process.env.NODE_ENV === "development";
 const logger = pino({
     // Set the log level based on the environment
     // Allows passing the log level via environment variable for testing purposes (userful for testing)
-    level: process.env.LOG_LEVEL || (isTest ? "silent" : isDevelopment ? "debug" : "info"),
+    level: getEnv("LOG_LEVEL") || (isTest ? "silent" : isDevelopment ? "debug" : "info"),
     // Use pino-pretty printing in development for better readability
     transport: isDevelopment
         ? {

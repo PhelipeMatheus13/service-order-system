@@ -4,8 +4,9 @@ dotenv.config({ quiet: true });
 import app from "./app.js";
 import { checkConnection } from "./shared/config/database.js";
 import logger from "./shared/utils/logger.js";
+import { getEnv } from "./shared/utils/env.js";
 
-const PORT = Number(process.env.PORT) || 3000;
+const port = Number(getEnv("PORT")) || 3000;
 
 const startServer = async (): Promise<void> => {
     logger.info("Connecting to database...");
@@ -26,8 +27,8 @@ const startServer = async (): Promise<void> => {
     process.on("SIGTERM", gracefulShutdown);
     process.on("SIGINT", gracefulShutdown);
 
-    app.listen(PORT, () => {
-        logger.info(`🚀 Server running on port ${PORT}`);
+    app.listen(port, () => {
+        logger.info(`🚀 Server running on port ${port}`);
     });
 }
 

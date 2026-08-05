@@ -19,4 +19,9 @@ const getRequiredEnv = (name: string): string => {
     return value;
 };
 
-export { getRequiredEnv };
+const getEnv = (name: string): string | undefined => {
+    return process.env[name];
+};
+
+
+export { getRequiredEnv, getEnv };
