@@ -1,20 +1,11 @@
+import type { User } from "../../generated/prisma/client.js";
+
 interface RegisterInput {
     name: string;
     email: string;
     password: string;
 }
 
-// Database-facing shape, what is stored in the database
-interface UserRecord {
-    id: string;
-    name: string;
-    email: string;
-    password: string;
-    created_at: string;
-    updated_at?: string;
-}
-
-// API-facing shape, what the client receives
 interface UserOutput {
     id: string;
     name: string;
@@ -23,9 +14,5 @@ interface UserOutput {
     updatedAt?: string;
 }
 
-
-export type {
-    RegisterInput,
-    UserRecord,
-    UserOutput,
-};
+export type { RegisterInput, UserOutput };
+export type { User as UserRecord };

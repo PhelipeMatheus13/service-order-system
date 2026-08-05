@@ -13,10 +13,11 @@ This project is derived from a previous JWT authentication API
 here as a starting point for the application's core infrastructure
 (security, logging, error handling, request context, documentation setup).
 
-The codebase is being migrated from JavaScript to TypeScript incrementally,
+The codebase was migrated from JavaScript to TypeScript incrementally,
 file by file, in dependency order (utils → services → middlewares → config →
-docs → modules). This migration is tracked as its own effort, separate from
-domain modeling and from planned technology swaps (see Notes below).
+docs → modules), as its own effort, separate from domain modeling and from
+technology swaps. Knex has since been replaced by Prisma (see Notes below);
+express-validator → Zod is the next planned swap.
 
 ## Features
 
@@ -33,13 +34,15 @@ domain modeling and from planned technology swaps (see Notes below).
   application skeleton end-to-end — not the final domain
 - Strict TypeScript (`strict: true` from the start, ESM/`nodenext` module
   resolution)
+- Type-safe database access with Prisma 7, using the `@prisma/adapter-pg`
+  driver adapter (required in this Prisma version — see Notes)
 
 ## Technologies
 
 - Node.js (TypeScript, strict mode, ESM)
 - Express
 - PostgreSQL
-- Knex.js (temporary — see Notes)
+- Prisma (with `@prisma/adapter-pg`)
 - express-validator (temporary — see Notes)
 - JSON Web Tokens (jsonwebtoken)
 - bcrypt
@@ -59,7 +62,7 @@ docker compose up -d
 
 Run migrations:
 ```bash
-npx knex migrate:latest
+npx prisma migrate dev
 ```
 
 Run the application (development):
@@ -99,18 +102,29 @@ npm install
 > plain JavaScript syntax; Jest's default transform does not understand
 > TypeScript syntax (`interface`, type annotations, etc.), so every test
 > suite fails to parse. This is a known, intentional gap: the test runner
-> itself is expected to change to Vitest once the planned technology swaps
-> (Knex → Prisma, express-validator → Zod) land, since rewriting the test
-> suite now — before those swaps — would mean rewriting it twice. Tests will
+> itself is expected to change to Vitest once the remaining planned
+> technology swap (express-validator → Zod) lands, since rewriting the test
+> suite now — before that swap — would mean rewriting it twice. Tests will
 > be reintroduced as part of that follow-up work, not forgotten.
 
-> Knex and express-validator are present in this codebase as **temporary**
-> dependencies. They were migrated to TypeScript alongside the rest of the
-> skeleton (to validate the structure end-to-end against a real database and
-> real input validation), but are planned to be replaced by Prisma and Zod
-> respectively in a dedicated branch — a deliberate choice to keep the
+> Knex was migrated to TypeScript alongside the rest of the skeleton (to
+> validate the structure end-to-end against a real database), then replaced
+> by Prisma in a dedicated branch — a deliberate choice to keep the
 > "migrate to TypeScript" branch scoped to syntax/tooling only, not mixed
-> with a technology swap.
+> with a technology swap. `express-validator` is still present as a
+> **temporary** dependency, following the same reasoning, and is planned to
+> be replaced by Zod in its own branch next.
+
+> Prisma 7 requires a driver adapter to connect to the database — instantiating
+> `PrismaClient` without one (`new PrismaClient()`) throws a constructor
+> validation error in this version; it isn't a stylistic choice made in this
+> project. Using `@prisma/adapter-pg` required separating the database
+> connection string into its own module (`connection-string.ts`), since
+> `prisma.config.ts` is read by the Prisma CLI — including when generating
+> the client for the first time, before the generated client module exists.
+> Importing the main `database.ts` (which imports the generated
+> `PrismaClient`) from `prisma.config.ts` would create a circular bootstrap
+> dependency.
 
 > TypeScript strict mode is enabled from the start of the migration,
 > rather than starting permissive and tightening later — this was a

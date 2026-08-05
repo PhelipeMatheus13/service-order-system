@@ -10,8 +10,8 @@ const userOutputDTO = (user: UserRecord): UserOutput => ({
     id: user.id,
     name: user.name,
     email: user.email,
-    createdAt: user.created_at,
-    updatedAt: user.updated_at,
+    createdAt: String(user.createdAt),
+    updatedAt: String(user.updatedAt),
 });
 
 export {
