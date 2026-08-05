@@ -1,7 +1,7 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../../generated/prisma/client.js";
 import { connectionString } from "./connection-string.js";
-import logger from "../utils/logger.js";
+import logger from "./logger.js";
 
 // Creates the PostgreSQL adapter used by Prisma Client
 const adapter = new PrismaPg({connectionString});

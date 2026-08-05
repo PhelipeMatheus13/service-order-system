@@ -1,7 +1,7 @@
 import jwt from "jsonwebtoken";
-import logger from "../utils/logger.js";
+import logger from "../config/logger.js";
 import { unauthorized } from "../errors/errors.js";
-import { getRequiredEnv } from "../utils/env.js";
+import { getRequiredEnv } from "../config/env.js";
 
 const generateAccessToken = (userId: string, role: string): string => {
     const secret = getRequiredEnv("SECRET");

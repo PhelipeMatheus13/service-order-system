@@ -1,5 +1,5 @@
 import { pinoHttp } from "pino-http";
-import logger from "../utils/logger.js";
+import logger from "../config/logger.js";
 
 const IGNORED_ROUTES = ["/"];
 

@@ -1,4 +1,4 @@
-import { getRequiredEnv } from "../utils/env.js";
+import { getRequiredEnv } from "./env.js";
 
 // This is intentionally kept separate from `database.ts` because
 // `prisma.config.ts` is loaded by the Prisma CLI before the generated

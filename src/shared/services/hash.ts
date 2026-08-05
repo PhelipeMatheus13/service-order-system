@@ -1,5 +1,5 @@
 import bcrypt  from "bcrypt";
-import logger from "../utils/logger.js";
+import logger from "../config/logger.js";
 import { internal } from "../errors/errors.js";
 
 const hashPassword = async (password: string): Promise<string> => {

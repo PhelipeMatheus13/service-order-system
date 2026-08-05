@@ -1,6 +1,6 @@
 import type { Request, RequestHandler } from "express";
 import { decodeAccessToken } from "../services/jwt.js";
-import logger from "../utils/logger.js";
+import logger from "../config/logger.js";
 import { unauthorized, forbidden } from "../errors/errors.js";
 
 interface AuthenticatedUser {

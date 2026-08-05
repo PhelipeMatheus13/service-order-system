@@ -1,5 +1,5 @@
 import pino from "pino";
-import { getContext } from "./request-context.js";
+import { getContext } from "../context/request-context.js";
 import { getRequiredEnv, getEnv } from "./env.js";
 
 const nodeEnv = getRequiredEnv("NODE_ENV") 

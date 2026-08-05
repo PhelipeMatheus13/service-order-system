@@ -3,8 +3,8 @@ dotenv.config({ quiet: true });
 
 import app from "./app.js";
 import { checkConnection } from "./shared/config/database.js";
-import logger from "./shared/utils/logger.js";
-import { getEnv } from "./shared/utils/env.js";
+import logger from "./shared/config/logger.js";
+import { getEnv } from "./shared/config/env.js";
 
 const port = Number(getEnv("PORT")) || 3000;
 
