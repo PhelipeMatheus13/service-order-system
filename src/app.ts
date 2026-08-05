@@ -1,9 +1,9 @@
 import express from "express";
 import helmet from "helmet";
-import httpLogger from "./shared/middlewares/http-logger.middleware.js";
-import errorHandler from "./shared/middlewares/error.middleware.js";
-import requestContextMiddleware from "./shared/middlewares/request-context.middleware.js";
-import { globalLimiter } from "./shared/middlewares/rate-limiter.middleware.js";
+import httpLogger from "./shared/middlewares/http-logger.js";
+import errorHandler from "./shared/middlewares/error.js";
+import requestContextMiddleware from "./shared/middlewares/request-context.js";
+import { globalLimiter } from "./shared/middlewares/rate-limiter.js";
 
 // Import routes
 import swaggerRoutes from "./shared/docs/swagger.routes.js";

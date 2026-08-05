@@ -1,6 +1,6 @@
 import type { RegisterInput, UserRecord } from "./user.types.js";
 import userRepository from "./user.repository.js";
-import { hashPassword } from "../../shared/services/hash.service.js";
+import { hashPassword } from "../../shared/services/hash.js";
 import { alreadyExists, notFound } from "../../shared/errors/errors.js";
 
 

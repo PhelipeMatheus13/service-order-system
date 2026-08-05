@@ -1,7 +1,7 @@
 import type { Request, RequestHandler } from "express";
-import { decodeAccessToken } from "../services/jwt.service.js";
+import { decodeAccessToken } from "../services/jwt.js";
 import logger from "../utils/logger.js";
-import { unauthorized, forbidden } from "../../shared/errors/errors.js";
+import { unauthorized, forbidden } from "../errors/errors.js";
 
 interface AuthenticatedUser {
     id: string;

@@ -1,4 +1,4 @@
-import asyncHandler from "../../shared/utils/async.util.js";
+import asyncHandler from "../../shared/utils/async.js";
 import userService from "./user.service.js";
 import { badRequest } from "../../shared/errors/errors.js";
 import { registerInputDTO, userOutputDTO } from "./user.dtos.js";

@@ -2,7 +2,7 @@ import express  from "express";
 const router = express.Router();
 import userController from "./user.controller.js";
 import { validateRegister } from "./user.validators.js";
-import { registerLimiter } from "../../shared/middlewares/rate-limiter.middleware.js";
+import { registerLimiter } from "../../shared/middlewares/rate-limiter.js";
 
 /**
  *  @swagger
