@@ -16,6 +16,7 @@ export default defineConfig({
                 "src/shared/middlewares/rate-limiter.middleware.ts",
                 "src/shared/docs/**",
                 "src/generated/**",
+                "src/modules/user/user.types.ts",
             ],
         },
     },
