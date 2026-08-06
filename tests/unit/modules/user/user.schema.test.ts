@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { registerSchema } from "../../../../src/modules/user/user.schemas";
+import { registerSchema } from "../../../../src/modules/user/user.schemas.js";
 
 
 // Only test the schema's custom `refine` logic.
