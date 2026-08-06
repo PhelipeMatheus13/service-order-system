@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { NextFunction } from "express";
 
 import userController from "../../../../src/modules/user/user.controller.js";
 import userService from "../../../../src/modules/user/user.service.js";
@@ -9,7 +8,7 @@ vi.mock("../../../../src/modules/user/user.service.js");
 describe("User Controller (Unit)", () => {
     let req: any;
     let res: any;
-    let next: NextFunction;
+    let next: any;
 
     beforeEach(() => {
         req = { body: {}, params: {}, user: {} };
@@ -17,7 +16,7 @@ describe("User Controller (Unit)", () => {
             status: vi.fn().mockReturnThis(),
             json: vi.fn().mockReturnThis(),
         };
-        next = vi.fn() as NextFunction;
+        next = vi.fn();
         vi.clearAllMocks();
     });
 
