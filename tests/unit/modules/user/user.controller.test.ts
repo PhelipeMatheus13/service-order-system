@@ -1,33 +1,46 @@
-const userController = require("../../../../src/modules/user/user.controller");
-const userService = require("../../../../src/modules/user/user.service");
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-jest.mock("../../../../src/modules/user/user.service");
+import userController from "../../../../src/modules/user/user.controller.js";
+import userService from "../../../../src/modules/user/user.service.js";
+
+vi.mock("../../../../src/modules/user/user.service.js");
 
 describe("User Controller (Unit)", () => {
-    let req, res, next;
+    let req: any;
+    let res: any;
+    let next: any;
 
     beforeEach(() => {
-        req = { body: {}, params: {} , user: {} };
+        req = { body: {}, params: {}, user: {} };
         res = {
-            status: jest.fn().mockReturnThis(),
-            json: jest.fn().mockReturnThis(),
+            status: vi.fn().mockReturnThis(),
+            json: vi.fn().mockReturnThis(),
         };
-        next = jest.fn(); // Mock next function for error handling
-        jest.clearAllMocks();
+        next = vi.fn();
+        vi.clearAllMocks();
     });
 
     describe("register", () => {
         it("should return 201 on successful registration", async () => {
-            req.body = {
-                name: "Test",
-                email: "test@example.com",
-                password: "Pass@123",
-                confirmpassword: "Pass@123",
+            const requestBody = {
+                name: "John doe",
+                email: "johndoe@hotmail.com",
+                password: "Johndoe@password",
+                confirmpassword: "Johndoe@password",
             };
-        
-            userService.createUser.mockResolvedValue("uuid-123");
+
+            req.body = requestBody;
+
+            vi.mocked(userService).createUser.mockResolvedValue("uuid-123");
 
             await userController.register(req, res, next);
+
+            // validates the behavior of registerInputDTO
+            expect(userService.createUser).toHaveBeenCalledWith({
+                name: requestBody.name,
+                email: requestBody.email,
+                password: requestBody.password,
+            });
 
             expect(res.status).toHaveBeenCalledWith(201);
             expect(res.json).toHaveBeenCalledWith({
@@ -40,17 +53,33 @@ describe("User Controller (Unit)", () => {
 
     describe("getUser", () => {
         it("should return 200 with user data", async () => {
-            req.params.id = "uuid-123";
+            const userId = "uuid-123";
+            req.params.id = userId;
 
-            const mockUser = { id: "uuid-123", name: "Test", email: "test@example.com"};
-            userService.getUserById.mockResolvedValue(mockUser);
+            const mockUserRecord = {
+                id: userId,
+                name: "John doe",
+                email: "johndoe@hotmail.com",
+                password: "hashPassword",
+                createdAt: new Date(),
+                updatedAt: null,
+            };
+
+            vi.mocked(userService).getUserById.mockResolvedValue(mockUserRecord);
 
             await userController.getUser(req, res, next);
 
             expect(res.status).toHaveBeenCalledWith(200);
             expect(res.json).toHaveBeenCalledWith({
                 success: true,
-                data: mockUser,
+                // validates the behavior of userOutputDTO
+                data: {
+                    id: mockUserRecord.id,
+                    name: mockUserRecord.name,
+                    email: mockUserRecord.email,
+                    createdAt: String(mockUserRecord.createdAt),
+                    updatedAt: String(mockUserRecord.updatedAt),
+                },
             });
             expect(next).not.toHaveBeenCalled();
         });
@@ -65,14 +94,13 @@ describe("User Controller (Unit)", () => {
             }));
             expect(res.status).not.toHaveBeenCalled();
         });
-
     });
 
     describe("deleteUser", () => {
         it("should return 200 if delete user is successful", async () => {
             req.params.id = "uuid-123";
-  
-            userService.deleteUserById.mockResolvedValue(1);
+
+            vi.mocked(userService).deleteUserById.mockResolvedValue();
 
             await userController.deleteUser(req, res, next);
 
@@ -95,6 +123,5 @@ describe("User Controller (Unit)", () => {
             }));
             expect(res.status).not.toHaveBeenCalled();
         });
-
     });
-})
+});

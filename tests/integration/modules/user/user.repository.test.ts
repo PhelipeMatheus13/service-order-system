@@ -1,15 +1,18 @@
-const { setupTestDatabase } = require("../../../helpers/testDatabase");
-// Ensure the test database is set up before importing the repository
-const { setKnexInstance } = require("../../../../src/shared/config/database"); 
-const userRepository = require("../../../../src/modules/user/user.repository");
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
+import { PrismaClient } from "../../../../src/generated/prisma/client.js";
+import { setupTestDatabase } from "../../../helpers/testDatabase.js";
+import { setPrismaInstance } from "../../../../src/shared/config/database";
+import userRepository from "../../../../src/modules/user/user.repository.js";
+
 
 describe("User Repository (Integration)", () => {
-    let db, knex;
+    let db: Awaited<ReturnType<typeof setupTestDatabase>>;
+    let prisma: PrismaClient;
 
     beforeAll(async () => {
-        db = await setupTestDatabase({ migrationDirectory: "./database/migrations" });
-        knex = db.knex;         
-        setKnexInstance(knex);  
+        db = await setupTestDatabase();
+        prisma = db.prismaClient;
+        setPrismaInstance(prisma);
     });
 
     afterAll(async () => {
@@ -17,7 +20,7 @@ describe("User Repository (Integration)", () => {
     });
 
     beforeEach(async () => {
-        await knex("users").del();
+        await prisma.user.deleteMany();
     });
 
     describe("Writer repository", () => {
@@ -26,18 +29,22 @@ describe("User Repository (Integration)", () => {
                 const userData = {
                     name: "jhon doe",
                     email: "jhon@example.com",
-                    password: "hashedpassword" 
-                }
+                    password: "hashedpassword"
+                };
 
                 const userId = await userRepository.create(userData);
 
                 expect(userId).toBeDefined();
                 expect(typeof userId).toBe("string");
 
-                const user = await knex("users").where({ id: userId }).first();
-                expect(user.name).toBe("jhon doe");
-                expect(user.email).toBe("jhon@example.com");
-                expect(user.password).toBe("hashedpassword");
+                const user = await prisma.user.findUnique({ where: { id: userId } });
+
+                expect(user?.id).toBeTruthy();
+                expect(user?.name).toBe("jhon doe");
+                expect(user?.email).toBe("jhon@example.com");
+                expect(user?.password).toBe("hashedpassword");
+                expect(user?.createdAt).toBeTruthy();
+                expect(user?.updatedAt).toBeNull();
             });
         });
 
@@ -46,23 +53,24 @@ describe("User Repository (Integration)", () => {
                 const userData = {
                     name: "jhon doe",
                     email: "jhon@example.com",
-                    password: "hashedpassword" 
-                }
+                    password: "hashedpassword"
+                };
 
-                const [{ id: userId }] = await knex("users")
-                    .insert(userData)
-                    .returning("id");
+                const { id: userId } = await prisma.user.create({
+                    data: userData,
+                    select: { id: true }
+                });
 
-                const deletedCount = await userRepository.deleteById(userId);
-                expect(deletedCount).toBe(1);
+                const deleted = await userRepository.deleteById(userId);
+                expect(deleted).toBe(true);
 
-                const user = await knex("users").where({ id: userId }).first();
-                expect(user).toBeUndefined();
+                const user = await prisma.user.findUnique({ where: { id: userId } });
+                expect(user).toBeNull();
             });
 
             it("should return 0 if no user was deleted", async () => {
-                const deletedCount = await userRepository.deleteById("0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa"); // Non-existent ID
-                expect(deletedCount).toBe(0);
+                const deleted = await userRepository.deleteById("0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa"); // Non-existent ID
+                expect(deleted).toBe(false);
             });
         });
     });
@@ -76,8 +84,8 @@ describe("User Repository (Integration)", () => {
                     password: "hashedpassword"
                 };
 
-                await knex("users").insert(userData);
-                
+                await prisma.user.create({ data: userData });
+
                 const exists = await userRepository.existsByEmail("jhon@example.com");
                 expect(exists).toBe(true);
             });
@@ -96,20 +104,25 @@ describe("User Repository (Integration)", () => {
                     password: "hashedpassword"
                 };
 
-                const [{ id: userId }] = await knex("users")
-                    .insert(userData)
-                    .returning("id");
+                const { id: userId } = await prisma.user.create({
+                    data: userData,
+                    select: { id: true }
+                });
 
                 const user = await userRepository.findById(userId);
-                expect(user.name).toBe("jhon doe");
-                expect(user.email).toBe("jhon@example.com");
-                expect(user.password).toBe("hashedpassword");
+
+                expect(user?.id).toBeTruthy();
+                expect(user?.name).toBe("jhon doe");
+                expect(user?.email).toBe("jhon@example.com");
+                expect(user?.password).toBe("hashedpassword");
+                expect(user?.createdAt).toBeTruthy();
+                expect(user?.updatedAt).toBeNull();
             });
 
             it("should return null if a user with the given ID does not exist", async () => {
                 const user = await userRepository.findById("0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa");
-                expect(user).toBe(undefined);
+                expect(user).toBeNull();
             });
         });
     });
-})
+});

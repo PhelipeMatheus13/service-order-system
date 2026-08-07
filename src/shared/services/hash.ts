@@ -7,16 +7,17 @@ const hashPassword = async (password: string): Promise<string> => {
         const salt = await bcrypt.genSalt(12);
         return bcrypt.hash(password, salt);
     } catch (error) {
-        logger.error({err: error}, "Bcrypt password hashing error");
+        logger.error({err: error}, "Unexpected error while hashing password");
         throw internal();
     }
 };
 
 const comparePassword = async (password: string, hash: string): Promise<boolean> => {
     try {
-        return bcrypt.compare(password, hash);
+        // Await ensures rejected promises are caught by this try/catch.
+        return await bcrypt.compare(password, hash);
     } catch (error) {
-        logger.error({ err: error }, "Bcrypt password compare error");
+        logger.error({ err: error }, "Unexpected error while compare password");
         throw internal();
     }
 };

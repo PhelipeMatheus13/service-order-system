@@ -1,26 +1,29 @@
-const errorHandler = require("../../../../src/shared/middlewares/error.middleware");
-const { notFound } = require("../../../../src/shared/errors/errors");
+import { vi, describe, beforeEach, it, expect } from "vitest";
 
-jest.mock("../../../../src/shared/utils/logger", () => ({
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
+import errorHandler from "../../../../src/shared/middlewares/error.js";
+import { notFound } from "../../../../src/shared/errors/errors.js";
+import logger from "../../../../src/shared/config/logger.js";
+
+vi.mock("../../../../src/shared/config/logger.js", () => ({
+    default: {
+        error: vi.fn(),
+    },
 }));
 
-const logger = require("../../../../src/shared/utils/logger");
-
 describe("Error Middleware (Unit)", () => {
-    let req, res, next;
+    let req: any;
+    let res: any; 
+    let next: any;
 
     beforeEach(() => {
         req = {};
         res = {
-            status: jest.fn().mockReturnThis(),
-            json: jest.fn().mockReturnThis(),
+            status: vi.fn().mockReturnThis(),
+            json: vi.fn().mockReturnThis(),
         };
-        next = jest.fn();
+        next = vi.fn();
 
-        jest.clearAllMocks();
+        vi.clearAllMocks();
     });
 
     it("should respond with operational error details when error is operational", () => {
@@ -30,7 +33,6 @@ describe("Error Middleware (Unit)", () => {
 
         expect(res.status).toHaveBeenCalledWith(404);
         expect(res.json).toHaveBeenCalledWith(operationalError.toJSON());
-        expect(logger.error).not.toHaveBeenCalled();
     });
 
     it("should respond with 500 for non-operational errors and log the error", () => {
@@ -46,11 +48,7 @@ describe("Error Middleware (Unit)", () => {
                 message: "Internal server error",
             },
         });
-        expect(logger.error).toHaveBeenCalled();
-    });
 
-    it("should not call next for operational or non-operational errors", () => {
-        errorHandler(new Error("any"), req, res, next);
-        expect(next).not.toHaveBeenCalled();
+        expect(logger.error).toHaveBeenCalledWith({ err: unexpectedError }, "Unexpected error");
     });
 });

@@ -5,7 +5,7 @@ import { getRequiredEnv } from "../config/env.js";
 
 const generateAccessToken = (userId: string, role: string): string => {
     const secret = getRequiredEnv("SECRET");
-    return jwt.sign({id: userId, role: role}, secret, { expiresIn: "15m" });
+    return jwt.sign({ id: userId, role: role }, secret, { expiresIn: "15m" });
 };
 
 interface AccessTokenPayload {
@@ -14,17 +14,13 @@ interface AccessTokenPayload {
     exp: number;
 }
 
-const decodeAccessToken = (token: string): AccessTokenPayload  => {
+const decodeAccessToken = (token: string): AccessTokenPayload => {
     const secret = getRequiredEnv("SECRET");
-    try {
-        const decoded = jwt.verify(token, secret);
-        if (typeof decoded === "string") {
-            // This should never happen with a standard JWT, but we handle it for safety.
-            throw unauthorized({ message: "Invalid token format", code: "INVALID_TOKEN" });
-        }
-        
-        return decoded as AccessTokenPayload;
+    
+    let decoded: string | jwt.JwtPayload;
 
+    try {
+        decoded = jwt.verify(token, secret);
     } catch (error) {
         if (error instanceof Error) {
             if (error.name === "TokenExpiredError") {
@@ -36,10 +32,17 @@ const decodeAccessToken = (token: string): AccessTokenPayload  => {
                 throw unauthorized({ message: "Invalid access token", code: "INVALID_TOKEN" });
             }
         }
-        
+
         logger.error({ err: error }, "Unexpected error while verifying access token");
         throw unauthorized({ message: "Invalid access token", code: "INVALID_TOKEN" });
     }
+
+    // This should never happen with a standard JWT, but we handle it for safety.
+    if (typeof decoded === "string") {
+        throw unauthorized({ message: "Invalid token format", code: "INVALID_TOKEN" });
+    }
+
+    return decoded as AccessTokenPayload;
 };
 
 const generateRefreshToken = (userId: string, role: string, jti: string): string => {
@@ -54,18 +57,13 @@ interface RefreshTokenPayload {
     exp: number;
 }
 
-const decodeRefreshToken = (token: string): RefreshTokenPayload  => {
+const decodeRefreshToken = (token: string): RefreshTokenPayload => {
     const secret = getRequiredEnv("REFRESH_SECRET");
 
-    try {
-        const decoded = jwt.verify(token, secret);
-        if (typeof decoded === "string") {
-            // This should never happen with a standard JWT, but we handle it for safety.
-            throw unauthorized({ message: "Invalid token format", code: "INVALID_TOKEN" });
-        }
-        
-        return decoded as RefreshTokenPayload;
+    let decoded: string | jwt.JwtPayload;
 
+    try {
+        decoded = jwt.verify(token, secret);
     } catch (error) {
         if (error instanceof Error) {
             if (error.name === "TokenExpiredError") {
@@ -77,16 +75,23 @@ const decodeRefreshToken = (token: string): RefreshTokenPayload  => {
                 throw unauthorized({ message: "Invalid refresh token", code: "INVALID_TOKEN" });
             }
         }
-        
+
         logger.error({ err: error }, "Unexpected error while verifying refresh token");
         throw unauthorized({ message: "Invalid refresh token", code: "INVALID_TOKEN" });
     }
+
+    // This should never happen with a standard JWT, but we handle it for safety.
+    if (typeof decoded === "string") {
+        throw unauthorized({ message: "Invalid token format", code: "INVALID_TOKEN" });
+    }
+
+    return decoded as RefreshTokenPayload;
 };
 
 
 export {
-    generateAccessToken, 
-    decodeAccessToken, 
-    generateRefreshToken, 
+    generateAccessToken,
+    decodeAccessToken,
+    generateRefreshToken,
     decodeRefreshToken,
 };
