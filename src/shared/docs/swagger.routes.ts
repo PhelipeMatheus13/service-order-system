@@ -1,7 +1,7 @@
 import express  from "express";
 import helmet from "helmet";
 import swaggerUi from "swagger-ui-express";
-import swaggerSpec from "./swagger.config.js"
+import { generateOpenApiDocument } from "./swagger.config.js";
 
 const router = express.Router();
 
@@ -21,7 +21,7 @@ router.use(
 // Provides access to the static files for Swagger UI (CSS, JS, images...)
 router.use("/", swaggerUi.serve);
 // Renders the documentation page using the generated OpenAPI specification
-router.get("/", swaggerUi.setup(swaggerSpec, {
+router.get("/", swaggerUi.setup(generateOpenApiDocument(), {
     swaggerOptions: {
         // hides the footer schemas on the documentation servers
         defaultModelsExpandDepth: -1, 
