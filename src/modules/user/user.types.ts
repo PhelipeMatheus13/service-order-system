@@ -1,18 +1,27 @@
-import type { User } from "../../generated/prisma/client.js";
+import type { User, Role } from "../../generated/prisma/client.js";
 
 interface RegisterInput {
-    name: string;
+    firstName: string;
+    lastName: string;
+    phoneNumber: string | null ;
     email: string;
-    password: string;
+    role: Role;
 }
 
 interface UserOutput {
     id: string;
-    name: string;
+    firstName: string;
+    lastName: string;
+    phoneNumber: string | null;
     email: string;
+    role: Role;
+    active: boolean;
     createdAt: string;
-    updatedAt?: string;
+    updatedAt: string | null;
 }
 
-export type { RegisterInput, UserOutput };
-export type { User as UserRecord };
+export type { 
+    RegisterInput, 
+    UserOutput,
+    User as UserRecord,
+};

@@ -26,10 +26,11 @@ describe("User Routes (Integration)", () => {
 
     describe("POST /users/register", () => {
         const validUser = {
-            name: "John Doe",
+            firstName: "John",
+            lastName: "Doe",
+            phoneNumber: "+55 (21) 98765-4321",
             email: "john@example.com",
-            password: "Pass@123",
-            confirmPassword: "Pass@123"
+            role: "ATTENDANT",
         };
 
         it("should register a new user successfully", async () => {
@@ -48,7 +49,7 @@ describe("User Routes (Integration)", () => {
         });
 
         it("should return 422 if validation fails (e.g., short password)", async () => {
-            const invalidUser = { ...validUser, password: "123" };
+            const invalidUser = { ...validUser, email: "john@example" };
             const res = await request(app)
                 .post("/users/register")
                 .send(invalidUser);
@@ -66,9 +67,14 @@ describe("User Routes (Integration)", () => {
         beforeEach(async () => {
             ({ id: userId } = await prisma.user.create({
                 data: {
-                    name: "Test User",
-                    email: "test@example.com",
-                    password: "hashedpass"
+                    firstName: "Jhon",
+                    lastName: "Doe",
+                    phoneNumber: "5521995437105",
+                    email: "jhon@example.com",
+                    passwordHash: "passwordHash",
+                    role: "ATTENDANT",
+                    active: true,
+                    updatedAt: new Date,
                 },
                 select: { id: true },
             }));
@@ -82,10 +88,15 @@ describe("User Routes (Integration)", () => {
             expect(res.body.success).toBe(true);
             expect(res.body.data).toMatchObject({
                 id: userId,
-                name: "Test User",
-                email: "test@example.com",
+                firstName: "Jhon",
+                lastName: "Doe",
+                phoneNumber: "5521995437105",
+                email: "jhon@example.com",
+                role: "ATTENDANT",
+                active: true,
             });
             expect(res.body.data.createdAt).toBeTruthy();
+            expect(res.body.data.updatedAt).toBeTruthy();
             expect(res.body.data.password).toBeUndefined(); // password should not be returned
         });
     });
@@ -94,9 +105,10 @@ describe("User Routes (Integration)", () => {
         beforeEach(async () => {
             ({ id: userId } = await prisma.user.create({
                 data: {
-                    name: "Test User",
+                    firstName: "Jhon",
+                    lastName: "Doe",                    
                     email: "test@example.com",
-                    password: "hashedpass"
+                    role: "ATTENDANT",
                 },
                 select: { id: true },
             }));

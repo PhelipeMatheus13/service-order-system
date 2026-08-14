@@ -4,17 +4,13 @@ import { hashPassword } from "../../shared/services/hash.js";
 import { alreadyExists, notFound } from "../../shared/errors/errors.js";
 
 
-const createUser = async (data: RegisterInput): Promise<string> => {
-    const exists = await userRepository.existsByEmail(data.email);
+const createUser = async (input: RegisterInput): Promise<UserRecord> => {
+    const exists = await userRepository.existsByEmail(input.email);
     if (exists) throw alreadyExists({message: "Email already in use, please choose another"});
 
-    // Hash the password before saving the user
-    const hashedPassword = await hashPassword(data.password);
+    const userCreated = userRepository.create(input);
 
-    return userRepository.create({
-        ...data,
-        password: hashedPassword
-    });
+    return userCreated;
 };
 
 const getUserById = async (id: string): Promise<UserRecord> => {

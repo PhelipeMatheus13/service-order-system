@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import userController from "../../../../src/modules/user/user.controller.js";
+import { UserRecord } from "../../../../src/modules/user/user.types.js";
 import userService from "../../../../src/modules/user/user.service.js";
 
 vi.mock("../../../../src/modules/user/user.service.js");
@@ -23,29 +24,56 @@ describe("User Controller (Unit)", () => {
     describe("register", () => {
         it("should return 201 on successful registration", async () => {
             const requestBody = {
-                name: "John doe",
+                firstName: "John",
+                lastName: "Doe",
+                phoneNumber: null,
                 email: "johndoe@hotmail.com",
-                password: "Johndoe@password",
-                confirmpassword: "Johndoe@password",
+                role: "ATTENDANT"
             };
 
             req.body = requestBody;
 
-            vi.mocked(userService).createUser.mockResolvedValue("uuid-123");
+            const mockUserRecord = {
+                id: "uuid-123",
+                firstName: requestBody.firstName,
+                lastName: requestBody.lastName,
+                phoneNumber: requestBody.phoneNumber,
+                email: requestBody.email,
+                passwordHash: null,
+                role: requestBody.role,
+                active: false,
+                createdAt: new Date(),
+                updatedAt: null,
+            } as UserRecord;
+
+            vi.mocked(userService).createUser.mockResolvedValue(mockUserRecord);
 
             await userController.register(req, res, next);
 
             // validates the behavior of registerInputDTO
             expect(userService.createUser).toHaveBeenCalledWith({
-                name: requestBody.name,
+                firstName: requestBody.firstName,
+                lastName: requestBody.lastName,
+                phoneNumber: requestBody.phoneNumber,
                 email: requestBody.email,
-                password: requestBody.password,
+                role: requestBody.role,
             });
 
             expect(res.status).toHaveBeenCalledWith(201);
             expect(res.json).toHaveBeenCalledWith({
                 success: true,
                 message: "User created successfully",
+                data: {
+                    id: mockUserRecord.id,
+                    firstName: mockUserRecord.firstName,
+                    lastName: mockUserRecord.lastName,
+                    phoneNumber: mockUserRecord.phoneNumber,
+                    email: mockUserRecord.email,
+                    role: mockUserRecord.role,
+                    active: mockUserRecord.active,
+                    createdAt: String(mockUserRecord.createdAt),
+                    updatedAt: null,
+                },
             });
             expect(next).not.toHaveBeenCalled();
         });
@@ -57,13 +85,17 @@ describe("User Controller (Unit)", () => {
             req.params.id = userId;
 
             const mockUserRecord = {
-                id: userId,
-                name: "John doe",
+                id: "uuid-123",
+                firstName: "John",
+                lastName: "Doe",
+                phoneNumber: null,
                 email: "johndoe@hotmail.com",
-                password: "hashPassword",
+                passwordHash: null,
+                role: "ATTENDANT",
+                active: false,
                 createdAt: new Date(),
                 updatedAt: null,
-            };
+            } as UserRecord;
 
             vi.mocked(userService).getUserById.mockResolvedValue(mockUserRecord);
 
@@ -75,10 +107,14 @@ describe("User Controller (Unit)", () => {
                 // validates the behavior of userOutputDTO
                 data: {
                     id: mockUserRecord.id,
-                    name: mockUserRecord.name,
+                    firstName: mockUserRecord.firstName,
+                    lastName: mockUserRecord.lastName,
+                    phoneNumber: mockUserRecord.phoneNumber,
                     email: mockUserRecord.email,
+                    role: mockUserRecord.role,
+                    active: mockUserRecord.active,
                     createdAt: String(mockUserRecord.createdAt),
-                    updatedAt: String(mockUserRecord.updatedAt),
+                    updatedAt: null,
                 },
             });
             expect(next).not.toHaveBeenCalled();

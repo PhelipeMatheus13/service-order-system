@@ -3,6 +3,7 @@ import { PrismaClient } from "../../../../src/generated/prisma/client.js";
 import { setupTestDatabase } from "../../../helpers/testDatabase.js";
 import { setPrismaInstance } from "../../../../src/shared/config/database";
 import userRepository from "../../../../src/modules/user/user.repository.js";
+import { UserRecord } from "../../../../src/modules/user/user.types.js";
 
 
 describe("User Repository (Integration)", () => {
@@ -27,22 +28,28 @@ describe("User Repository (Integration)", () => {
         describe("create", () => {
             it("should insert a new user into the database", async () => {
                 const userData = {
-                    name: "jhon doe",
+                    firstName: "Jhon",
+                    lastName: "Doe",
+                    phoneNumber: "5521995437105",
                     email: "jhon@example.com",
-                    password: "hashedpassword"
-                };
+                    role: "ATTENDANT",
+                } as UserRecord;
 
-                const userId = await userRepository.create(userData);
+                const userCreated = await userRepository.create(userData);
 
-                expect(userId).toBeDefined();
-                expect(typeof userId).toBe("string");
+                expect(userCreated).toBeDefined();
+                expect(typeof userCreated.id).toBe("string");
 
-                const user = await prisma.user.findUnique({ where: { id: userId } });
+                const user = await prisma.user.findUnique({ where: { id: userCreated.id } });
 
                 expect(user?.id).toBeTruthy();
-                expect(user?.name).toBe("jhon doe");
-                expect(user?.email).toBe("jhon@example.com");
-                expect(user?.password).toBe("hashedpassword");
+                expect(user?.firstName).toBe(userCreated.firstName);
+                expect(user?.lastName).toBe(userCreated.lastName);
+                expect(user?.phoneNumber).toBe(userCreated.phoneNumber);
+                expect(user?.email).toBe(userCreated.email);
+                expect(user?.passwordHash).toBeNull(); // user must be created without a password.
+                expect(user?.role).toBe(userCreated.role);
+                expect(user?.active).toBe(false);
                 expect(user?.createdAt).toBeTruthy();
                 expect(user?.updatedAt).toBeNull();
             });
@@ -51,10 +58,11 @@ describe("User Repository (Integration)", () => {
         describe("deleteById", () => {
             it("should delete a user from the database by ID", async () => {
                 const userData = {
-                    name: "jhon doe",
+                    firstName: "Jhon",
+                    lastName: "Doe",
                     email: "jhon@example.com",
-                    password: "hashedpassword"
-                };
+                    role: "ATTENDANT",
+                } as UserRecord;
 
                 const { id: userId } = await prisma.user.create({
                     data: userData,
@@ -79,10 +87,11 @@ describe("User Repository (Integration)", () => {
         describe("existsByEmail", () => {
             it("should return true if a user with the given email exists", async () => {
                 const userData = {
-                    name: "jhon doe",
+                    firstName: "Jhon",
+                    lastName: "Doe",
                     email: "jhon@example.com",
-                    password: "hashedpassword"
-                };
+                    role: "ATTENDANT",
+                } as UserRecord;
 
                 await prisma.user.create({ data: userData });
 
@@ -99,24 +108,29 @@ describe("User Repository (Integration)", () => {
         describe("findById", () => {
             it("should return the user if a user with the given ID exists", async () => {
                 const userData = {
-                    name: "jhon doe",
+                    firstName: "Jhon",
+                    lastName: "Doe",
+                    phoneNumber: "5521995437105",
                     email: "jhon@example.com",
-                    password: "hashedpassword"
-                };
+                    passwordHash: "passwordHash",
+                    role: "ATTENDANT",
+                    active: true,
+                    updatedAt: new Date,
+                } as UserRecord;
 
-                const { id: userId } = await prisma.user.create({
-                    data: userData,
-                    select: { id: true }
-                });
+                const  userCreated = await prisma.user.create({data: userData});
 
-                const user = await userRepository.findById(userId);
+                const user = await userRepository.findById(userCreated.id);
 
                 expect(user?.id).toBeTruthy();
-                expect(user?.name).toBe("jhon doe");
-                expect(user?.email).toBe("jhon@example.com");
-                expect(user?.password).toBe("hashedpassword");
+                expect(user?.firstName).toBe(userCreated.firstName);
+                expect(user?.lastName).toBe(userCreated.lastName);
+                expect(user?.phoneNumber).toBe(userCreated.phoneNumber);
+                expect(user?.email).toBe(userCreated.email);
+                expect(user?.passwordHash).toBe(userCreated.passwordHash);
+                expect(user?.role).toBe(userCreated.role);
                 expect(user?.createdAt).toBeTruthy();
-                expect(user?.updatedAt).toBeNull();
+                expect(user?.updatedAt).toBeTruthy();
             });
 
             it("should return null if a user with the given ID does not exist", async () => {

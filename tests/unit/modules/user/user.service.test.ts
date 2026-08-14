@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import userService from "../../../../src/modules/user/user.service.js";
+import { RegisterInput, UserRecord } from "../../../../src/modules/user/user.types.js";
 import userRepository from "../../../../src/modules/user/user.repository.js";
 import { hashPassword } from "../../../../src/shared/services/hash.js";
 
@@ -14,10 +15,12 @@ describe("User Service (Unit)", () => {
 
     describe("createUser", () => {
         const registerData = {
-            name: "John doe",
+            firstName: "John",
+            lastName: "Doe",
+            phoneNumber: null,
             email: "johndoe@hotmail.com",
-            password: "Johndoe@password"
-        };
+            role: "ATTENDANT"
+        } as RegisterInput;
 
 
         it("should throw if fail in email check ", async () => {
@@ -38,9 +41,8 @@ describe("User Service (Unit)", () => {
                 });
         });
 
-        it("should throw if fail in hashService.hashPassword", async () => {
+        it("should throw if fail in userRepository.create", async () => {
             vi.mocked(userRepository).existsByEmail.mockResolvedValue(false);
-            vi.mocked(hashPassword).mockResolvedValue("hashedPassword");
             vi.mocked(userRepository).create.mockRejectedValue(new Error("fake error"));
 
             await expect(userService.createUser(registerData))
@@ -49,20 +51,34 @@ describe("User Service (Unit)", () => {
 
         it("should create user successfully", async () => {
             vi.mocked(userRepository).existsByEmail.mockResolvedValue(false);
-            vi.mocked(hashPassword).mockResolvedValue("hashedPassword");
-            vi.mocked(userRepository).create.mockResolvedValue("uuid-123");
+
+            const mockUserRecord = {
+                id: "uuid-123",
+                firstName: registerData.firstName,
+                lastName: registerData.lastName,
+                phoneNumber: registerData.phoneNumber,
+                email: registerData.email,
+                passwordHash: null,
+                role: registerData.role,
+                active: false,
+                createdAt: new Date(),
+                updatedAt: null,
+            } as UserRecord;
+
+            vi.mocked(userRepository).create.mockResolvedValue(mockUserRecord);
 
             const result = await userService.createUser(registerData);
 
             expect(userRepository.existsByEmail).toHaveBeenCalledWith(registerData.email);
-            expect(hashPassword).toHaveBeenCalledWith(registerData.password);
             expect(userRepository.create).toHaveBeenCalledWith({
-                name: registerData.name,
+                firstName: registerData.firstName,
+                lastName: registerData.lastName,
+                phoneNumber: registerData.phoneNumber,
                 email: registerData.email,
-                password: "hashedPassword",
+                role: registerData.role,
             });
 
-            expect(result).toBe("uuid-123");
+            expect(result).toBe(mockUserRecord);
         });
     });
 
@@ -90,13 +106,17 @@ describe("User Service (Unit)", () => {
 
         it("should return user", async () => {
             const mockUserRecord = {
-                id: userId,
-                name: "John doe",
+                id: "uuid-123",
+                firstName: "John",
+                lastName: "Doe",
+                phoneNumber: null,
                 email: "johndoe@hotmail.com",
-                password: "hashPassword",
+                passwordHash: null,
+                role: "ATTENDANT",
+                active: false,
                 createdAt: new Date(),
                 updatedAt: null,
-            };
+            } as UserRecord;
 
             vi.mocked(userRepository).findById.mockResolvedValue(mockUserRecord);
 

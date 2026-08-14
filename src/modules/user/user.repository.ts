@@ -3,18 +3,19 @@ import { Prisma } from "../../generated/prisma/client.js";
 import type { RegisterInput, UserRecord } from "./user.types.js";
 
 // Writer
-const create = async (userData: RegisterInput): Promise<string> => {
+const create = async (userData: RegisterInput): Promise<UserRecord> => {
     const prisma = getPrisma();
     const user = await prisma.user.create({
         data: {
-            name: userData.name,
+            firstName: userData.firstName,
+            lastName: userData.lastName,
+            phoneNumber: userData.phoneNumber,
             email: userData.email,
-            password: userData.password,
+            role: userData.role,
         },
-        select: {id: true},
     });
 
-    return user.id;
+    return user;
 };
 
 const deleteById = async (id: string): Promise<boolean> => {

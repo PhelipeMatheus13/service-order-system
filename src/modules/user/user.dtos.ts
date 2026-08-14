@@ -5,18 +5,29 @@ import type { RegisterInput, UserRecord, UserOutput } from "./user.types.js";
 // Since controllers are responsible for invoking these mappings,
 // dedicated DTO tests would only duplicate the same assertions.
 
+const sanitizePhoneNumber = (phone: string | null): string | null => {
+    if (!phone) return null;
+    return phone.replace(/\D/g, "");
+};
+
 const registerInputDTO = (body: RegisterRequest): RegisterInput => ({
-    name: body.name,
+    firstName: body.firstName,
+    lastName: body.lastName,
     email: body.email,
-    password: body.password,
+    phoneNumber: sanitizePhoneNumber(body.phoneNumber),
+    role: body.role,
 });
 
 const userOutputDTO = (user: UserRecord): UserOutput => ({
     id: user.id,
-    name: user.name,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    phoneNumber: user.phoneNumber,
     email: user.email,
+    role: user.role,
+    active: user.active,
     createdAt: String(user.createdAt),
-    updatedAt: String(user.updatedAt),
+    updatedAt: user.updatedAt ? String(user.updatedAt) : null,
 });
 
 export {

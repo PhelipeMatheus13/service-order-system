@@ -5,11 +5,12 @@ import { registerInputDTO, userOutputDTO } from "./user.dtos.js";
 
 const register = asyncHandler(async (req, res) => {
     const input = registerInputDTO(req.body);
-    await userService.createUser(input);
+    const user = await userService.createUser(input);
     res.status(201).json({
         success: true,
-        message: "User created successfully"
-    });    
+        data: userOutputDTO(user),
+        message: "User created successfully",
+    });
 });
 
 const getUser = asyncHandler(async (req, res) => {
@@ -24,7 +25,7 @@ const getUser = asyncHandler(async (req, res) => {
 
 const deleteUser = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    if (!id) throw badRequest({message: "User ID is required"})
+    if (!id) throw badRequest({ message: "User ID is required" })
     await userService.deleteUserById(String(id));
     res.status(200).json({
         success: true,

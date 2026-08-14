@@ -4,9 +4,9 @@ const router = express.Router();
 import userController from "./user.controller.js";
 import registry  from "../../shared/docs/registry.js";
 import { z } from "zod";
+import { registerLimiter } from "../../shared/middlewares/rate-limiter.js";
 import validate from "../../shared/middlewares/validate.js";
 import { registerSchema, userSchema } from "./user.schemas.js";
-import { registerLimiter } from "../../shared/middlewares/rate-limiter.js";
 import { errorSchema } from "../../shared/docs/components/schemas.js"
 
 
@@ -27,6 +27,7 @@ registry.registerPath({
                 "application/json": {
                     schema: z.object({
                         success: z.boolean().openapi({ example: true }),
+                        data: userSchema,
                         message: z.string().openapi({ example: "User created successfully" })
                     }),
                 },
