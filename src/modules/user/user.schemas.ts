@@ -38,12 +38,12 @@ const userSchema = registry.register(
         id: z.string(),
         firstName: z.string(),
         lastName: z.string(),
-        phoneNumber: z.string(),
+        phoneNumber: z.string().nullable(),
         email: z.string(),
         role: z.string(),
         active: z.boolean(),
         createdAt: z.string(),
-        updatedAt: z.string(),
+        updatedAt: z.string().nullable(),
     })
 );
 

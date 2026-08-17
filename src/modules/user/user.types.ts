@@ -20,8 +20,17 @@ interface UserOutput {
     updatedAt: string | null;
 }
 
+interface ListUsersInput {
+    options: ListUsersOption;
+}
+
+interface ListUsersOption {
+    limit: number | null;
+}
+
 export type { 
     RegisterInput, 
     UserOutput,
     User as UserRecord,
+    ListUsersInput,
 };

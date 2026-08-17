@@ -160,4 +160,57 @@ describe("User Controller (Unit)", () => {
             expect(res.status).not.toHaveBeenCalled();
         });
     });
+
+    describe("listAllUser", () => {
+        it("should return 200 with users data", async () => {
+            req.query = {
+                limit: "1",
+            };
+            
+            const mockUserRecords = [
+                {
+                    id: "uuid-123",
+                    firstName: "John",
+                    lastName: "Doe",
+                    phoneNumber: null,
+                    email: "johndoe@hotmail.com",
+                    passwordHash: null,
+                    role: "ATTENDANT",
+                    active: false,
+                    createdAt: new Date(),
+                    updatedAt: null,
+                },
+            ] as UserRecord[];
+
+            vi.mocked(userService).listUsers.mockResolvedValue(mockUserRecords);
+
+            await userController.listUsers(req, res, next);
+
+            expect(userService.listUsers).toHaveBeenCalledWith({
+                options: {
+                    limit: 1,
+                },
+            });
+
+            expect(res.status).toHaveBeenCalledWith(200);
+            expect(res.json).toHaveBeenCalledWith({
+                success: true,
+                data: [
+                    {
+                        id: mockUserRecords[0].id,
+                        firstName: mockUserRecords[0].firstName,
+                        lastName: mockUserRecords[0].lastName,
+                        phoneNumber: mockUserRecords[0].phoneNumber,
+                        email: mockUserRecords[0].email,
+                        role: mockUserRecords[0].role,
+                        active: mockUserRecords[0].active,
+                        createdAt: String(mockUserRecords[0].createdAt),
+                        updatedAt: null,
+                    },
+                ],
+            });
+
+            expect(next).not.toHaveBeenCalled();
+        });
+    });
 });

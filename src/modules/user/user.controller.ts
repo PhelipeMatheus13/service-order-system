@@ -1,7 +1,7 @@
 import asyncHandler from "../../shared/utils/async.js";
 import userService from "./user.service.js";
 import { badRequest } from "../../shared/errors/errors.js";
-import { registerInputDTO, userOutputDTO } from "./user.dtos.js";
+import { registerInputDTO, userOutputDTO, usersOutputDTO } from "./user.dtos.js";
 
 const register = asyncHandler(async (req, res) => {
     const input = registerInputDTO(req.body);
@@ -33,8 +33,26 @@ const deleteUser = asyncHandler(async (req, res) => {
     });
 });
 
+const listUsers = asyncHandler(async (req, res) => {
+    const limit = req.query.limit
+        ? Number(req.query.limit)
+        : null;
+
+    const users = await userService.listUsers({
+        options: {
+            limit,
+        },
+    });
+
+    res.status(200).json({
+        success: true,
+        data: usersOutputDTO(users),
+    });
+});
+
 export default {
     register,
     getUser,
     deleteUser,
+    listUsers,
 };

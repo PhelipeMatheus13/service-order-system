@@ -156,4 +156,45 @@ describe("User Service (Unit)", () => {
             expect(result).toEqual(undefined); // return Promise<void>
         });
     });
+
+    describe("listAllUser", () => {
+        const input = {
+            options: {
+                limit: 1,
+            },
+        };
+
+        it("should throw an error if repository.listAll fails", async () => {
+            vi.mocked(userRepository).list.mockRejectedValue(
+                new Error("fake error")
+            );
+
+            await expect(userService.listUsers(input))
+                .rejects.toThrow("fake error");
+        });
+
+        it("should return the users from repository", async () => {
+            const users = [
+                {
+                    id: "uuid-123",
+                    firstName: "John",
+                    lastName: "Doe",
+                    phoneNumber: "5521995437105",
+                    email: "john@example.com",
+                    passwordHash: "passwordHash",
+                    role: "ATTENDANT",
+                    active: true,
+                    createdAt: new Date(),
+                    updatedAt: null,
+                },
+            ] as UserRecord[];
+
+            vi.mocked(userRepository).list.mockResolvedValue(users);
+
+            const result = await userService.listUsers(input);
+
+            expect(userRepository.list).toHaveBeenCalledWith(input);
+            expect(result).toEqual(users);
+        });
+    });
 });

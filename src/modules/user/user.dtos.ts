@@ -30,7 +30,22 @@ const userOutputDTO = (user: UserRecord): UserOutput => ({
     updatedAt: user.updatedAt ? String(user.updatedAt) : null,
 });
 
+
+const usersOutputDTO = (users: UserRecord[]): UserOutput[] =>
+    users.map((user) => ({
+        id: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        phoneNumber: user.phoneNumber,
+        email: user.email,
+        role: user.role,
+        active: user.active,
+        createdAt: String(user.createdAt),
+        updatedAt: user.updatedAt ? String(user.updatedAt) : null,
+    }));
+
 export {
     registerInputDTO,
     userOutputDTO,
+    usersOutputDTO,
 };

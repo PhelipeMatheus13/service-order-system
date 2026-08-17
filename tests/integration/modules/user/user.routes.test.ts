@@ -63,6 +63,57 @@ describe("User Routes (Integration)", () => {
         });
     });
 
+    describe("GET /users", () => {
+        it("should return users ordered by creation date descending and respect the given limit", async () => {
+            const now = new Date;
+
+            await prisma.user.create({
+                data: {
+                    firstName: "John",
+                    lastName: "Doe",
+                    phoneNumber: "5521995437105",
+                    email: "john@example.com",
+                    passwordHash: "passwordHash",
+                    role: "ATTENDANT",
+                    active: true,
+                    createdAt: new Date(now.getTime() - 60 * 60 * 1000), // 1 hour ago
+                },
+            });
+
+            const userCreated = await prisma.user.create({
+                data: {
+                    firstName: "Jane",
+                    lastName: "Doe",
+                    phoneNumber: "5521995437106",
+                    email: "jane@example.com",
+                    passwordHash: "passwordHash",
+                    role: "TECHNICIAN",
+                    active: true,
+                    createdAt: now,
+                },
+            });
+
+            const res = await request(app)
+                .get("/users")
+                .query({ limit: 1 });
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body.success).toBe(true);
+
+            expect(res.body.data).toHaveLength(1);
+            expect(res.body.data[0].id).toBe(userCreated.id);
+            expect(res.body.data[0].firstName).toBe(userCreated.firstName);
+            expect(res.body.data[0].lastName).toBe(userCreated.lastName);
+            expect(res.body.data[0].phoneNumber).toBe(userCreated.phoneNumber);
+            expect(res.body.data[0].email).toBe(userCreated.email);
+            expect(res.body.data[0].role).toBe(userCreated.role);
+            expect(res.body.data[0].active).toBe(userCreated.active);
+            expect(res.body.data[0].createdAt).toBeTruthy();
+            expect(res.body.data[0].updatedAt).toBeNull();
+            expect(res.body.data[0].passwordHash).toBeUndefined();
+        });
+    });
+
     describe("GET /users/:id", () => {
         beforeEach(async () => {
             ({ id: userId } = await prisma.user.create({

@@ -9,7 +9,7 @@ import validate from "../../shared/middlewares/validate.js";
 import { registerSchema, userSchema } from "./user.schemas.js";
 import { errorSchema } from "../../shared/docs/components/schemas.js"
 
-
+// POST
 registry.registerPath({
     tags: ["User"],
     method: "post",
@@ -51,6 +51,36 @@ registry.registerPath({
 });
 router.post("/register", registerLimiter, validate(registerSchema), userController.register);
 
+// GET
+registry.registerPath({
+    tags: ["User"],
+    method: "get",
+    path: "/users/",
+    summary: "List users",
+    request: {
+        query: z.object({
+            limit: z.coerce.number().int().positive().optional().openapi({
+                example: 5,
+            }),
+        }),
+    },
+    responses: {
+        200: {
+            description: "Users listed successfully",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        success: z.boolean().openapi({ example: true }),
+                        data: z.array(userSchema),
+                    }),
+                },
+            },
+        },
+        500: { $ref: "#/components/responses/InternalError" },
+    },
+});
+router.get("/", userController.listUsers);
+
 registry.registerPath({
     tags: ["User"],
     method: "get",
@@ -75,6 +105,7 @@ registry.registerPath({
 });
 router.get("/:id", userController.getUser);
 
+// DELETE
 registry.registerPath({
     tags: ["User"],
     method: "delete",

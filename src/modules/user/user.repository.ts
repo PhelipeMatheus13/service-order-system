@@ -1,17 +1,18 @@
 import { getPrisma } from "../../shared/config/database.js";
 import { Prisma } from "../../generated/prisma/client.js";
-import type { RegisterInput, UserRecord } from "./user.types.js";
+import type { RegisterInput, UserRecord, ListUsersInput } from "./user.types.js";
+
 
 // Writer
-const create = async (userData: RegisterInput): Promise<UserRecord> => {
+const create = async (input: RegisterInput): Promise<UserRecord> => {
     const prisma = getPrisma();
     const user = await prisma.user.create({
         data: {
-            firstName: userData.firstName,
-            lastName: userData.lastName,
-            phoneNumber: userData.phoneNumber,
-            email: userData.email,
-            role: userData.role,
+            firstName: input.firstName,
+            lastName: input.lastName,
+            phoneNumber: input.phoneNumber,
+            email: input.email,
+            role: input.role,
         },
     });
 
@@ -45,6 +46,19 @@ const findById = async(id: string): Promise<UserRecord | null>  => {
     return prisma.user.findUnique({ where: { id } });
 }; 
 
+const list = async (input: ListUsersInput): Promise<UserRecord[]> => {
+    const prisma = getPrisma();
+    
+    const limit = input.options.limit ?? 100;
+
+    return prisma.user.findMany({
+        take: limit,
+        orderBy: {
+            createdAt: "desc",
+        },
+    });
+};
+
 export default {
     // Writer
     create,
@@ -52,4 +66,5 @@ export default {
     // Reader
     existsByEmail,
     findById,
+    list,
 };

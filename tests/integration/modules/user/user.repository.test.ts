@@ -138,5 +138,54 @@ describe("User Repository (Integration)", () => {
                 expect(user).toBeNull();
             });
         });
+
+        describe("list", () => {
+            it("should return users ordered by creation date descending and respect the given limit", async () => {
+                const now = new Date;
+                
+                await prisma.user.create({
+                    data: {
+                        firstName: "John",
+                        lastName: "Doe",
+                        phoneNumber: "5521995437105",
+                        email: "john@example.com",
+                        passwordHash: "passwordHash",
+                        role: "ATTENDANT",
+                        active: true,
+                        createdAt: new Date(now.getTime() - 60 * 60 * 1000), // 1 hour ago
+                    },
+                });
+
+                const userCreated = await prisma.user.create({
+                    data: {
+                        firstName: "Jane",
+                        lastName: "Doe",
+                        phoneNumber: "5521995437106",
+                        email: "jane@example.com",
+                        passwordHash: "passwordHash",
+                        role: "TECHNICIAN",
+                        active: true,
+                        createdAt: now,
+                    },
+                });
+
+                const users = await userRepository.list({
+                    options: {
+                        limit: 1,
+                    },
+                });
+
+                expect(users).toHaveLength(1);
+                expect(users[0].id).toBe(userCreated.id);
+                expect(users[0].firstName).toBe(userCreated.firstName);
+                expect(users[0].lastName).toBe(userCreated.lastName);
+                expect(users[0].phoneNumber).toBe(userCreated.phoneNumber);
+                expect(users[0].email).toBe(userCreated.email);
+                expect(users[0].role).toBe(userCreated.role);
+                expect(users[0].active).toBe(userCreated.active);
+                expect(users[0].createdAt).toBeTruthy();
+                expect(users[0].updatedAt).toBeNull();
+            });
+        });
     });
 });
