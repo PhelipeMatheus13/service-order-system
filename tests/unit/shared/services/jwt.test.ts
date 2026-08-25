@@ -6,6 +6,7 @@ import {
     generateRefreshToken,
     decodeAccessToken,
     decodeRefreshToken,
+    generateActivationToken
 } from "../../../../src/shared/services/jwt.js";
 import logger from "../../../../src/shared/config/logger.js";
 
@@ -35,7 +36,7 @@ describe("JWT Service (Unit)", () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
-        process.env = { ...originalEnv, SECRET: "secret", REFRESH_SECRET: "refresh" };
+        process.env = { ...originalEnv, SECRET: "secret", REFRESH_SECRET: "refresh", ACTIVATION_SECRET: "activation" };
     });
 
     afterEach(() => {
@@ -57,7 +58,7 @@ describe("JWT Service (Unit)", () => {
             const token = generateAccessToken("user-123", "admin");
             expect(token).toBe("access-token");
             expect(sign).toHaveBeenCalledWith({ id: "user-123", role: "admin" }, "secret", { expiresIn: "15m" });
-        });        
+        });
     });
 
     describe("decodeAccessToken", () => {
@@ -101,7 +102,7 @@ describe("JWT Service (Unit)", () => {
                 );
 
             expect(logger.warn).toHaveBeenCalledWith({ err: jwtError }, "Invalid access token");
-            
+
         });
 
         it("should log an error and throw INVALID_TOKEN for an unexpected error", () => {
@@ -122,7 +123,7 @@ describe("JWT Service (Unit)", () => {
 
         it("should throw an exception if verify returns a string instead of a payload", () => {
             verify.mockReturnValue("invalid-string");
-            
+
             expect(() => decodeAccessToken("valid-token"))
                 .toThrow(
                     expect.objectContaining({
@@ -131,15 +132,15 @@ describe("JWT Service (Unit)", () => {
                         message: "Invalid token format",
                     })
                 );
-        }); 
+        });
 
         it("should decode a valid token", () => {
             verify.mockReturnValue({ id: "user-123", role: "admin", iat: 123, exp: 456 });
             const decoded = decodeAccessToken("valid-token");
             expect(decoded).toEqual({ id: "user-123", role: "admin", iat: 123, exp: 456 });
             expect(verify).toHaveBeenCalledWith("valid-token", "secret");
-        });        
-    });    
+        });
+    });
 
     describe("generateRefreshToken", () => {
         it("should throw if REFRESH_SECRET is not set", () => {
@@ -150,13 +151,13 @@ describe("JWT Service (Unit)", () => {
 
             expect(sign).not.toHaveBeenCalled();
         });
-        
+
         it("should generate refresh token using REFRESH_SECRET and expiration of 7d", () => {
             sign.mockReturnValue("refresh-token");
             const token = generateRefreshToken("user-123", "admin", "jti-uuid-123");
             expect(token).toBe("refresh-token");
             expect(sign).toHaveBeenCalledWith({ id: "user-123", role: "admin", jti: "jti-uuid-123" }, "refresh", { expiresIn: "7d" });
-        });        
+        });
     });
 
     describe("decodeRefreshToken", () => {
@@ -219,7 +220,7 @@ describe("JWT Service (Unit)", () => {
 
         it("should throw an exception if verify returns a string instead of a payload", () => {
             verify.mockReturnValue("invalid-string");
-            
+
             expect(() => decodeRefreshToken("valid-token"))
                 .toThrow(
                     expect.objectContaining({
@@ -228,13 +229,31 @@ describe("JWT Service (Unit)", () => {
                         message: "Invalid token format",
                     })
                 );
-        });         
+        });
 
         it("should decode a valid token", () => {
             verify.mockReturnValue({ id: "user-123", role: "admin", iat: 123, exp: 456 });
             const decoded = decodeRefreshToken("valid-token");
             expect(decoded).toEqual({ id: "user-123", role: "admin", iat: 123, exp: 456 });
             expect(verify).toHaveBeenCalledWith("valid-token", "refresh");
+        });
+    });
+
+    describe("generateActivationToken", () => {
+        it("should throw if ACTIVATION_SECRET is not set", () => {
+            delete process.env.ACTIVATION_SECRET;
+
+            expect(() => generateActivationToken("user-123"))
+                .toThrow("Missing required environment variable: ACTIVATION_SECRET");
+
+            expect(sign).not.toHaveBeenCalled();
+        });
+
+        it("should generate refresh token using ACTIVATION_SECRET and expiration of 7d", () => {
+            sign.mockReturnValue("activation-token");
+            const token = generateActivationToken("user-123");
+            expect(token).toBe("activation-token");
+            expect(sign).toHaveBeenCalledWith({ id: "user-123"}, "activation", { expiresIn: "15m" });
         });
     });
 });

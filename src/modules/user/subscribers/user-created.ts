@@ -32,7 +32,7 @@ const sendActivationEmailSubscriber: Subscriber = {
             throw new PubsubError("user-created event missing 'after' state", false);
         }
 
-        const resourceValidation = await userRepository.findResourceValidation(payload.userId, "EMAIL");
+        const resourceValidation = await userRepository.findResourceValidationByUserId(payload.userId, "EMAIL");
 
         if (resourceValidation?.confirmedAt) {
             return;

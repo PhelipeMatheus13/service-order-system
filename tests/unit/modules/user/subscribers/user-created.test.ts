@@ -92,7 +92,7 @@ describe("User Created Subscriber (Unit)", () => {
             "Failed to process user-created event: payload is missing the 'after' state",
         );
 
-        expect(userRepository.findResourceValidation).not.toHaveBeenCalled();
+        expect(userRepository.findResourceValidationByUserId).not.toHaveBeenCalled();
 
         expect(userRepository.createResourceValidation).not.toHaveBeenCalled();
 
@@ -102,7 +102,7 @@ describe("User Created Subscriber (Unit)", () => {
     it("should throw when it fails to find the resource validation", async () => {
         const error = new Error("Failed to find resource validation");
 
-        vi.mocked(userRepository).findResourceValidation.mockRejectedValue(error);
+        vi.mocked(userRepository).findResourceValidationByUserId.mockRejectedValue(error);
 
         await expect(sendActivationEmailSubscriber.handler(messagePayload))
             .rejects.toThrow(error);
@@ -115,14 +115,14 @@ describe("User Created Subscriber (Unit)", () => {
     });
 
     it("should return when the resource validation is already confirmed", async () => {
-        vi.mocked(userRepository).findResourceValidation.mockResolvedValue({
+        vi.mocked(userRepository).findResourceValidationByUserId.mockResolvedValue({
             ...resourceValidation,
             confirmedAt: new Date(),
         });
 
         await sendActivationEmailSubscriber.handler(messagePayload);
 
-        expect(userRepository.findResourceValidation)
+        expect(userRepository.findResourceValidationByUserId)
             .toHaveBeenCalledWith("user-1", "EMAIL");
 
         expect(generateSecure6DigitCode).not.toHaveBeenCalled();
@@ -133,7 +133,7 @@ describe("User Created Subscriber (Unit)", () => {
     });
 
     it("should send the activation email using the existing valid resource validation", async () => {
-        vi.mocked(userRepository).findResourceValidation.mockResolvedValue({
+        vi.mocked(userRepository).findResourceValidationByUserId.mockResolvedValue({
             ...resourceValidation,
             expiresAt: new Date(Date.now() + 60_000),
         });
@@ -142,7 +142,7 @@ describe("User Created Subscriber (Unit)", () => {
 
         await sendActivationEmailSubscriber.handler(messagePayload);
 
-        expect(userRepository.findResourceValidation)
+        expect(userRepository.findResourceValidationByUserId)
             .toHaveBeenCalledWith("user-1", "EMAIL");
 
         expect(generateSecure6DigitCode).not.toHaveBeenCalled();
@@ -160,7 +160,7 @@ describe("User Created Subscriber (Unit)", () => {
     it("should throw when it fails to create the resource validation", async () => {
         const error = new Error("Failed to create resource validation");
 
-        vi.mocked(userRepository).findResourceValidation.mockResolvedValue(null);
+        vi.mocked(userRepository).findResourceValidationByUserId.mockResolvedValue(null);
 
         vi.mocked(generateSecure6DigitCode).mockReturnValue("123456");
 
@@ -169,7 +169,7 @@ describe("User Created Subscriber (Unit)", () => {
         await expect(sendActivationEmailSubscriber.handler(messagePayload))
             .rejects.toThrow(error);
 
-        expect(userRepository.findResourceValidation)
+        expect(userRepository.findResourceValidationByUserId)
             .toHaveBeenCalledWith("user-1", "EMAIL");
 
         expect(generateSecure6DigitCode).toHaveBeenCalled();
@@ -187,7 +187,7 @@ describe("User Created Subscriber (Unit)", () => {
     it("should throw when it fails to send the activation email", async () => {
         const error = new Error("Failed to send activation email");
 
-        vi.mocked(userRepository).findResourceValidation.mockResolvedValue(null);
+        vi.mocked(userRepository).findResourceValidationByUserId.mockResolvedValue(null);
 
         vi.mocked(generateSecure6DigitCode).mockReturnValue("123456");
 
@@ -198,7 +198,7 @@ describe("User Created Subscriber (Unit)", () => {
         await expect(sendActivationEmailSubscriber.handler(messagePayload))
             .rejects.toThrow(error);
 
-        expect(userRepository.findResourceValidation)
+        expect(userRepository.findResourceValidationByUserId)
             .toHaveBeenCalledWith("user-1", "EMAIL");
 
         expect(userRepository.createResourceValidation)
@@ -217,7 +217,7 @@ describe("User Created Subscriber (Unit)", () => {
     });
 
     it("should create the resource validation and send the activation email", async () => {
-        vi.mocked(userRepository).findResourceValidation.mockResolvedValue(null);
+        vi.mocked(userRepository).findResourceValidationByUserId.mockResolvedValue(null);
 
         vi.mocked(generateSecure6DigitCode).mockReturnValue("123456");
 
@@ -227,7 +227,7 @@ describe("User Created Subscriber (Unit)", () => {
 
         await sendActivationEmailSubscriber.handler(messagePayload);
 
-        expect(userRepository.findResourceValidation)
+        expect(userRepository.findResourceValidationByUserId)
             .toHaveBeenCalledWith("user-1", "EMAIL");
 
         expect(generateSecure6DigitCode).toHaveBeenCalled();

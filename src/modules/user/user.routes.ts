@@ -2,11 +2,11 @@ import express from "express";
 const router = express.Router();
 
 import userController from "./user.controller.js";
-import registry  from "../../shared/docs/registry.js";
+import registry from "../../shared/docs/registry.js";
 import { z } from "zod";
-import { registerLimiter } from "../../shared/middlewares/rate-limiter.js";
+import { registerLimiter, confirmEmailLimiter } from "../../shared/middlewares/rate-limiter.js";
 import validate from "../../shared/middlewares/validate.js";
-import { registerSchema, userSchema } from "./user.schemas.js";
+import { registerSchema, userSchema, confirmEmailSchema } from "./user.schemas.js";
 import { errorSchema } from "../../shared/docs/components/schemas.js"
 
 // POST
@@ -51,6 +51,73 @@ registry.registerPath({
 });
 router.post("/register", registerLimiter, validate(registerSchema), userController.register);
 
+registry.registerPath({
+    tags: ["User"],
+    method: "post",
+    path: "/users/confirm-email",
+    summary: "Confirm user email",
+    request: {
+        body: {
+            content: { "application/json": { schema: confirmEmailSchema } },
+        },
+    },
+    responses: {
+        200: {
+            description: "Email confirmed successfully",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        success: z.boolean().openapi({ example: true }),
+                        data: z.object({
+                            activationToken: z.string().openapi({ example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." }),
+                        }),
+                        message: z.string().openapi({ example: "Email confirmed successfully" }),
+                    }),
+                },
+            },
+        },
+        401: {
+            description: "Invalid or expired challenger number",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        invalidChallengerNumber: { $ref: "#/components/examples/invalidChallengerNumber" },
+                        challengerNumberExpired: { $ref: "#/components/examples/challengerNumberExpired" },
+                    },
+                },
+            },
+        },
+        404: {
+            description: "Resource validation not found",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    example: {
+                        success: false,
+                        error: { code: "NOT_FOUND", message: "Resource validation not found" },
+                    },
+                },
+            },
+        },
+        409: {
+            description: "Resource validation already confirmed",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    example: {
+                        success: false,
+                        error: { code: "CONFLICT", message: "Resource validation already confirmed" },
+                    },
+                },
+            },
+        },
+        422: { $ref: "#/components/responses/confirmEmailValidationError" },
+        500: { $ref: "#/components/responses/InternalError" },
+    },
+})
+router.post("/confirm-email", confirmEmailLimiter, validate(confirmEmailSchema), userController.confirmEmail);
+
 // GET
 registry.registerPath({
     tags: ["User"],
@@ -94,7 +161,7 @@ registry.registerPath({
             description: "User retrieved successfully",
             content: {
                 "application/json": {
-                    schema: z.object({ success: z.boolean().openapi({ example: true }), data: userSchema}),
+                    schema: z.object({ success: z.boolean().openapi({ example: true }), data: userSchema }),
                 },
             },
         },

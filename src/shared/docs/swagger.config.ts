@@ -2,6 +2,7 @@ import { OpenApiGeneratorV3 } from "@asteasolutions/zod-to-openapi";
 import  registry  from "./registry.js";
 
 import "./components/response.js";
+import "./components/examples.js"
 import "../../modules/user/user.routes.js";
  
 const generateOpenApiDocument = () => {

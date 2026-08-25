@@ -166,7 +166,7 @@ describe("User Controller (Unit)", () => {
             req.query = {
                 limit: "1",
             };
-            
+
             const mockUserRecords = [
                 {
                     id: "uuid-123",
@@ -208,6 +208,39 @@ describe("User Controller (Unit)", () => {
                         updatedAt: null,
                     },
                 ],
+            });
+
+            expect(next).not.toHaveBeenCalled();
+        });
+    });
+
+    describe("confirmEmail", () => {
+        it("should return 200 with activation token when email is confirmed", async () => {
+            const requestBody = {
+                email: "johndoe@hotmail.com",
+                challengerNumber: "123456",
+            };
+
+            req.body = requestBody;
+
+            const activationToken = "activation-token";
+
+            vi.mocked(userService.confirmEmail).mockResolvedValue(activationToken);
+
+            await userController.confirmEmail(req, res, next);
+
+            expect(userService.confirmEmail).toHaveBeenCalledWith({
+                email: requestBody.email,
+                challengerNumber: requestBody.challengerNumber,
+            });
+
+            expect(res.status).toHaveBeenCalledWith(200);
+            expect(res.json).toHaveBeenCalledWith({
+                success: true,
+                data: {
+                    activationToken,
+                },
+                message: "Email confirmed successfully",
             });
 
             expect(next).not.toHaveBeenCalled();

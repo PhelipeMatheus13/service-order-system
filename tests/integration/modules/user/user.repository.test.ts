@@ -116,6 +116,46 @@ describe("User Repository (Integration)", () => {
                 expect(resourceValidationCreated?.confirmedAt).toBeNull();
             });
         });
+
+        describe("confirmResourceValidationById", async () => {
+            let userCreated: UserRecord;
+
+            beforeEach(async () => {
+                const userData: RegisterInput = {
+                    firstName: "Jhon",
+                    lastName: "Doe",
+                    phoneNumber: "5521995437105",
+                    email: "jhon@example.com",
+                    role: "ATTENDANT",
+                };
+
+                userCreated = await userRepository.create(userData);
+            });
+
+            it("should confirm a resource validation by id", async () => {
+                const resourceValidationData: CreateResourceValidationInput = {
+                    userId: userCreated.id,
+                    challengerNumber: "123456",
+                    resourceType: "EMAIL",
+                };
+
+                const resourceValidationCreated = await userRepository.createResourceValidation(resourceValidationData);
+
+                await userRepository.confirmResourceValidationById(
+                    resourceValidationCreated.id,
+                );
+
+                const resourceValidationConfirmed = await prisma.userResourceValidation.findUnique({
+                    where: {
+                        id: resourceValidationCreated.id,
+                    },
+                });
+
+                expect(resourceValidationConfirmed).toBeTruthy();
+                expect(resourceValidationConfirmed?.id).toBe(resourceValidationCreated.id);
+                expect(resourceValidationConfirmed?.confirmedAt).toBeTruthy();
+            });
+        });
     });
 
     describe("Reader repository", () => {
@@ -319,7 +359,7 @@ describe("User Repository (Integration)", () => {
             });
         });
 
-        describe("findResourceValidation", async () => {
+        describe("findResourceValidationByUserId", async () => {
             let userCreated: UserRecord;
 
             beforeEach(async () => {
@@ -343,7 +383,7 @@ describe("User Repository (Integration)", () => {
 
                 const resourceValidationCreated = await userRepository.createResourceValidation(resourceValidationData);
 
-                const resourceValidationFound = await userRepository.findResourceValidation(
+                const resourceValidationFound = await userRepository.findResourceValidationByUserId(
                     userCreated.id,
                     "EMAIL",
                 );
@@ -360,10 +400,54 @@ describe("User Repository (Integration)", () => {
             });
 
             it("should return null when the resource validation does not exist", async () => {
-                const resourceValidationFound = await userRepository.findResourceValidation(
+                const resourceValidationFound = await userRepository.findResourceValidationByUserId(
                     userCreated.id,
                     "EMAIL",
                 );
+
+                expect(resourceValidationFound).toBeNull();
+            });
+        });
+
+        describe("findResourceValidationByEmail", async () => {
+            let userCreated: UserRecord;
+
+            beforeEach(async () => {
+                const userData: RegisterInput = {
+                    firstName: "Jhon",
+                    lastName: "Doe",
+                    phoneNumber: "5521995437105",
+                    email: "jhon@example.com",
+                    role: "ATTENDANT",
+                };
+
+                userCreated = await userRepository.create(userData);
+            });
+
+            it("should find a resource validation for an existing user", async () => {
+                const resourceValidationData: CreateResourceValidationInput = {
+                    userId: userCreated.id,
+                    challengerNumber: "123456",
+                    resourceType: "EMAIL",
+                };
+
+                const resourceValidationCreated = await userRepository.createResourceValidation(resourceValidationData);
+
+                const resourceValidationFound = await userRepository.findResourceValidationByEmail(userCreated.email);
+
+                expect(resourceValidationFound).toBeTruthy();
+
+                expect(resourceValidationFound?.id).toBe(resourceValidationCreated.id);
+                expect(resourceValidationFound?.userId).toBe(userCreated.id);
+                expect(resourceValidationFound?.challengerNumber).toBe("123456");
+                expect(resourceValidationFound?.resourceType).toBe("EMAIL");
+                expect(resourceValidationFound?.createdAt).toBeTruthy();
+                expect(resourceValidationFound?.expiresAt).toBeTruthy();
+                expect(resourceValidationFound?.confirmedAt).toBeNull();
+            });
+
+            it("should return null when the resource validation does not exist", async () => {
+                const resourceValidationFound = await userRepository.findResourceValidationByEmail(userCreated.email);
 
                 expect(resourceValidationFound).toBeNull();
             });

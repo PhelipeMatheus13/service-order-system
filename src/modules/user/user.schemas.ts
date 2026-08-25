@@ -75,18 +75,39 @@ const registerSchema = registry.register(
     })
 );
 
+const confirmEmailSchema = registry.register(
+    "ConfirmEmailInput",
+    z.object({
+        email: z
+            .email("Please provide a valid email address")
+            .trim()
+            .openapi({ example: "johndoe@hotmail.com" }),
+
+        challengerNumber: z
+            .string()
+            .regex(/^\d{6}$/, "Challenger number must contain exactly 6 digits")
+            .openapi({ example: "123456" }),
+    }),
+);
+
 
 
 // Represents the validated request body received by the API.
 // This type belongs to the transport layer and may differ from
 // the domain input used by the service layer.
 type RegisterRequest = z.infer<typeof registerSchema>;
+type confirmEmailRequest = z.infer<typeof confirmEmailSchema>;
+
 
 export {
     registerSchema,
     userSchema,
+    confirmEmailSchema,
     normalizeEmptyValue,
     isValidPhone,
 };
 
-export type { RegisterRequest };
+export type { 
+    RegisterRequest,
+    confirmEmailRequest
+};

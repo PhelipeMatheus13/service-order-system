@@ -49,7 +49,15 @@ const registerLimiter = createRateLimiter({
     errorMessage: "Too many register attempts, please try again in a minute",
 });
 
+const confirmEmailLimiter = createRateLimiter({
+    identifier: "confirm-email",
+    windowMs: 60 * 1000, // 1 min
+    maxRequests: 5, 
+    errorMessage: "Too many confirm attempts, please try again in a minute",
+});
+
 export {
     globalLimiter,
     registerLimiter,
+    confirmEmailLimiter,
 };

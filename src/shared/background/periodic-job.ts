@@ -38,9 +38,7 @@ const startPeriodicJob = (job: PeriodicJob): (() => void) => {
  * Starts every job in the list and returns a single stop() that clears
  * all intervals — used for graceful shutdown.
  */
-const startPeriodicJobs = (
-    jobs: PeriodicJob[],
-): { stop: () => void } => {
+const startPeriodicJobs = (jobs: PeriodicJob[]): { stop: () => void } => {
     const stops = jobs.map(startPeriodicJob);
 
     return {

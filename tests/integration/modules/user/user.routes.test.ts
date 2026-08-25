@@ -63,6 +63,40 @@ describe("User Routes (Integration)", () => {
         });
     });
 
+    describe("POST /users/confirm-email", () => {
+        it("should confirm user email successfully", async () => {
+            const user = await prisma.user.create({
+                data: {
+                    firstName: "Jhon",
+                    lastName: "Doe",
+                    email: "jhon@example.com",
+                    role: "ATTENDANT",
+                    active: false,
+                },
+            });
+
+            await prisma.userResourceValidation.create({
+                data: {
+                    userId: user.id,
+                    challengerNumber: "123456",
+                    resourceType: "EMAIL",
+                },
+            });
+
+            const res = await request(app)
+                .post("/users/confirm-email")
+                .send({
+                    email: "jhon@example.com",
+                    challengerNumber: "123456",
+                });
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(res.body.message).toBe("Email confirmed successfully");
+            expect(res.body.data.activationToken).toBeTruthy();
+        });
+    });
+
     describe("GET /users", () => {
         it("should return users ordered by creation date descending and respect the given limit", async () => {
             const now = new Date;
@@ -157,7 +191,7 @@ describe("User Routes (Integration)", () => {
             ({ id: userId } = await prisma.user.create({
                 data: {
                     firstName: "Jhon",
-                    lastName: "Doe",                    
+                    lastName: "Doe",
                     email: "test@example.com",
                     role: "ATTENDANT",
                 },

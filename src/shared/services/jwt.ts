@@ -89,9 +89,15 @@ const decodeRefreshToken = (token: string): RefreshTokenPayload => {
 };
 
 
+const generateActivationToken = (userId: string): string => {
+    const secret = getRequiredEnv("ACTIVATION_SECRET");
+    return jwt.sign({ id: userId}, secret, { expiresIn: "15m" });
+};
+
 export {
     generateAccessToken,
     decodeAccessToken,
     generateRefreshToken,
     decodeRefreshToken,
+    generateActivationToken,
 };

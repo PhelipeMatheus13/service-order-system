@@ -1,5 +1,5 @@
-import type { RegisterRequest } from "./user.schemas.js";
-import type { RegisterInput, UserRecord, UserOutput } from "./user.types.js";
+import type { RegisterRequest, confirmEmailRequest } from "./user.schemas.js";
+import type { RegisterInput, UserRecord, UserOutput, ConfirmEmailInput } from "./user.types.js";
 
 // DTOs are exercised through the controller unit tests.
 // Since controllers are responsible for invoking these mappings,
@@ -44,8 +44,14 @@ const usersOutputDTO = (users: UserRecord[]): UserOutput[] =>
         updatedAt: user.updatedAt ? String(user.updatedAt) : null,
     }));
 
-export {
+const confirmEmailDTO = (body: confirmEmailRequest): ConfirmEmailInput => ({
+    email: body.email,
+    challengerNumber: body.challengerNumber,
+});
+
+export default {
     registerInputDTO,
     userOutputDTO,
     usersOutputDTO,
+    confirmEmailDTO,
 };

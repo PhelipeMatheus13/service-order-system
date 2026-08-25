@@ -1,8 +1,8 @@
 import { getPrisma } from "../../shared/config/database.js";
 import { Prisma } from "../../generated/prisma/client.js";
-import type { 
-    RegisterInput, 
-    UserRecord, 
+import type {
+    RegisterInput,
+    UserRecord,
     ListUsersInput,
     OutboxUserRecord,
     ResourceValidationRecord,
@@ -30,7 +30,7 @@ const create = async (input: RegisterInput): Promise<UserRecord> => {
 const deleteById = async (id: string): Promise<boolean> => {
     const prisma = getPrisma();
     try {
-        await prisma.user.delete({where: { id }});
+        await prisma.user.delete({ where: { id } });
         return true
     } catch (error) {
         // if the user does not exist, Prisma will throw a known request error with code P2025
@@ -52,24 +52,37 @@ const createResourceValidation = async (input: CreateResourceValidationInput): P
     });
 
     return resourceValidation;
-}
+};
+
+const confirmResourceValidationById = async (id: string): Promise<void> => {
+    const prisma = getPrisma();
+
+    await prisma.userResourceValidation.update({
+        where: {
+            id,
+        },
+        data: {
+            confirmedAt: new Date(),
+        },
+    });
+};
 
 // Reader
-const existsByEmail = async(email: string): Promise<boolean>  => {
+const existsByEmail = async (email: string): Promise<boolean> => {
     const prisma = getPrisma();
-    const user = await prisma.user.findUnique({where: { email }});
-    
+    const user = await prisma.user.findUnique({ where: { email } });
+
     return !!user;
 };
 
-const findById = async(id: string): Promise<UserRecord | null>  => {
+const findById = async (id: string): Promise<UserRecord | null> => {
     const prisma = getPrisma();
     return prisma.user.findUnique({ where: { id } });
-}; 
+};
 
 const list = async (input: ListUsersInput): Promise<UserRecord[]> => {
     const prisma = getPrisma();
-    
+
     const limit = input.options.limit ?? 100;
 
     return prisma.user.findMany({
@@ -98,7 +111,7 @@ const markOutboxUserAsConsumed = async (ids: number[]): Promise<void> => {
     });
 };
 
-const findResourceValidation = async ( 
+const findResourceValidationByUserId = async (
     userId: string,
     resourceType: ResourceValidationType,
 ): Promise<ResourceValidationRecord | null> => {
@@ -108,6 +121,27 @@ const findResourceValidation = async (
         where: {
             userId,
             resourceType,
+        },
+        orderBy: {
+            createdAt: "desc",
+        },
+    });
+
+    return resourceValidation;
+};
+
+const findResourceValidationByEmail = async (email: string): Promise<ResourceValidationRecord | null> => {
+    const prisma = getPrisma();
+
+    const resourceValidation = await prisma.userResourceValidation.findFirst({
+        where: {
+            user: {
+                email,
+            },
+            resourceType: "EMAIL",
+        },
+        orderBy: {
+            createdAt: "desc",
         },
     });
 
@@ -119,11 +153,13 @@ export default {
     create,
     deleteById,
     createResourceValidation,
+    confirmResourceValidationById,
     // Reader
     existsByEmail,
     findById,
     list,
     listOutboxUserUnconsumed,
     markOutboxUserAsConsumed,
-    findResourceValidation,
+    findResourceValidationByUserId,
+    findResourceValidationByEmail,
 };

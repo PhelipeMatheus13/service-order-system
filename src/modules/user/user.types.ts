@@ -40,6 +40,11 @@ interface CreateResourceValidationInput {
     challengerNumber: string;
 }
 
+interface ConfirmEmailInput {
+    email: string;
+    challengerNumber: string;
+}
+
 export type {
     RegisterInput,
     UserOutput,
@@ -48,5 +53,6 @@ export type {
     OutboxUser as OutboxUserRecord,
     UserResourceValidation as ResourceValidationRecord,
     CreateResourceValidationInput,
-    UserResourceValidationType as ResourceValidationType
+    UserResourceValidationType as ResourceValidationType,
+    ConfirmEmailInput
 };

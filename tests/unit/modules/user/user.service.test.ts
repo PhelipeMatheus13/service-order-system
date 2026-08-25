@@ -1,11 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import userService from "../../../../src/modules/user/user.service.js";
-import { RegisterInput, UserRecord } from "../../../../src/modules/user/user.types.js";
+import { RegisterInput, UserRecord, ConfirmEmailInput } from "../../../../src/modules/user/user.types.js";
+
 import userRepository from "../../../../src/modules/user/user.repository.js";
+import { generateActivationToken } from "../../../../src/shared/services/jwt.js"
 import { hashPassword } from "../../../../src/shared/services/hash.js";
 
 vi.mock("../../../../src/modules/user/user.repository.js");
+vi.mock("../../../../src/shared/services/jwt.js");
 vi.mock("../../../../src/shared/services/hash.js");
 
 describe("User Service (Unit)", () => {
@@ -14,13 +17,13 @@ describe("User Service (Unit)", () => {
     });
 
     describe("createUser", () => {
-        const registerData = {
+        const registerData: RegisterInput = {
             firstName: "John",
             lastName: "Doe",
             phoneNumber: null,
             email: "johndoe@hotmail.com",
             role: "ATTENDANT"
-        } as RegisterInput;
+        };
 
 
         it("should throw if fail in email check ", async () => {
@@ -195,6 +198,113 @@ describe("User Service (Unit)", () => {
 
             expect(userRepository.list).toHaveBeenCalledWith(input);
             expect(result).toEqual(users);
+        });
+    });
+
+    describe("confirmEmail", () => {
+        const input: ConfirmEmailInput = {
+            email: "jhon@example.com",
+            challengerNumber: "123456",
+        };
+
+        const resourceValidation = {
+            id: "validation-1",
+            createdAt: new Date(),
+            userId: "user-1",
+            resourceType: "EMAIL" as const,
+            challengerNumber: "123456",
+            expiresAt: null,
+            confirmedAt: null,
+        };
+
+        beforeEach(() => {
+            vi.clearAllMocks();
+        });
+
+        it("should throw when the resource validation does not exist", async () => {
+            vi.mocked(userRepository).findResourceValidationByEmail.mockResolvedValue(null);
+
+            await expect(userService.confirmEmail(input))
+                .rejects.toMatchObject({
+                    statusCode: 404,
+                    message: "Resource validation not found",
+                });
+
+            expect(userRepository.confirmResourceValidationById).not.toHaveBeenCalled();
+            expect(generateActivationToken).not.toHaveBeenCalled();
+        });
+
+        it("should throw when the challenger number is invalid", async () => {
+            vi.mocked(userRepository).findResourceValidationByEmail.mockResolvedValue({
+                ...resourceValidation,
+                challengerNumber: "654321",
+            });
+
+            await expect(userService.confirmEmail(input))
+                .rejects.toMatchObject({
+                    statusCode: 401,
+                    message: "Invalid challenger number",
+                    code: "INVALID_CHALLENGER_NUMBER",
+                });
+
+            expect(userRepository.confirmResourceValidationById).not.toHaveBeenCalled();
+            expect(generateActivationToken).not.toHaveBeenCalled();
+        });
+
+        it("should throw when the resource validation is already confirmed", async () => {
+            vi.mocked(userRepository).findResourceValidationByEmail.mockResolvedValue({
+                ...resourceValidation,
+                confirmedAt: new Date(),
+            });
+
+            await expect(userService.confirmEmail(input))
+                .rejects.toMatchObject({
+                    statusCode: 409,
+                    message: "Resource validation already confirmed",
+                });
+
+            expect(userRepository.confirmResourceValidationById).not.toHaveBeenCalled();
+            expect(generateActivationToken).not.toHaveBeenCalled();
+        });
+
+        it("should throw when the challenger number has expired", async () => {
+            vi.mocked(userRepository).findResourceValidationByEmail.mockResolvedValue({
+                ...resourceValidation,
+                expiresAt: new Date(Date.now() - 60_000),
+            });
+
+            await expect(userService.confirmEmail(input))
+                .rejects.toMatchObject({
+                    statusCode: 401,
+                    message: "Challenger number expired",
+                    code: "CHALLENGER_NUMBER_EXPIRED",
+                });
+
+            expect(userRepository.confirmResourceValidationById).not.toHaveBeenCalled();
+            expect(generateActivationToken).not.toHaveBeenCalled();
+        });
+
+        it("should confirm the resource validation and return an activation token", async () => {
+            const activationToken = "activation-token";
+
+            vi.mocked(userRepository).findResourceValidationByEmail.mockResolvedValue(
+                resourceValidation,
+            );
+
+            vi.mocked(generateActivationToken).mockReturnValue(activationToken);
+
+            vi.mocked(userRepository).confirmResourceValidationById.mockResolvedValue(
+                undefined,
+            );
+
+            await expect(userService.confirmEmail(input))
+                .resolves.toBe(activationToken);
+
+            expect(generateActivationToken)
+                .toHaveBeenCalledWith("user-1");
+
+            expect(userRepository.confirmResourceValidationById)
+                .toHaveBeenCalledWith("validation-1");
         });
     });
 });
