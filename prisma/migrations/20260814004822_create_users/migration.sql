@@ -25,11 +25,10 @@ CREATE TABLE "outbox_users" (
     "id" SERIAL NOT NULL,
     "user_id" UUID NOT NULL,
     "action" "outbox_action_status" NOT NULL,
-    "before_state" JSONB NOT NULL DEFAULT '{}',
+    "before_state" JSONB,
     "after_state" JSONB,
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "consumed_at" TIMESTAMPTZ,
-    "retried_at" TIMESTAMPTZ,
 
     CONSTRAINT "outbox_users_pkey" PRIMARY KEY ("id")
 );
@@ -52,7 +51,7 @@ BEGIN
     VALUES (
         NEW.id,
         'INSERT',
-        '{}'::jsonb,
+        NULL,
         jsonb_build_object(
             'id', NEW.id,
             'first_name', NEW.first_name,

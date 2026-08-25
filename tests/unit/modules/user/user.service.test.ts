@@ -157,14 +157,14 @@ describe("User Service (Unit)", () => {
         });
     });
 
-    describe("listAllUser", () => {
+    describe("listUsers", () => {
         const input = {
             options: {
                 limit: 1,
             },
         };
 
-        it("should throw an error if repository.listAll fails", async () => {
+        it("should throw an error if repository.listUsers fails", async () => {
             vi.mocked(userRepository).list.mockRejectedValue(
                 new Error("fake error")
             );

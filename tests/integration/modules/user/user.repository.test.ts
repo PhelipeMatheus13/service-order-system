@@ -3,7 +3,7 @@ import { PrismaClient } from "../../../../src/generated/prisma/client.js";
 import { setupTestDatabase } from "../../../helpers/testDatabase.js";
 import { setPrismaInstance } from "../../../../src/shared/config/database";
 import userRepository from "../../../../src/modules/user/user.repository.js";
-import { UserRecord } from "../../../../src/modules/user/user.types.js";
+import { UserRecord, RegisterInput, CreateResourceValidationInput } from "../../../../src/modules/user/user.types.js";
 
 
 describe("User Repository (Integration)", () => {
@@ -21,48 +21,47 @@ describe("User Repository (Integration)", () => {
     });
 
     beforeEach(async () => {
+        await prisma.outboxUser.deleteMany();
         await prisma.user.deleteMany();
     });
 
     describe("Writer repository", () => {
         describe("create", () => {
             it("should insert a new user into the database", async () => {
-                const userData = {
+                const userData: RegisterInput = {
                     firstName: "Jhon",
                     lastName: "Doe",
                     phoneNumber: "5521995437105",
                     email: "jhon@example.com",
                     role: "ATTENDANT",
-                } as UserRecord;
+                };
 
                 const userCreated = await userRepository.create(userData);
 
-                expect(userCreated).toBeDefined();
-                expect(typeof userCreated.id).toBe("string");
+                expect(userCreated).toBeTruthy();
 
-                const user = await prisma.user.findUnique({ where: { id: userCreated.id } });
-
-                expect(user?.id).toBeTruthy();
-                expect(user?.firstName).toBe(userCreated.firstName);
-                expect(user?.lastName).toBe(userCreated.lastName);
-                expect(user?.phoneNumber).toBe(userCreated.phoneNumber);
-                expect(user?.email).toBe(userCreated.email);
-                expect(user?.passwordHash).toBeNull(); // user must be created without a password.
-                expect(user?.role).toBe(userCreated.role);
-                expect(user?.active).toBe(false);
-                expect(user?.createdAt).toBeTruthy();
-                expect(user?.updatedAt).toBeNull();
+                expect(userCreated?.id).toBeTruthy();
+                expect(userCreated?.firstName).toBe(userData.firstName);
+                expect(userCreated?.lastName).toBe(userData.lastName);
+                expect(userCreated?.phoneNumber).toBe(userData.phoneNumber);
+                expect(userCreated?.email).toBe(userData.email);
+                expect(userCreated?.passwordHash).toBeNull(); // user must be created without a password.
+                expect(userCreated?.role).toBe(userData.role);
+                expect(userCreated?.active).toBe(false);
+                expect(userCreated?.createdAt).toBeTruthy();
+                expect(userCreated?.updatedAt).toBeNull();
             });
         });
 
         describe("deleteById", () => {
             it("should delete a user from the database by ID", async () => {
-                const userData = {
+                const userData: RegisterInput = {
                     firstName: "Jhon",
                     lastName: "Doe",
+                    phoneNumber: null,
                     email: "jhon@example.com",
-                    role: "ATTENDANT",
-                } as UserRecord;
+                    role: "ATTENDANT"
+                };
 
                 const { id: userId } = await prisma.user.create({
                     data: userData,
@@ -81,6 +80,42 @@ describe("User Repository (Integration)", () => {
                 expect(deleted).toBe(false);
             });
         });
+
+        describe("createResourceValidation", async () => {
+            let userCreated: UserRecord;
+
+            beforeEach(async () => {
+                const userData: RegisterInput = {
+                    firstName: "Jhon",
+                    lastName: "Doe",
+                    phoneNumber: "5521995437105",
+                    email: "jhon@example.com",
+                    role: "ATTENDANT",
+                };
+
+                userCreated = await userRepository.create(userData);
+            });
+
+            it("should create a resource validation for an existing user", async () => {
+                const resourceValidationData: CreateResourceValidationInput = {
+                    userId: userCreated.id,
+                    challengerNumber: "123456",
+                    resourceType: "EMAIL",
+                };
+
+                const resourceValidationCreated = await userRepository.createResourceValidation(resourceValidationData);
+
+                expect(resourceValidationCreated).toBeTruthy();
+
+                expect(resourceValidationCreated?.id).toBeTruthy();
+                expect(resourceValidationCreated?.userId).toBe(resourceValidationData.userId);
+                expect(resourceValidationCreated?.challengerNumber).toBe(resourceValidationData.challengerNumber);
+                expect(resourceValidationCreated?.resourceType).toBe(resourceValidationData.resourceType);
+                expect(resourceValidationCreated?.createdAt).toBeTruthy();
+                expect(resourceValidationCreated?.expiresAt).toBeTruthy();
+                expect(resourceValidationCreated?.confirmedAt).toBeNull();
+            });
+        });
     });
 
     describe("Reader repository", () => {
@@ -91,7 +126,7 @@ describe("User Repository (Integration)", () => {
                     lastName: "Doe",
                     email: "jhon@example.com",
                     role: "ATTENDANT",
-                } as UserRecord;
+                } as RegisterInput;
 
                 await prisma.user.create({ data: userData });
 
@@ -107,18 +142,18 @@ describe("User Repository (Integration)", () => {
 
         describe("findById", () => {
             it("should return the user if a user with the given ID exists", async () => {
-                const userData = {
-                    firstName: "Jhon",
-                    lastName: "Doe",
-                    phoneNumber: "5521995437105",
-                    email: "jhon@example.com",
-                    passwordHash: "passwordHash",
-                    role: "ATTENDANT",
-                    active: true,
-                    updatedAt: new Date,
-                } as UserRecord;
-
-                const  userCreated = await prisma.user.create({data: userData});
+                const userCreated = await prisma.user.create({
+                    data: {
+                        firstName: "Jhon",
+                        lastName: "Doe",
+                        phoneNumber: "5521995437105",
+                        email: "jhon@example.com",
+                        passwordHash: "passwordHash",
+                        role: "ATTENDANT",
+                        active: true,
+                        updatedAt: new Date,
+                    }
+                });
 
                 const user = await userRepository.findById(userCreated.id);
 
@@ -142,7 +177,7 @@ describe("User Repository (Integration)", () => {
         describe("list", () => {
             it("should return users ordered by creation date descending and respect the given limit", async () => {
                 const now = new Date;
-                
+
                 await prisma.user.create({
                     data: {
                         firstName: "John",
@@ -185,6 +220,152 @@ describe("User Repository (Integration)", () => {
                 expect(users[0].active).toBe(userCreated.active);
                 expect(users[0].createdAt).toBeTruthy();
                 expect(users[0].updatedAt).toBeNull();
+            });
+        });
+
+        describe("listOutboxUserUnconsumed", () => {
+            it("should return unconsumed outbox user records ordered by creation date ascending", async () => {
+                const user1 = await prisma.user.create({
+                    data: {
+                        firstName: "John",
+                        lastName: "Doe",
+                        email: "john@example.com",
+                        role: "ATTENDANT",
+                    },
+                });
+
+                await prisma.user.create({
+                    data: {
+                        firstName: "Jane",
+                        lastName: "Doe",
+                        email: "jane@example.com",
+                        role: "TECHNICIAN",
+                    },
+                });
+
+                const unconsumed = await userRepository.listOutboxUserUnconsumed();
+
+                expect(unconsumed).toHaveLength(2);
+
+                const [outbox] = unconsumed;
+                const afterState = outbox.afterState as Record<string, any>;
+
+                expect(outbox.id).toBeTruthy();
+                expect(outbox.userId).toBe(user1.id);
+                expect(outbox.action).toBe("INSERT");
+
+                expect(outbox.beforeState).toBeNull();
+
+                expect(afterState.id).toBe(user1.id);
+                expect(afterState.first_name).toBe(user1.firstName);
+                expect(afterState.last_name).toBe(user1.lastName);
+                expect(afterState.phone_number).toBe(user1.phoneNumber);
+                expect(afterState.email).toBe(user1.email);
+                expect(afterState.role).toBe(user1.role);
+                expect(afterState.active).toBe(user1.active);
+                expect(afterState.created_at).toBeTruthy();
+                expect(afterState.updated_at).toBeNull();
+
+                expect(outbox.createdAt).toBeTruthy();
+                expect(outbox.consumedAt).toBeNull();
+            });
+        });
+
+        describe("markOutboxUserAsConsumed", () => {
+            it("should mark the given outbox user records as consumed", async () => {
+                const user1 = await prisma.user.create({
+                    data: {
+                        firstName: "John",
+                        lastName: "Doe",
+                        email: "john@example.com",
+                        role: "ATTENDANT",
+                    },
+                });
+
+                const user2 = await prisma.user.create({
+                    data: {
+                        firstName: "Jane",
+                        lastName: "Doe",
+                        email: "jane@example.com",
+                        role: "TECHNICIAN",
+                    },
+                });
+
+                const outboxRecords = await prisma.outboxUser.findMany({
+                    where: {
+                        userId: {
+                            in: [user1.id, user2.id],
+                        },
+                    },
+                });
+
+                const ids = outboxRecords.map((record) => record.id);
+
+                await userRepository.markOutboxUserAsConsumed(ids);
+
+                const consumedRecords = await prisma.outboxUser.findMany({
+                    where: {
+                        id: {
+                            in: ids,
+                        },
+                    },
+                });
+
+                expect(consumedRecords).toHaveLength(2);
+
+                for (const record of consumedRecords) {
+                    expect(record.consumedAt).toBeTruthy();
+                }
+            });
+        });
+
+        describe("findResourceValidation", async () => {
+            let userCreated: UserRecord;
+
+            beforeEach(async () => {
+                const userData: RegisterInput = {
+                    firstName: "Jhon",
+                    lastName: "Doe",
+                    phoneNumber: "5521995437105",
+                    email: "jhon@example.com",
+                    role: "ATTENDANT",
+                };
+
+                userCreated = await userRepository.create(userData);
+            });
+
+            it("should find a resource validation for an existing user", async () => {
+                const resourceValidationData: CreateResourceValidationInput = {
+                    userId: userCreated.id,
+                    challengerNumber: "123456",
+                    resourceType: "EMAIL",
+                };
+
+                const resourceValidationCreated = await userRepository.createResourceValidation(resourceValidationData);
+
+                const resourceValidationFound = await userRepository.findResourceValidation(
+                    userCreated.id,
+                    "EMAIL",
+                );
+
+                expect(resourceValidationFound).toBeTruthy();
+
+                expect(resourceValidationFound?.id).toBe(resourceValidationCreated.id);
+                expect(resourceValidationFound?.userId).toBe(userCreated.id);
+                expect(resourceValidationFound?.challengerNumber).toBe("123456");
+                expect(resourceValidationFound?.resourceType).toBe("EMAIL");
+                expect(resourceValidationFound?.createdAt).toBeTruthy();
+                expect(resourceValidationFound?.expiresAt).toBeTruthy();
+                expect(resourceValidationFound?.confirmedAt).toBeNull();
+            });
+
+            it("should return null when the resource validation does not exist", async () => {
+                const resourceValidationFound = await userRepository.findResourceValidation(
+                    userCreated.id,
+                    "EMAIL",
+                );
+
+                expect(resourceValidationFound).toBeNull();
             });
         });
     });

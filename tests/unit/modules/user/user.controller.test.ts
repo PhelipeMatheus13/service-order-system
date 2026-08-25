@@ -161,7 +161,7 @@ describe("User Controller (Unit)", () => {
         });
     });
 
-    describe("listAllUser", () => {
+    describe("listUsers", () => {
         it("should return 200 with users data", async () => {
             req.query = {
                 limit: "1",

@@ -23,6 +23,13 @@ enum OutboxActionStatus {
   @@map("outbox_action_status")
 }
 
+enum UserResourceValidationType {
+  EMAIL
+  PHONE
+
+  @@map("user_resource_validation_type")
+}
+
 model User {
   id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   firstName    String    @map("first_name") @db.VarChar(255)
@@ -35,6 +42,8 @@ model User {
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt    DateTime? @map("updated_at") @db.Timestamptz()
 
+  resourceValidations UserResourceValidation[]
+
   @@map("users")
 }
 
@@ -42,11 +51,24 @@ model OutboxUser {
   id          Int                @id @default(autoincrement())
   userId      String             @map("user_id") @db.Uuid
   action      OutboxActionStatus
-  beforeState Json               @default("{}") @map("before_state") @db.JsonB
+  beforeState Json?              @map("before_state") @db.JsonB
   afterState  Json?              @map("after_state") @db.JsonB
   createdAt   DateTime           @default(now()) @map("created_at") @db.Timestamptz()
   consumedAt  DateTime?          @map("consumed_at") @db.Timestamptz()
-  retriedAt   DateTime?          @map("retried_at") @db.Timestamptz()
 
   @@map("outbox_users")
+}
+
+model UserResourceValidation {
+  id               String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId           String                     @map("user_id") @db.Uuid
+  resourceType     UserResourceValidationType @map("resource_type")
+  challengerNumber String                     @map("challenger_number") @db.VarChar(6)
+  createdAt        DateTime                   @default(now()) @map("created_at") @db.Timestamptz()
+  expiresAt        DateTime?                  @map("expires_at") @db.Timestamptz()
+  confirmedAt      DateTime?                  @map("confirmed_at") @db.Timestamptz()
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_resource_validations")
 }

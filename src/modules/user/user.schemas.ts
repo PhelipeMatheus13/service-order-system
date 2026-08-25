@@ -85,6 +85,8 @@ type RegisterRequest = z.infer<typeof registerSchema>;
 export {
     registerSchema,
     userSchema,
+    normalizeEmptyValue,
+    isValidPhone,
 };
 
 export type { RegisterRequest };

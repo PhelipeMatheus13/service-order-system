@@ -1,9 +1,15 @@
-import type { User, Role } from "../../generated/prisma/client.js";
+import type {
+    User,
+    Role,
+    OutboxUser,
+    UserResourceValidation,
+    UserResourceValidationType
+} from "../../generated/prisma/client.js";
 
 interface RegisterInput {
     firstName: string;
     lastName: string;
-    phoneNumber: string | null ;
+    phoneNumber: string | null;
     email: string;
     role: Role;
 }
@@ -28,9 +34,19 @@ interface ListUsersOption {
     limit: number | null;
 }
 
-export type { 
-    RegisterInput, 
+interface CreateResourceValidationInput {
+    userId: string;
+    resourceType: UserResourceValidationType;
+    challengerNumber: string;
+}
+
+export type {
+    RegisterInput,
     UserOutput,
     User as UserRecord,
     ListUsersInput,
+    OutboxUser as OutboxUserRecord,
+    UserResourceValidation as ResourceValidationRecord,
+    CreateResourceValidationInput,
+    UserResourceValidationType as ResourceValidationType
 };
