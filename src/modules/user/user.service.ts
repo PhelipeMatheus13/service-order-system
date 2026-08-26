@@ -2,7 +2,8 @@ import type {
     RegisterInput,
     UserRecord,
     ListUsersInput,
-    ConfirmEmailInput
+    ConfirmEmailInput,
+    ActivateUserInput,
 } from "./user.types.js";
 import userRepository from "./user.repository.js";
 import { generateActivationToken } from "../../shared/services/jwt.js";
@@ -59,10 +60,16 @@ const confirmEmail = async (input: ConfirmEmailInput): Promise<string> => {
     return activationToken;
 };
 
+const activateUser = async (input: ActivateUserInput): Promise<void> => {
+    const passwordHash = await hashPassword(input.password);
+    await userRepository.activateAndSetPassword(input.userId, passwordHash)
+};
+
 export default {
     createUser,
     getUserById,
     deleteUserById,
     listUsers,
     confirmEmail,
+    activateUser,
 };

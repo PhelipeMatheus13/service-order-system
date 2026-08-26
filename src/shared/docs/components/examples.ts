@@ -22,7 +22,43 @@ const challengerNumberExpired = registry.registerComponent("examples", "challeng
     },
 });
 
+const missingActivationToken = registry.registerComponent("examples", "missingActivationToken", {
+    summary: "Missing activation token",
+    value: {
+        success: false,
+        error: {
+            code: "MISSING_ACTIVATION_TOKEN",
+            message: "Missing activation token",
+        },
+    },
+});
+
+const activationTokenExpired = registry.registerComponent("examples", "activationTokenExpired", {
+    summary: "Activation token expired",
+    value: {
+        success: false,
+        error: {
+            code: "ACTIVATION_TOKEN_EXPIRED",
+            message: "Activation token expired",
+        },
+    },
+});
+
+const invalidActivationToken = registry.registerComponent("examples", "invalidActivationToken", {
+    summary: "Invalid activation token",
+    value: {
+        success: false,
+        error: {
+            code: "INVALID_ACTIVATION_TOKEN",
+            message: "Invalid activation token",
+        },
+    },
+});
+
 export {
     invalidChallengerNumber,
     challengerNumberExpired,
+    missingActivationToken,
+    activationTokenExpired,
+    invalidActivationToken,
 };

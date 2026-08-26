@@ -156,6 +156,42 @@ describe("User Repository (Integration)", () => {
                 expect(resourceValidationConfirmed?.confirmedAt).toBeTruthy();
             });
         });
+
+        describe("activateAndSetPassword", async () => {
+            let userCreated: UserRecord;
+
+            beforeEach(async () => {
+                const userData: RegisterInput = {
+                    firstName: "Jhon",
+                    lastName: "Doe",
+                    phoneNumber: "5521995437105",
+                    email: "jhon@example.com",
+                    role: "ATTENDANT",
+                };
+
+                userCreated = await userRepository.create(userData);
+            });
+
+            it("should activate the user and set the password", async () => {
+                const passwordHash = "hashed-password";
+
+                await userRepository.activateAndSetPassword(
+                    userCreated.id,
+                    passwordHash,
+                );
+
+                const userUpdated = await prisma.user.findUnique({
+                    where: {
+                        id: userCreated.id,
+                    },
+                });
+
+                expect(userUpdated).toBeTruthy();
+                expect(userUpdated?.passwordHash).toBe(passwordHash);
+                expect(userUpdated?.active).toBe(true);
+                expect(userUpdated?.updatedAt).toBeTruthy();
+            });
+        });
     });
 
     describe("Reader repository", () => {

@@ -91,6 +91,26 @@ const confirmEmailValidationError = registry.registerComponent("responses", "con
     },
 });
 
+const activateUserValidationError = registry.registerComponent("responses", "activateUserValidationError", {
+    description: "Activate user validation error",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/ValidationError" },
+            example: {
+                success: false,
+                error: {
+                    code: "VALIDATION_ERROR",
+                    message: "Validation failed",
+                    details: [
+                        { field: "password", message: "Password must be at least 8 characters" },
+                        { field: "confirmPassword", message: "Passwords do not match" },
+                    ],
+                },
+            },
+        },
+    },
+});
+
 export {
     internalError,
     registerValidationError,

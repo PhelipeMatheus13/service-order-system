@@ -6,8 +6,9 @@ import registry from "../../shared/docs/registry.js";
 import { z } from "zod";
 import { registerLimiter, confirmEmailLimiter } from "../../shared/middlewares/rate-limiter.js";
 import validate from "../../shared/middlewares/validate.js";
-import { registerSchema, userSchema, confirmEmailSchema } from "./user.schemas.js";
+import { registerSchema, userSchema, confirmEmailSchema, activateUserSchema } from "./user.schemas.js";
 import { errorSchema } from "../../shared/docs/components/schemas.js"
+import { checkActivationToken } from "../../shared/middlewares/auth.js";
 
 // POST
 registry.registerPath({
@@ -117,6 +118,47 @@ registry.registerPath({
     },
 })
 router.post("/confirm-email", confirmEmailLimiter, validate(confirmEmailSchema), userController.confirmEmail);
+
+registry.registerPath({
+    tags: ["User"],
+    method: "post",
+    path: "/users/activate",
+    summary: "Set password and activate user",
+    request: {
+        body: {
+            content: { "application/json": { schema: activateUserSchema } },
+        },
+    },
+    responses: {
+        200: {
+            description: "User activated successfully",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        success: z.boolean().openapi({ example: true }),
+                        message: z.string().openapi({ example: "User activated successfully" }),
+                    }),
+                },
+            },
+        },
+        401: {
+            description: "Missing, invalid, or expired activation token",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        missingActivationToken: { $ref: "#/components/examples/missingActivationToken" },
+                        activationTokenExpired: { $ref: "#/components/examples/activationTokenExpired" },
+                        invalidActivationToken: { $ref: "#/components/examples/invalidActivationToken" },
+                    },
+                },
+            },
+        },
+        422: { $ref: "#/components/responses/activateUserValidationError" },
+        500: { $ref: "#/components/responses/InternalError" },
+    },
+})
+router.post("/activate", checkActivationToken, validate(activateUserSchema), userController.activateUser);
 
 // GET
 registry.registerPath({

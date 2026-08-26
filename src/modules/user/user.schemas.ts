@@ -90,6 +90,30 @@ const confirmEmailSchema = registry.register(
     }),
 );
 
+const activateUserSchema = registry.register(
+    "activateUserInput",
+    z.object({
+        password: z
+            .string()
+            .min(8, "Password must be at least 8 characters")
+            .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
+            .regex(/[a-z]/, "Password must contain at least one lowercase letter")
+            .regex(/[0-9]/, "Password must contain at least one number")
+            .regex(/[!@#$%^&*(),.?":{}|<>]/, "Password must contain at least one special character")
+            .openapi({
+                example: "Str0ng!P4ss",
+                description: "Must have 8+ chars, one uppercase, one lowercase, one number, and one special character"
+            }),
+
+        confirmPassword: z
+            .string()
+            .openapi({ example: "Str0ng!P4ss" }),
+    })
+    .refine(
+        ({ password, confirmPassword }) => password === confirmPassword,
+        { path: ["confirmPassword"], message: "Passwords do not match", }
+    )
+);
 
 
 // Represents the validated request body received by the API.
@@ -97,17 +121,20 @@ const confirmEmailSchema = registry.register(
 // the domain input used by the service layer.
 type RegisterRequest = z.infer<typeof registerSchema>;
 type confirmEmailRequest = z.infer<typeof confirmEmailSchema>;
+type activateUserRequest = z.infer<typeof activateUserSchema>;
 
 
 export {
     registerSchema,
     userSchema,
     confirmEmailSchema,
+    activateUserSchema,
     normalizeEmptyValue,
     isValidPhone,
 };
 
-export type { 
+export type {
     RegisterRequest,
-    confirmEmailRequest
+    confirmEmailRequest,
+    activateUserRequest,
 };

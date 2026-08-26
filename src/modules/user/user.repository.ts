@@ -67,6 +67,18 @@ const confirmResourceValidationById = async (id: string): Promise<void> => {
     });
 };
 
+ const activateAndSetPassword = async (userId: string, passwordHash: string): Promise<void> => {
+    const prisma = getPrisma();
+    await prisma.user.update({
+        where: { id: userId },
+        data: {
+            passwordHash,
+            active: true,
+            updatedAt: new Date(),
+        },
+    });
+};
+
 // Reader
 const existsByEmail = async (email: string): Promise<boolean> => {
     const prisma = getPrisma();
@@ -154,6 +166,7 @@ export default {
     deleteById,
     createResourceValidation,
     confirmResourceValidationById,
+    activateAndSetPassword,
     // Reader
     existsByEmail,
     findById,

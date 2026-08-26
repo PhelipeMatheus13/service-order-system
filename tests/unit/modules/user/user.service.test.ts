@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import userService from "../../../../src/modules/user/user.service.js";
-import { RegisterInput, UserRecord, ConfirmEmailInput } from "../../../../src/modules/user/user.types.js";
+import {
+    RegisterInput,
+    UserRecord,
+    ConfirmEmailInput,
+    ActivateUserInput
+} from "../../../../src/modules/user/user.types.js";
 
 import userRepository from "../../../../src/modules/user/user.repository.js";
 import { generateActivationToken } from "../../../../src/shared/services/jwt.js"
@@ -305,6 +310,69 @@ describe("User Service (Unit)", () => {
 
             expect(userRepository.confirmResourceValidationById)
                 .toHaveBeenCalledWith("validation-1");
+        });
+    });
+
+    describe("activateUser", () => {
+        it("should throw when hashing the password fails", async () => {
+            const error = new Error("Failed to hash password");
+
+            const input: ActivateUserInput = {
+                userId: "user-123",
+                password: "password123",
+            };
+
+            vi.mocked(hashPassword).mockRejectedValue(error);
+
+            await expect(userService.activateUser(input))
+                .rejects.toThrow(error);
+
+            expect(hashPassword).toHaveBeenCalledWith(input.password);
+
+            expect(userRepository.activateAndSetPassword).not.toHaveBeenCalled();
+        });
+
+        it("should throw when activating the user fails", async () => {
+            const error = new Error("Failed to activate user");
+
+            const input: ActivateUserInput = {
+                userId: "user-123",
+                password: "password123",
+            };
+
+            vi.mocked(hashPassword).mockResolvedValue("hashed-password");
+            vi.mocked(userRepository.activateAndSetPassword).mockRejectedValue(error);
+
+            await expect(userService.activateUser(input))
+                .rejects.toThrow(error);
+
+            expect(hashPassword).toHaveBeenCalledWith(input.password);
+
+            expect(userRepository.activateAndSetPassword).toHaveBeenCalledWith(
+                input.userId,
+                "hashed-password",
+            );
+        });
+        
+        it("should hash the password and activate the user", async () => {
+            const input: ActivateUserInput = {
+                userId: "user-123",
+                password: "password123",
+            };
+
+            const passwordHash = "hashed-password";
+
+            vi.mocked(hashPassword).mockResolvedValue(passwordHash);
+            vi.mocked(userRepository.activateAndSetPassword).mockResolvedValue();
+
+            await userService.activateUser(input);
+
+            expect(hashPassword).toHaveBeenCalledWith(input.password);
+
+            expect(userRepository.activateAndSetPassword).toHaveBeenCalledWith(
+                input.userId,
+                passwordHash,
+            );
         });
     });
 });

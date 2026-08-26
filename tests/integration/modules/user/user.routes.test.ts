@@ -4,6 +4,7 @@ import app from "../../../../src/app";
 import { PrismaClient } from "../../../../src/generated/prisma/client.js";
 import { setupTestDatabase } from "../../../helpers/testDatabase.js";
 import { setPrismaInstance } from "../../../../src/shared/config/database";
+import { generateActivationToken } from "../../../../src/shared/services/jwt.js";
 
 describe("User Routes (Integration)", () => {
     let db: Awaited<ReturnType<typeof setupTestDatabase>>;
@@ -206,6 +207,44 @@ describe("User Routes (Integration)", () => {
             expect(res.statusCode).toBe(200);
             expect(res.body.success).toBe(true);
             expect(res.body.message).toBe("User deleted successfully");
+        });
+    });
+
+    describe("POST /users/activate", () => {
+        it("should activate the user successfully", async () => {
+            const user = await prisma.user.create({
+                data: {
+                    firstName: "Jhon",
+                    lastName: "Doe",
+                    email: "jhon@example.com",
+                    role: "ATTENDANT",
+                    active: false,
+                },
+            });
+
+            const activationToken = generateActivationToken(user.id);
+
+            const res = await request(app)
+                .post("/users/activate")
+                .set("Authorization", `Bearer ${activationToken}`)
+                .send({
+                    password: "Str0ng!P4ss",
+                    confirmPassword: "Str0ng!P4ss",
+                });
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(res.body.message).toBe("User activated successfully");
+
+            const activatedUser = await prisma.user.findUnique({
+                where: {
+                    id: user.id,
+                },
+            });
+
+            expect(activatedUser?.active).toBe(true);
+            expect(activatedUser?.passwordHash).toBeTruthy();
+            expect(activatedUser?.updatedAt).toBeTruthy();
         });
     });
 });

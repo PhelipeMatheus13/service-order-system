@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
     normalizeEmptyValue,
     isValidPhone,
+    activateUserSchema
 } from "../../../../src/modules/user/user.schemas.js";
 
 describe("User Schemas (Unit)", () => {
@@ -53,6 +54,28 @@ describe("User Schemas (Unit)", () => {
 
         it("should return false when the phone parser throws", () => {
             expect(isValidPhone("invalid-phone")).toBe(false);
+        });
+    });
+
+    describe("activateUserSchema", () => {
+        it("should return a validation error when passwords do not match", () => {
+            const result = activateUserSchema.safeParse({
+                password: "Str0ng!P4ss",
+                confirmPassword: "Different!P4ss",
+            });
+
+            expect(result.success).toBe(false);
+
+            if (!result.success) {
+                expect(result.error.issues).toEqual(
+                    expect.arrayContaining([
+                        expect.objectContaining({
+                            path: ["confirmPassword"],
+                            message: "Passwords do not match",
+                        }),
+                    ]),
+                );
+            }
         });
     });
 });
