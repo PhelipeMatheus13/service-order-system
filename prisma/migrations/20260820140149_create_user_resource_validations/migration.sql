@@ -21,20 +21,3 @@ FOREIGN KEY ("user_id")
 REFERENCES "users"("id")
 ON DELETE CASCADE
 ON UPDATE CASCADE;
-
--- Create function
-CREATE OR REPLACE FUNCTION set_user_resource_validation_expires_at()
-RETURNS trigger AS
-$$
-BEGIN
-    NEW.expires_at := NEW.created_at + INTERVAL '10 minutes';
-    RETURN NEW;
-END;
-$$
-LANGUAGE plpgsql;
-
--- Create trigger
-CREATE TRIGGER set_expires_at_before_insert_user_resource_validation
-BEFORE INSERT ON user_resource_validations
-FOR EACH ROW
-EXECUTE FUNCTION set_user_resource_validation_expires_at();

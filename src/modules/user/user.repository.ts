@@ -43,11 +43,14 @@ const deleteById = async (id: string): Promise<boolean> => {
 
 const createResourceValidation = async (input: CreateResourceValidationInput): Promise<ResourceValidationRecord> => {
     const prisma = getPrisma();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes from now
+    
     const resourceValidation = await prisma.userResourceValidation.create({
         data: {
             userId: input.userId,
             challengerNumber: input.challengerNumber,
             resourceType: input.resourceType,
+            expiresAt
         },
     });
 
