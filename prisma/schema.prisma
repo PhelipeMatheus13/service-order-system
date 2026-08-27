@@ -25,7 +25,6 @@ enum OutboxActionStatus {
 
 enum UserResourceValidationType {
   EMAIL
-  PHONE
 
   @@map("user_resource_validation_type")
 }
@@ -44,6 +43,7 @@ model User {
 
   resourceValidations UserResourceValidation[]
 
+  @@index([createdAt(sort: Desc)])   
   @@map("users")
 }
 
@@ -70,5 +70,6 @@ model UserResourceValidation {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId, resourceType, createdAt(sort: Desc)])  
   @@map("user_resource_validations")
 }

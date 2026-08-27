@@ -33,10 +33,14 @@ CREATE TABLE "outbox_users" (
     CONSTRAINT "outbox_users_pkey" PRIMARY KEY ("id")
 );
 
--- Performance indexes
-CREATE INDEX "users_created_at" ON "users" ("created_at" DESC);
+-- CreateIndex
+CREATE INDEX "users_created_at_idx" ON "users" ("created_at" DESC);
+
+-- CreateIndex
 CREATE UNIQUE INDEX "users_email_key" ON "users" ("email");
-CREATE INDEX "outbox_users_unconsumed_created" ON "outbox_users" ("created_at" ASC) WHERE "consumed_at" IS NULL;
+
+-- CreateIndex
+CREATE INDEX "outbox_users_unconsumed_created_idx" ON "outbox_users" ("created_at" ASC) WHERE "consumed_at" IS NULL;
 
 -- CreateFunction
 CREATE OR REPLACE FUNCTION create_user_outbox()

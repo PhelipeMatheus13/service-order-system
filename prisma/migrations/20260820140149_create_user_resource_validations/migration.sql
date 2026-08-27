@@ -23,9 +23,10 @@ ON DELETE CASCADE
 ON UPDATE CASCADE;
 
 -- CreateIndex
-CREATE INDEX "idx_user_validations_user_type_created"
+CREATE INDEX "user_resource_validations_user_id_resource_type_created_at_idx"
 ON "user_resource_validations" ("user_id", "resource_type", "created_at" DESC);
 
-CREATE INDEX "idx_user_validations_active_email"
+-- CreateIndex
+CREATE INDEX "user_resource_validations_active_email_idx"
 ON "user_resource_validations" ("user_id", "resource_type", "expires_at")
 WHERE "confirmed_at" IS NULL AND "resource_type" = 'EMAIL';
