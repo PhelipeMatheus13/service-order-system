@@ -1,6 +1,6 @@
 import { sendMail } from "../../shared/services/mailer.js";
 
-interface SendActivationEmailInput {
+interface SendConfirmationInput {
     to: string;
     name: string;
     code: string;
@@ -11,7 +11,7 @@ interface SendActivationEmailInput {
  * user-created subscriber and the (future) resend-code flow, since both
  * need the exact same template.
  */
-const sendActivationEmail = async ({ to, name, code }: SendActivationEmailInput): Promise<void> => {
+const sendConfirmationCode = async ({ to, name, code }: SendConfirmationInput): Promise<void> => {
     const subject = "Confirm your registration";
     const html = `
         <p>Hi, ${name}!</p>
@@ -23,4 +23,18 @@ const sendActivationEmail = async ({ to, name, code }: SendActivationEmailInput)
     await sendMail({ to, subject, html });
 };
 
-export { sendActivationEmail };
+const resendConfirmationCode = async ({ to, name, code }: SendConfirmationInput): Promise<void> => {
+    const subject = "Resend: Confirm your registration";
+    const html = `
+        <p>Hi, ${name}!</p>
+        <p>We're sending you a new activation code as you requested.</p>
+        <p>Use the code below to activate your account:</p>
+        <h2>${code}</h2>
+        <p><strong>Note:</strong> This is your most recent code. Any previous codes you received are no longer valid.</p>
+        <p>If you didn't request this, please ignore this email.</p>
+    `;
+
+    await sendMail({ to, subject, html });
+};
+
+export { sendConfirmationCode, resendConfirmationCode };

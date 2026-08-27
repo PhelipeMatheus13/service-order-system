@@ -11,10 +11,12 @@ import {
 import userRepository from "../../../../src/modules/user/user.repository.js";
 import { generateActivationToken } from "../../../../src/shared/services/jwt.js"
 import { hashPassword } from "../../../../src/shared/services/hash.js";
+import { getPrisma } from "../../../../src/shared/config/database.js";
 
 vi.mock("../../../../src/modules/user/user.repository.js");
 vi.mock("../../../../src/shared/services/jwt.js");
 vi.mock("../../../../src/shared/services/hash.js");
+vi.mock("../../../../src/shared/config/database.js");
 
 describe("User Service (Unit)", () => {
     beforeEach(() => {
@@ -353,7 +355,7 @@ describe("User Service (Unit)", () => {
                 "hashed-password",
             );
         });
-        
+
         it("should hash the password and activate the user", async () => {
             const input: ActivateUserInput = {
                 userId: "user-123",
@@ -372,6 +374,120 @@ describe("User Service (Unit)", () => {
             expect(userRepository.activateAndSetPassword).toHaveBeenCalledWith(
                 input.userId,
                 passwordHash,
+            );
+        });
+    });
+
+    describe("resendEmailConfirmationCode", () => {
+        const email = "jhon@example.com";
+
+        const user = {
+            id: "user-123",
+            firstName: "Jhon",
+            lastName: "Doe",
+            email,
+        } as UserRecord;
+
+        it("should silently return when user does not exist", async () => {
+            vi.mocked(userRepository.findByEmail).mockResolvedValue(null);
+
+            await expect(
+                userService.resendEmailConfirmationCode(email),
+            ).resolves.toBeUndefined();
+
+            expect(userRepository.findByEmail).toHaveBeenCalledWith(email);
+            expect(userRepository.invalidateActiveEmailValidations).not.toHaveBeenCalled();
+            expect(userRepository.createResourceValidation).not.toHaveBeenCalled();
+        });
+
+        it("should propagate an error when invalidating active validations fails", async () => {
+            const error = new Error("Failed to invalidate validations");
+
+            vi.mocked(userRepository.findByEmail).mockResolvedValue(user);
+
+            vi.mocked(getPrisma).mockReturnValue({
+                $transaction: vi.fn(async (callback) => callback({})),
+            } as any);
+
+            vi.mocked(userRepository.invalidateActiveEmailValidations)
+                .mockRejectedValue(error);
+
+            await expect(
+                userService.resendEmailConfirmationCode(email),
+            ).rejects.toThrow(error);
+
+            expect(userRepository.createResourceValidation).not.toHaveBeenCalled();
+        });
+
+        it("should propagate an error when creating the new validation fails", async () => {
+            const error = new Error("Failed to create validation");
+
+            vi.mocked(userRepository.findByEmail).mockResolvedValue(user);
+
+            const tx = {} as any;
+
+            vi.mocked(getPrisma).mockReturnValue({
+                $transaction: vi.fn(async (callback) => callback(tx)),
+            } as any);
+
+            vi.mocked(userRepository.invalidateActiveEmailValidations).mockResolvedValue();
+            vi.mocked(userRepository.createResourceValidation).mockRejectedValue(error);
+
+            await expect(
+                userService.resendEmailConfirmationCode(email),
+            ).rejects.toThrow(error);
+
+            expect(userRepository.invalidateActiveEmailValidations).toHaveBeenCalledWith(
+                email,
+                tx,
+            );
+
+            expect(userRepository.createResourceValidation).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    userId: user.id,
+                    resourceType: "EMAIL",
+                }),
+                tx,
+            );
+        });
+
+        it("should resend the confirmation code using a transaction", async () => {
+            vi.mocked(userRepository.findByEmail).mockResolvedValue(user);
+
+            const tx = {} as any;
+
+            // Mock $transaction so the callback receives the transaction client.
+            vi.mocked(getPrisma).mockReturnValue({
+                $transaction: vi.fn(async (callback) => callback(tx)),
+            } as any);
+
+            vi.mocked(userRepository.invalidateActiveEmailValidations).mockResolvedValue();
+            vi.mocked(userRepository.createResourceValidation).mockResolvedValue({
+                id: "validation-123",
+                userId: user.id,
+                challengerNumber: "123456",
+                resourceType: "EMAIL",
+                createdAt: new Date(),
+                expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+                confirmedAt: null,
+            });
+
+            await userService.resendEmailConfirmationCode(email);
+
+            expect(userRepository.findByEmail).toHaveBeenCalledWith(email);
+
+            expect(userRepository.invalidateActiveEmailValidations).toHaveBeenCalledWith(
+                email,
+                tx,
+            );
+
+            expect(userRepository.createResourceValidation).toHaveBeenCalledWith(
+                {
+                    userId: user.id,
+                    challengerNumber: expect.stringMatching(/^\d{6}$/),
+                    resourceType: "EMAIL",
+                },
+                tx,
             );
         });
     });

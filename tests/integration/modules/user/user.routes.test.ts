@@ -1,10 +1,15 @@
-import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from "vitest";
 import request from "supertest";
 import app from "../../../../src/app";
 import { PrismaClient } from "../../../../src/generated/prisma/client.js";
 import { setupTestDatabase } from "../../../helpers/testDatabase.js";
 import { setPrismaInstance } from "../../../../src/shared/config/database";
 import { generateActivationToken } from "../../../../src/shared/services/jwt.js";
+import { resendConfirmationCode } from "../../../../src/modules/user/user.emails.js";
+
+vi.mock("../../../../src/modules/user/user.emails.js", () => ({
+    resendConfirmationCode: vi.fn().mockResolvedValue(undefined),
+}));
 
 describe("User Routes (Integration)", () => {
     let db: Awaited<ReturnType<typeof setupTestDatabase>>;
@@ -245,6 +250,37 @@ describe("User Routes (Integration)", () => {
             expect(activatedUser?.active).toBe(true);
             expect(activatedUser?.passwordHash).toBeTruthy();
             expect(activatedUser?.updatedAt).toBeTruthy();
+        });
+    });
+
+    describe("POST /users/resend-email-confirmation", () => {
+        it("should resend the confirmation email successfully", async () => {
+            const user = await prisma.user.create({
+                data: {
+                    firstName: "Jhon",
+                    lastName: "Doe",
+                    email: "johndoe@hotmail.com",
+                    role: "ATTENDANT",
+                },
+            });
+
+            const response = await request(app)
+                .post("/users/resend-email-confirmation")
+                .send({
+                    email: user.email,
+                });
+
+            expect(response.status).toBe(200);
+            expect(response.body).toEqual({
+                success: true,
+                message: "If the account is eligible, a new verification code has been sent",
+            });
+
+            expect(resendConfirmationCode).toHaveBeenCalledWith({
+                to: user.email,
+                name: `${user.firstName} ${user.lastName}`,
+                code: expect.stringMatching(/^\d{6}$/),
+            });
         });
     });
 });

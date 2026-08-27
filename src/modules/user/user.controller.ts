@@ -62,17 +62,26 @@ const confirmEmail = asyncHandler(async (req, res) => {
     });
 });
 
-const activateUser =  asyncHandler(async (req, res) => {
+const activateUser = asyncHandler(async (req, res) => {
     const user = req.user;
     if (!user) {
-        throw unauthorized({ message: "User not authenticated" }); 
+        throw unauthorized({ message: "User not authenticated" });
     }
-    
+
     const input = userDTO.activateUserDTO(req.body, user);
     await userService.activateUser(input);
     res.status(200).json({
         success: true,
         message: "User activated successfully",
+    });
+});
+
+const resendEmailConfirmationCode = asyncHandler(async (req, res) => {
+    const { email } = req.body;
+    await userService.resendEmailConfirmationCode(email);
+    res.status(200).json({
+        success: true,
+        message: "If the account is eligible, a new verification code has been sent",
     });
 });
 
@@ -82,5 +91,6 @@ export default {
     deleteUser,
     listUsers,
     confirmEmail,
-    activateUser
+    activateUser,
+    resendEmailConfirmationCode,
 };

@@ -1,6 +1,6 @@
 import { vi, describe, beforeEach, it, expect } from "vitest";
 
-import { sendActivationEmail } from "../../../../src/modules/user/user.emails.js";
+import { sendConfirmationCode } from "../../../../src/modules/user/user.emails.js";
 import { sendMail } from "../../../../src/shared/services/mailer.js";
 
 vi.mock("../../../../src/shared/services/mailer.js", () => ({
@@ -14,14 +14,14 @@ describe("User Emails (Unit)", () => {
         vi.clearAllMocks();
     });
 
-    describe("sendActivationEmail", () => {
+    describe("sendConfirmationCode", () => {
         it("should propagate the error when sending the email fails", async () => {
             const error = new Error("Fake error");
 
             sendMailMock.mockRejectedValue(error);
 
             await expect(
-                sendActivationEmail({
+                sendConfirmationCode({
                     to: "user@example.com",
                     name: "John Doe",
                     code: "123456",
@@ -32,7 +32,7 @@ describe("User Emails (Unit)", () => {
         it("should send the account activation email", async () => {
             sendMailMock.mockResolvedValue(undefined);
 
-            await sendActivationEmail({
+            await sendConfirmationCode({
                 to: "user@example.com",
                 name: "John Doe",
                 code: "123456",

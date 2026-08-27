@@ -3,7 +3,7 @@ import PubsubError from "../../../shared/pubsub/error.js";
 import generateSecure6DigitCode from "../../../shared/utils/secure-code.js";
 import logger from "../../../shared/config/logger.js";
 import userRepository from "../user.repository.js";
-import { sendActivationEmail } from "../user.emails.js";
+import { sendConfirmationCode } from "../user.emails.js";
 
 interface UserCreatedPayload {
     id: string;
@@ -18,10 +18,10 @@ interface UserCreatedPayload {
     } | null;
 }
 
-const sendActivationEmailSubscriber: Subscriber = {
+const sendEmailConfirmationCodeSubscriber: Subscriber = {
     config: {
         topic: "public.users.created",
-        queue: "user-created.send-activation-email",
+        queue: "user-created.send-email-confirmation-code",
         prefetch: 1,
     },
     handler: async (message) => {
@@ -39,7 +39,7 @@ const sendActivationEmailSubscriber: Subscriber = {
         }
 
         if (resourceValidation && resourceValidation.expiresAt !== null && resourceValidation.expiresAt > new Date()) {
-            await sendActivationEmail({
+            await sendConfirmationCode({
                 to: payload.after.email,
                 name: `${payload.after.firstName} ${payload.after.lastName}`,
                 code: resourceValidation.challengerNumber,
@@ -55,7 +55,7 @@ const sendActivationEmailSubscriber: Subscriber = {
             resourceType: "EMAIL",
         });
 
-        await sendActivationEmail({
+        await sendConfirmationCode({
             to: payload.after.email,
             name: `${payload.after.firstName} ${payload.after.lastName}`,
             code: verificationCode,
@@ -66,4 +66,4 @@ const sendActivationEmailSubscriber: Subscriber = {
     },
 };
 
-export { sendActivationEmailSubscriber };
+export { sendEmailConfirmationCodeSubscriber };

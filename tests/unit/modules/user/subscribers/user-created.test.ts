@@ -1,11 +1,11 @@
 import { vi, describe, beforeEach, it, expect } from "vitest";
 
-import { sendActivationEmailSubscriber } from "../../../../../src/modules/user/subscribers/user-created.js";
+import { sendEmailConfirmationCodeSubscriber } from "../../../../../src/modules/user/subscribers/user-created.js";
 
 import generateSecure6DigitCode from "../../../../../src/shared/utils/secure-code.js";
 import logger from "../../../../../src/shared/config/logger.js";
 import userRepository from "../../../../../src/modules/user/user.repository.js";
-import { sendActivationEmail } from "../../../../../src/modules/user/user.emails.js";
+import { sendConfirmationCode } from "../../../../../src/modules/user/user.emails.js";
 
 vi.mock("../../../../../src/shared/utils/secure-code.js");
 vi.mock("../../../../../src/shared/config/logger.js", () => ({
@@ -48,21 +48,21 @@ describe("User Created Subscriber (Unit)", () => {
     });
 
     it("should have the correct subscriber configuration", () => {
-        expect(sendActivationEmailSubscriber.config).toEqual({
+        expect(sendEmailConfirmationCodeSubscriber.config).toEqual({
             topic: "public.users.created",
-            queue: "user-created.send-activation-email",
+            queue: "user-created.send-email-confirmation-code",
             prefetch: 1,
         });
 
-        expect(sendActivationEmailSubscriber.handler).toEqual(expect.any(Function));
+        expect(sendEmailConfirmationCodeSubscriber.handler).toEqual(expect.any(Function));
 
-        expect(sendActivationEmailSubscriber.onError).toEqual(expect.any(Function));
+        expect(sendEmailConfirmationCodeSubscriber.onError).toEqual(expect.any(Function));
     });
 
     it("should log an error when processing the event fails", () => {
         const error = new Error("Failed to process user-created event");
 
-        sendActivationEmailSubscriber.onError?.(error, messagePayload);
+        sendEmailConfirmationCodeSubscriber.onError?.(error, messagePayload);
 
         expect(logger.error).toHaveBeenCalledWith(
             {
@@ -84,7 +84,7 @@ describe("User Created Subscriber (Unit)", () => {
             },
         };
 
-        await expect(sendActivationEmailSubscriber.handler(message))
+        await expect(sendEmailConfirmationCodeSubscriber.handler(message))
             .rejects.toThrow("user-created event missing 'after' state");
 
         expect(logger.error).toHaveBeenCalledWith(
@@ -96,7 +96,7 @@ describe("User Created Subscriber (Unit)", () => {
 
         expect(userRepository.createResourceValidation).not.toHaveBeenCalled();
 
-        expect(sendActivationEmail).not.toHaveBeenCalled();
+        expect(sendConfirmationCode).not.toHaveBeenCalled();
     });
 
     it("should throw when it fails to find the resource validation", async () => {
@@ -104,14 +104,14 @@ describe("User Created Subscriber (Unit)", () => {
 
         vi.mocked(userRepository).findResourceValidationByUserId.mockRejectedValue(error);
 
-        await expect(sendActivationEmailSubscriber.handler(messagePayload))
+        await expect(sendEmailConfirmationCodeSubscriber.handler(messagePayload))
             .rejects.toThrow(error);
 
         expect(generateSecure6DigitCode).not.toHaveBeenCalled();
 
         expect(userRepository.createResourceValidation).not.toHaveBeenCalled();
 
-        expect(sendActivationEmail).not.toHaveBeenCalled();
+        expect(sendConfirmationCode).not.toHaveBeenCalled();
     });
 
     it("should return when the resource validation is already confirmed", async () => {
@@ -120,7 +120,7 @@ describe("User Created Subscriber (Unit)", () => {
             confirmedAt: new Date(),
         });
 
-        await sendActivationEmailSubscriber.handler(messagePayload);
+        await sendEmailConfirmationCodeSubscriber.handler(messagePayload);
 
         expect(userRepository.findResourceValidationByUserId)
             .toHaveBeenCalledWith("user-1", "EMAIL");
@@ -129,7 +129,7 @@ describe("User Created Subscriber (Unit)", () => {
 
         expect(userRepository.createResourceValidation).not.toHaveBeenCalled();
 
-        expect(sendActivationEmail).not.toHaveBeenCalled();
+        expect(sendConfirmationCode).not.toHaveBeenCalled();
     });
 
     it("should send the activation email using the existing valid resource validation", async () => {
@@ -138,9 +138,9 @@ describe("User Created Subscriber (Unit)", () => {
             expiresAt: new Date(Date.now() + 60_000),
         });
 
-        vi.mocked(sendActivationEmail).mockResolvedValue(undefined);
+        vi.mocked(sendConfirmationCode).mockResolvedValue(undefined);
 
-        await sendActivationEmailSubscriber.handler(messagePayload);
+        await sendEmailConfirmationCodeSubscriber.handler(messagePayload);
 
         expect(userRepository.findResourceValidationByUserId)
             .toHaveBeenCalledWith("user-1", "EMAIL");
@@ -149,7 +149,7 @@ describe("User Created Subscriber (Unit)", () => {
 
         expect(userRepository.createResourceValidation).not.toHaveBeenCalled();
 
-        expect(sendActivationEmail)
+        expect(sendConfirmationCode)
             .toHaveBeenCalledWith({
                 to: "jhon@example.com",
                 name: "Jhon Doe",
@@ -166,7 +166,7 @@ describe("User Created Subscriber (Unit)", () => {
 
         vi.mocked(userRepository).createResourceValidation.mockRejectedValue(error);
 
-        await expect(sendActivationEmailSubscriber.handler(messagePayload))
+        await expect(sendEmailConfirmationCodeSubscriber.handler(messagePayload))
             .rejects.toThrow(error);
 
         expect(userRepository.findResourceValidationByUserId)
@@ -181,7 +181,7 @@ describe("User Created Subscriber (Unit)", () => {
                 resourceType: "EMAIL",
             });
 
-        expect(sendActivationEmail).not.toHaveBeenCalled();
+        expect(sendConfirmationCode).not.toHaveBeenCalled();
     });
 
     it("should throw when it fails to send the activation email", async () => {
@@ -193,9 +193,9 @@ describe("User Created Subscriber (Unit)", () => {
 
         vi.mocked(userRepository).createResourceValidation.mockResolvedValue(resourceValidation);
 
-        vi.mocked(sendActivationEmail).mockRejectedValue(error);
+        vi.mocked(sendConfirmationCode).mockRejectedValue(error);
 
-        await expect(sendActivationEmailSubscriber.handler(messagePayload))
+        await expect(sendEmailConfirmationCodeSubscriber.handler(messagePayload))
             .rejects.toThrow(error);
 
         expect(userRepository.findResourceValidationByUserId)
@@ -208,7 +208,7 @@ describe("User Created Subscriber (Unit)", () => {
                 resourceType: "EMAIL",
             });
 
-        expect(sendActivationEmail)
+        expect(sendConfirmationCode)
             .toHaveBeenCalledWith({
                 to: "jhon@example.com",
                 name: "Jhon Doe",
@@ -223,9 +223,9 @@ describe("User Created Subscriber (Unit)", () => {
 
         vi.mocked(userRepository).createResourceValidation.mockResolvedValue(resourceValidation);
 
-        vi.mocked(sendActivationEmail).mockResolvedValue(undefined);
+        vi.mocked(sendConfirmationCode).mockResolvedValue(undefined);
 
-        await sendActivationEmailSubscriber.handler(messagePayload);
+        await sendEmailConfirmationCodeSubscriber.handler(messagePayload);
 
         expect(userRepository.findResourceValidationByUserId)
             .toHaveBeenCalledWith("user-1", "EMAIL");
@@ -239,7 +239,7 @@ describe("User Created Subscriber (Unit)", () => {
                 resourceType: "EMAIL",
             });
 
-        expect(sendActivationEmail)
+        expect(sendConfirmationCode)
             .toHaveBeenCalledWith({
                 to: "jhon@example.com",
                 name: "Jhon Doe",

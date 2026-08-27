@@ -9,6 +9,9 @@ import userRepository from "./user.repository.js";
 import { generateActivationToken } from "../../shared/services/jwt.js";
 import { hashPassword } from "../../shared/services/hash.js";
 import { alreadyExists, notFound, conflict, unauthorized } from "../../shared/errors/errors.js";
+import generateSecure6DigitCode from "../../shared/utils/secure-code.js";
+import { getPrisma } from "../../shared/config/database.js";
+import { resendConfirmationCode } from "./user.emails.js";
 
 
 const createUser = async (input: RegisterInput): Promise<UserRecord> => {
@@ -65,6 +68,35 @@ const activateUser = async (input: ActivateUserInput): Promise<void> => {
     await userRepository.activateAndSetPassword(input.userId, passwordHash)
 };
 
+const resendEmailConfirmationCode = async (email: string): Promise<void> => {
+    const user = await userRepository.findByEmail(email);
+
+    if (!user) {
+        // Silently return to prevent email enumeration (security best practice)
+        return;
+    }
+
+    const verificationCode = generateSecure6DigitCode();
+
+    await getPrisma().$transaction(async (tx) => {
+        await userRepository.invalidateActiveEmailValidations(email, tx);
+        await userRepository.createResourceValidation(
+            {
+                userId: user.id,
+                challengerNumber: verificationCode,
+                resourceType: "EMAIL",
+            },
+            tx,
+        );
+    });
+
+    await resendConfirmationCode({
+        to: user.email,
+        name: `${user.firstName} ${user.lastName}`,
+        code: verificationCode,
+    });
+};
+
 export default {
     createUser,
     getUserById,
@@ -72,4 +104,5 @@ export default {
     listUsers,
     confirmEmail,
     activateUser,
+    resendEmailConfirmationCode,
 };

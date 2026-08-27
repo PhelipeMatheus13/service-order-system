@@ -56,8 +56,16 @@ const confirmEmailLimiter = createRateLimiter({
     errorMessage: "Too many confirm attempts, please try again in a minute",
 });
 
+const resendEmailConfirmationCodeLimiter = createRateLimiter({
+    identifier: "resend-code",
+    windowMs: 15 * 60 * 1000,
+    maxRequests: 3,
+    errorMessage: "Too many resend requests, please try again later",
+});
+
 export {
     globalLimiter,
     registerLimiter,
     confirmEmailLimiter,
+    resendEmailConfirmationCodeLimiter
 };

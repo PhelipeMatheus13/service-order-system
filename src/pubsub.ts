@@ -5,7 +5,7 @@ import { connect as connectPubsub } from "./shared/pubsub/connection.js";
 import { startSubscribers, type Subscriber } from "./shared/pubsub/subscriber.js";
 import { startPeriodicJobs, type PeriodicJob } from "./shared/background/periodic-job.js";
 import { getAndPushUnconsumedUserEvents } from "./modules/user/jobs/outbox-relay.js";
-import { sendActivationEmailSubscriber } from "./modules/user/subscribers/user-created.js";
+import { sendEmailConfirmationCodeSubscriber } from "./modules/user/subscribers/user-created.js";
 import logger from "./shared/config/logger.js";
 
 const periodicJobs: PeriodicJob[] = [
@@ -13,7 +13,7 @@ const periodicJobs: PeriodicJob[] = [
 ];
 
 const subscribers: Subscriber[] = [
-    sendActivationEmailSubscriber,
+    sendEmailConfirmationCodeSubscriber,
 ];
 
 const startPubsub = async (): Promise<void> => {

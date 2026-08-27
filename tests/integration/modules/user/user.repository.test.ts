@@ -192,6 +192,71 @@ describe("User Repository (Integration)", () => {
                 expect(userUpdated?.updatedAt).toBeTruthy();
             });
         });
+                });
+
+                await userRepository.invalidateActiveEmailValidations(userCreated.email);
+
+                const after = await prisma.userResourceValidation.findUnique({
+                    where: { id: validation.id },
+                });
+
+                expect(after?.expiresAt).toEqual(before?.expiresAt);
+            });
+
+            it("should not invalidate a confirmed email validation", async () => {
+                const validation = await prisma.userResourceValidation.create({
+                    data: {
+                        userId: userCreated.id,
+                        challengerNumber: "123456",
+                        resourceType: "EMAIL",
+                        expiresAt: new Date(Date.now() + 60_000),
+                        confirmedAt: new Date(),
+                    },
+                });
+
+                const before = await prisma.userResourceValidation.findUnique({
+                    where: { id: validation.id },
+                });
+
+                await userRepository.invalidateActiveEmailValidations(userCreated.email);
+
+                const after = await prisma.userResourceValidation.findUnique({
+                    where: { id: validation.id },
+                });
+
+                expect(after?.expiresAt).toEqual(before?.expiresAt);
+                expect(after?.confirmedAt).toEqual(before?.confirmedAt);
+            });
+
+            it("should use the transaction client when provided", async () => {
+                const validation = await userRepository.createResourceValidation({
+                    userId: userCreated.id,
+                    challengerNumber: "123456",
+                    resourceType: "EMAIL",
+                });
+
+                const originalExpiresAt = validation.expiresAt!;
+
+                await expect(
+                    prisma.$transaction(async (tx) => {
+                        await userRepository.invalidateActiveEmailValidations(
+                            userCreated.email,
+                            tx,
+                        );
+
+                        throw new Error("rollback");
+                    }),
+                ).rejects.toThrow("rollback");
+
+                const afterRollback = await prisma.userResourceValidation.findUnique({
+                    where: { id: validation.id },
+                });
+
+                expect(afterRollback?.expiresAt?.getTime()).toBe(
+                    originalExpiresAt.getTime(),
+                );
+            });
+        });
     });
 
     describe("Reader repository", () => {
@@ -246,6 +311,40 @@ describe("User Repository (Integration)", () => {
 
             it("should return null if a user with the given ID does not exist", async () => {
                 const user = await userRepository.findById("0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa");
+                expect(user).toBeNull();
+            });
+        });
+
+        describe("findByEmail", () => {
+            it("should return the user if a user with the given email exists", async () => {
+                const userCreated = await prisma.user.create({
+                    data: {
+                        firstName: "Jhon",
+                        lastName: "Doe",
+                        phoneNumber: "5521995437105",
+                        email: "jhon@example.com",
+                        passwordHash: "passwordHash",
+                        role: "ATTENDANT",
+                        active: true,
+                        updatedAt: new Date,
+                    }
+                });
+
+                const user = await userRepository.findByEmail(userCreated.email);
+
+                expect(user?.id).toBeTruthy();
+                expect(user?.firstName).toBe(userCreated.firstName);
+                expect(user?.lastName).toBe(userCreated.lastName);
+                expect(user?.phoneNumber).toBe(userCreated.phoneNumber);
+                expect(user?.email).toBe(userCreated.email);
+                expect(user?.passwordHash).toBe(userCreated.passwordHash);
+                expect(user?.role).toBe(userCreated.role);
+                expect(user?.createdAt).toBeTruthy();
+                expect(user?.updatedAt).toBeTruthy();
+            });
+
+            it("should return null if a user with the given email does not exist", async () => {
+                const user = await userRepository.findByEmail("fake@hotmail.com");
                 expect(user).toBeNull();
             });
         });

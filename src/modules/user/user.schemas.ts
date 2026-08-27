@@ -115,6 +115,16 @@ const activateUserSchema = registry.register(
     )
 );
 
+const resendEmailConfirmationSchema = registry.register(
+    "ResendEmailConfirmationInput",
+    z.object({
+        email: z
+            .email("Please provide a valid email address")
+            .trim()
+            .openapi({ example: "johndoe@hotmail.com" }),
+    }),
+);
+
 
 // Represents the validated request body received by the API.
 // This type belongs to the transport layer and may differ from
@@ -129,6 +139,7 @@ export {
     userSchema,
     confirmEmailSchema,
     activateUserSchema,
+    resendEmailConfirmationSchema,
     normalizeEmptyValue,
     isValidPhone,
 };

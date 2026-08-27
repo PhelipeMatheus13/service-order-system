@@ -246,4 +246,30 @@ describe("User Controller (Unit)", () => {
             expect(next).not.toHaveBeenCalled();
         });
     });
+
+    describe("resendEmailConfirmationCode", () => {
+        it("should return 200 when the confirmation code is resent", async () => {
+            const requestBody = {
+                email: "johndoe@hotmail.com",
+            };
+
+            req.body = requestBody;
+
+            vi.mocked(userService.resendEmailConfirmationCode).mockResolvedValue();
+
+            await userController.resendEmailConfirmationCode(req, res, next);
+
+            expect(userService.resendEmailConfirmationCode).toHaveBeenCalledWith(
+                requestBody.email,
+            );
+
+            expect(res.status).toHaveBeenCalledWith(200);
+            expect(res.json).toHaveBeenCalledWith({
+                success: true,
+                message: "If the account is eligible, a new verification code has been sent",
+            });
+
+            expect(next).not.toHaveBeenCalled();
+        });
+    });
 });

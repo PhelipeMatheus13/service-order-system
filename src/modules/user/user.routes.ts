@@ -4,11 +4,17 @@ const router = express.Router();
 import userController from "./user.controller.js";
 import registry from "../../shared/docs/registry.js";
 import { z } from "zod";
-import { registerLimiter, confirmEmailLimiter } from "../../shared/middlewares/rate-limiter.js";
+import { registerLimiter, confirmEmailLimiter, resendEmailConfirmationCodeLimiter } from "../../shared/middlewares/rate-limiter.js";
 import validate from "../../shared/middlewares/validate.js";
-import { registerSchema, userSchema, confirmEmailSchema, activateUserSchema } from "./user.schemas.js";
 import { errorSchema } from "../../shared/docs/components/schemas.js"
 import { checkActivationToken } from "../../shared/middlewares/auth.js";
+import {
+    registerSchema,
+    userSchema,
+    confirmEmailSchema,
+    activateUserSchema,
+    resendEmailConfirmationSchema
+} from "./user.schemas.js";
 
 // POST
 registry.registerPath({
@@ -159,6 +165,51 @@ registry.registerPath({
     },
 })
 router.post("/activate", checkActivationToken, validate(activateUserSchema), userController.activateUser);
+
+registry.registerPath({
+    tags: ["User"],
+    method: "post",
+    path: "/users/resend-email-confirmation",
+    summary: "Resend code for email confirmation",
+    request: {
+        body: {
+            content: { "application/json": { schema: resendEmailConfirmationSchema } },
+        },
+    },
+    responses: {
+        200: {
+            description: "Only resend the email if the provided email address belongs to a user registered in the system",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        success: z.boolean().openapi({ example: true }),
+                        message: z.string().openapi({ example: "If the account is eligible, a new verification code has been sent" }),
+                    }),
+                },
+            },
+        },
+        422: {
+            description: "Resend email validation error",
+            content: {
+                "application/json": {
+                    schema: { $ref: "#/components/schemas/ValidationError" },
+                    example: {
+                        success: false,
+                        error: {
+                            code: "VALIDATION_ERROR",
+                            message: "Validation failed",
+                            details: [
+                                { field: "email", message: "johndoe@hotmail.com" },
+                            ],
+                        },
+                    },
+                },
+            },
+        },
+        500: { $ref: "#/components/responses/InternalError" },
+    },
+})
+router.post("/resend-email-confirmation", resendEmailConfirmationCodeLimiter, validate(resendEmailConfirmationSchema), userController.resendEmailConfirmationCode);
 
 // GET
 registry.registerPath({
