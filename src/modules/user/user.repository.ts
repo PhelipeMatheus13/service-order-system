@@ -1,5 +1,5 @@
 import { getPrisma } from "../../shared/config/database.js";
-import { Prisma } from "../../generated/prisma/client.js";
+import { Prisma, PrismaClient } from "../../generated/prisma/client.js";
 import type {
     RegisterInput,
     UserRecord,
@@ -10,6 +10,11 @@ import type {
     ResourceValidationType,
 } from "./user.types.js";
 
+// Represents either the main Prisma client or a transaction client.
+// Used in repository methods to support optional transactions:
+// - If a transaction client is provided (tx), use it.
+// - Otherwise, fall back to the default Prisma client.
+type PrismaClientOrTx = PrismaClient | Prisma.TransactionClient;
 
 // Writer
 const create = async (input: RegisterInput): Promise<UserRecord> => {
@@ -41,8 +46,11 @@ const deleteById = async (id: string): Promise<boolean> => {
     }
 };
 
-const createResourceValidation = async (input: CreateResourceValidationInput): Promise<ResourceValidationRecord> => {
-    const prisma = getPrisma();
+const createResourceValidation = async (
+    input: CreateResourceValidationInput, 
+    tx?: Prisma.TransactionClient
+): Promise<ResourceValidationRecord> => {
+    const prisma: PrismaClientOrTx = tx || getPrisma();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes from now
     
     const resourceValidation = await prisma.userResourceValidation.create({
@@ -70,7 +78,7 @@ const confirmResourceValidationById = async (id: string): Promise<void> => {
     });
 };
 
- const activateAndSetPassword = async (userId: string, passwordHash: string): Promise<void> => {
+const activateAndSetPassword = async (userId: string, passwordHash: string): Promise<void> => {
     const prisma = getPrisma();
     await prisma.user.update({
         where: { id: userId },
@@ -78,6 +86,25 @@ const confirmResourceValidationById = async (id: string): Promise<void> => {
             passwordHash,
             active: true,
             updatedAt: new Date(),
+        },
+    });
+};
+
+const invalidateActiveEmailValidations = async (email: string, tx?: Prisma.TransactionClient): Promise<void> => {
+    const prisma: PrismaClientOrTx = tx || getPrisma();
+    await prisma.userResourceValidation.updateMany({
+        where: {
+            user: {
+                email,
+            },
+            resourceType: "EMAIL",
+            confirmedAt: null,
+            expiresAt: {
+                gt: new Date(),
+            },
+        },
+        data: {
+            expiresAt: new Date(),
         },
     });
 };
@@ -93,6 +120,11 @@ const existsByEmail = async (email: string): Promise<boolean> => {
 const findById = async (id: string): Promise<UserRecord | null> => {
     const prisma = getPrisma();
     return prisma.user.findUnique({ where: { id } });
+};
+
+const findByEmail = async (email: string): Promise<UserRecord | null> => {
+    const prisma = getPrisma();
+    return prisma.user.findUnique({ where: { email } });
 };
 
 const list = async (input: ListUsersInput): Promise<UserRecord[]> => {
@@ -170,9 +202,11 @@ export default {
     createResourceValidation,
     confirmResourceValidationById,
     activateAndSetPassword,
+    invalidateActiveEmailValidations,
     // Reader
     existsByEmail,
     findById,
+    findByEmail,
     list,
     listOutboxUserUnconsumed,
     markOutboxUserAsConsumed,

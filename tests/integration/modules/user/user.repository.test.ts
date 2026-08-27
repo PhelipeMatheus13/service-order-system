@@ -115,6 +115,35 @@ describe("User Repository (Integration)", () => {
                 expect(resourceValidationCreated?.expiresAt).toBeTruthy();
                 expect(resourceValidationCreated?.confirmedAt).toBeNull();
             });
+
+            it("should use the transaction client when provided", async () => {
+                const resourceValidationData: CreateResourceValidationInput = {
+                    userId: userCreated.id,
+                    challengerNumber: "123456",
+                    resourceType: "EMAIL",
+                };
+
+                let resourceValidationId: string | undefined;
+
+                await expect(
+                    prisma.$transaction(async (tx) => {
+                        const validation = await userRepository.createResourceValidation(
+                            resourceValidationData,
+                            tx,
+                        );
+
+                        resourceValidationId = validation.id;
+
+                        throw new Error("rollback");
+                    }),
+                ).rejects.toThrow("rollback");
+
+                const validation = await prisma.userResourceValidation.findUnique({
+                    where: { id: resourceValidationId },
+                });
+
+                expect(validation).toBeNull();
+            });
         });
 
         describe("confirmResourceValidationById", async () => {
@@ -192,6 +221,54 @@ describe("User Repository (Integration)", () => {
                 expect(userUpdated?.updatedAt).toBeTruthy();
             });
         });
+
+        describe("invalidateActiveEmailValidations", () => {
+            let userCreated: UserRecord;
+
+            beforeEach(async () => {
+                const userData: RegisterInput = {
+                    firstName: "Jhon",
+                    lastName: "Doe",
+                    phoneNumber: "5521995437105",
+                    email: "jhon@example.com",
+                    role: "ATTENDANT",
+                };
+
+                userCreated = await userRepository.create(userData);
+            });
+
+            it("should invalidate an active and unconfirmed email validation", async () => {
+                const validation = await prisma.userResourceValidation.create({
+                    data: {
+                        userId: userCreated.id,
+                        challengerNumber: "123456",
+                        resourceType: "EMAIL",
+                        expiresAt: new Date(Date.now() + 60_000),
+                    },
+                });
+
+                await userRepository.invalidateActiveEmailValidations(userCreated.email);
+
+                const updated = await prisma.userResourceValidation.findUnique({
+                    where: { id: validation.id },
+                });
+
+                expect(updated?.expiresAt).toBeTruthy();
+                expect(updated!.expiresAt!.getTime()).toBeLessThanOrEqual(Date.now());
+            });
+
+            it("should not invalidate an expired email validation", async () => {
+                const validation = await prisma.userResourceValidation.create({
+                    data: {
+                        userId: userCreated.id,
+                        challengerNumber: "123456",
+                        resourceType: "EMAIL",
+                        expiresAt: new Date(Date.now() - 60_000),
+                    },
+                });
+
+                const before = await prisma.userResourceValidation.findUnique({
+                    where: { id: validation.id },
                 });
 
                 await userRepository.invalidateActiveEmailValidations(userCreated.email);
