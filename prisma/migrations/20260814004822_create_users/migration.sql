@@ -33,8 +33,10 @@ CREATE TABLE "outbox_users" (
     CONSTRAINT "outbox_users_pkey" PRIMARY KEY ("id")
 );
 
--- CreateIndex
-CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
+-- Performance indexes
+CREATE INDEX "users_created_at" ON "users" ("created_at" DESC);
+CREATE UNIQUE INDEX "users_email_key" ON "users" ("email");
+CREATE INDEX "outbox_users_unconsumed_created" ON "outbox_users" ("created_at" ASC) WHERE "consumed_at" IS NULL;
 
 -- CreateFunction
 CREATE OR REPLACE FUNCTION create_user_outbox()
@@ -42,35 +44,34 @@ RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $$
 BEGIN
-    INSERT INTO outbox_users (
-        user_id,
-        action,
-        before_state,
-        after_state
+    INSERT INTO "outbox_users" (
+        "user_id",
+        "action",
+        "before_state",
+        "after_state"
     )
     VALUES (
-        NEW.id,
+        NEW."id",
         'INSERT',
         NULL,
         jsonb_build_object(
-            'id', NEW.id,
-            'first_name', NEW.first_name,
-            'last_name', NEW.last_name,
-            'phone_number', NEW.phone_number,
-            'email', NEW.email,
-            'role', NEW.role,
-            'active', NEW.active,
-            'created_at', NEW.created_at,
-            'updated_at', NEW.updated_at
+            'id', NEW."id",
+            'first_name', NEW."first_name",
+            'last_name', NEW."last_name",
+            'phone_number', NEW."phone_number",
+            'email', NEW."email",
+            'role', NEW."role",
+            'active', NEW."active",
+            'created_at', NEW."created_at",
+            'updated_at', NEW."updated_at"
         )
     );
-
     RETURN NEW;
 END;
 $$;
 
 -- CreateTrigger
-CREATE TRIGGER users_after_insert
-AFTER INSERT ON users
+CREATE TRIGGER "users_after_insert"
+AFTER INSERT ON "users"
 FOR EACH ROW
 EXECUTE FUNCTION create_user_outbox();

@@ -1,5 +1,5 @@
 -- CreateEnum
-CREATE TYPE "user_resource_validation_type" AS ENUM ('EMAIL', 'PHONE');
+CREATE TYPE "user_resource_validation_type" AS ENUM ('EMAIL');
 
 -- CreateTable
 CREATE TABLE "user_resource_validations" (
@@ -21,3 +21,11 @@ FOREIGN KEY ("user_id")
 REFERENCES "users"("id")
 ON DELETE CASCADE
 ON UPDATE CASCADE;
+
+-- CreateIndex
+CREATE INDEX "idx_user_validations_user_type_created"
+ON "user_resource_validations" ("user_id", "resource_type", "created_at" DESC);
+
+CREATE INDEX "idx_user_validations_active_email"
+ON "user_resource_validations" ("user_id", "resource_type", "expires_at")
+WHERE "confirmed_at" IS NULL AND "resource_type" = 'EMAIL';

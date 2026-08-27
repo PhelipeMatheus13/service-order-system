@@ -61,6 +61,51 @@ router.post("/register", registerLimiter, validate(registerSchema), userControll
 registry.registerPath({
     tags: ["User"],
     method: "post",
+    path: "/users/resend-email-confirmation",
+    summary: "Resend code for email confirmation",
+    request: {
+        body: {
+            content: { "application/json": { schema: resendEmailConfirmationSchema } },
+        },
+    },
+    responses: {
+        200: {
+            description: "Only resend the email if the provided email address belongs to a user registered in the system",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        success: z.boolean().openapi({ example: true }),
+                        message: z.string().openapi({ example: "If the account is eligible, a new verification code has been sent" }),
+                    }),
+                },
+            },
+        },
+        422: {
+            description: "Resend email validation error",
+            content: {
+                "application/json": {
+                    schema: { $ref: "#/components/schemas/ValidationError" },
+                    example: {
+                        success: false,
+                        error: {
+                            code: "VALIDATION_ERROR",
+                            message: "Validation failed",
+                            details: [
+                                { field: "email", message: "johndoe@hotmail.com" },
+                            ],
+                        },
+                    },
+                },
+            },
+        },
+        500: { $ref: "#/components/responses/InternalError" },
+    },
+})
+router.post("/resend-email-confirmation", resendEmailConfirmationCodeLimiter, validate(resendEmailConfirmationSchema), userController.resendEmailConfirmationCode);
+
+registry.registerPath({
+    tags: ["User"],
+    method: "post",
     path: "/users/confirm-email",
     summary: "Confirm user email",
     request: {
@@ -166,50 +211,6 @@ registry.registerPath({
 })
 router.post("/activate", checkActivationToken, validate(activateUserSchema), userController.activateUser);
 
-registry.registerPath({
-    tags: ["User"],
-    method: "post",
-    path: "/users/resend-email-confirmation",
-    summary: "Resend code for email confirmation",
-    request: {
-        body: {
-            content: { "application/json": { schema: resendEmailConfirmationSchema } },
-        },
-    },
-    responses: {
-        200: {
-            description: "Only resend the email if the provided email address belongs to a user registered in the system",
-            content: {
-                "application/json": {
-                    schema: z.object({
-                        success: z.boolean().openapi({ example: true }),
-                        message: z.string().openapi({ example: "If the account is eligible, a new verification code has been sent" }),
-                    }),
-                },
-            },
-        },
-        422: {
-            description: "Resend email validation error",
-            content: {
-                "application/json": {
-                    schema: { $ref: "#/components/schemas/ValidationError" },
-                    example: {
-                        success: false,
-                        error: {
-                            code: "VALIDATION_ERROR",
-                            message: "Validation failed",
-                            details: [
-                                { field: "email", message: "johndoe@hotmail.com" },
-                            ],
-                        },
-                    },
-                },
-            },
-        },
-        500: { $ref: "#/components/responses/InternalError" },
-    },
-})
-router.post("/resend-email-confirmation", resendEmailConfirmationCodeLimiter, validate(resendEmailConfirmationSchema), userController.resendEmailConfirmationCode);
 
 // GET
 registry.registerPath({
