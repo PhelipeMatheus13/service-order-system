@@ -43,7 +43,7 @@ model User {
 
   resourceValidations UserResourceValidation[]
 
-  @@index([createdAt(sort: Desc)])   
+  @@index([createdAt(sort: Desc)])
   @@map("users")
 }
 
@@ -65,11 +65,12 @@ model UserResourceValidation {
   resourceType     UserResourceValidationType @map("resource_type")
   challengerNumber String                     @map("challenger_number") @db.VarChar(6)
   createdAt        DateTime                   @default(now()) @map("created_at") @db.Timestamptz()
-  expiresAt        DateTime?                  @map("expires_at") @db.Timestamptz()
+  expiresAt        DateTime                   @map("expires_at") @db.Timestamptz()
   confirmedAt      DateTime?                  @map("confirmed_at") @db.Timestamptz()
+  consumedAt       DateTime?                  @map("consumed_at") @db.Timestamptz()
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId, resourceType, createdAt(sort: Desc)])  
+  @@index([userId, resourceType, createdAt(sort: Desc)])
   @@map("user_resource_validations")
 }

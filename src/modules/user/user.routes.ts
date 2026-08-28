@@ -205,6 +205,30 @@ registry.registerPath({
                 },
             },
         },
+        404: {
+            description: "Resource validation not found",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    example: {
+                        success: false,
+                        error: { code: "NOT_FOUND", message: "Resource validation not found" },
+                    },
+                },
+            },
+        },
+        409: {
+            description: "Activation token already used",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    example: {
+                        success: false,
+                        error: { code: "CONFLICT", message: "Activation token already used" },
+                    },
+                },
+            },
+        },
         422: { $ref: "#/components/responses/activateUserValidationError" },
         500: { $ref: "#/components/responses/InternalError" },
     },

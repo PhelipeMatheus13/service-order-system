@@ -272,4 +272,44 @@ describe("User Controller (Unit)", () => {
             expect(next).not.toHaveBeenCalled();
         });
     });
+
+    describe("activateUser", () => {
+        it("should return 200 on successful activation", async () => {
+            req.user = { id: "user-123" };
+            res.locals = { validationId: "validation-123" };
+            req.body = { password: "newPassword" };
+
+            vi.mocked(userService.activateUser).mockResolvedValue(undefined);
+
+            await userController.activateUser(req, res, next);
+
+            expect(userService.activateUser).toHaveBeenCalledWith({
+                userId: "user-123",
+                validationId: "validation-123",
+                password: "newPassword",
+            });
+            expect(res.status).toHaveBeenCalledWith(200);
+            expect(res.json).toHaveBeenCalledWith({
+                success: true,
+                message: "User activated successfully",
+            });
+            expect(next).not.toHaveBeenCalled();
+        });
+
+        it("should call next with unauthorized error if user is missing", async () => {
+            req.user = undefined;
+            res.locals = { validationId: "validation-123" };
+            req.body = { password: "newPassword" };
+
+            await userController.activateUser(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(expect.objectContaining({
+                statusCode: 401,
+                code: "UNAUTHORIZED",
+                message: "User not authenticated",
+            }));
+            expect(userService.activateUser).not.toHaveBeenCalled();
+            expect(res.status).not.toHaveBeenCalled();
+        });
+    });
 });

@@ -33,14 +33,17 @@ describe("User Created Subscriber (Unit)", () => {
         },
     }
 
+    const now = new Date();
+
     const resourceValidation = {
         id: "validation-1",
-        createdAt: new Date(),
+        createdAt: now,
         userId: "user-1",
         resourceType: "EMAIL" as const,
         challengerNumber: "123456",
-        expiresAt: null,
+        expiresAt: new Date(now.getTime() + 10 * 60 * 1000), // 10 min
         confirmedAt: null,
+        consumedAt: null,
     }
 
     beforeEach(() => {

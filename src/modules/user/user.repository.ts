@@ -78,8 +78,8 @@ const confirmResourceValidationById = async (id: string): Promise<void> => {
     });
 };
 
-const activateAndSetPassword = async (userId: string, passwordHash: string): Promise<void> => {
-    const prisma = getPrisma();
+const activateAndSetPassword = async (userId: string, passwordHash: string, tx?: Prisma.TransactionClient): Promise<void> => {
+    const prisma: PrismaClientOrTx = tx || getPrisma();
     await prisma.user.update({
         where: { id: userId },
         data: {
@@ -107,6 +107,18 @@ const invalidateActiveEmailValidations = async (email: string, tx?: Prisma.Trans
             expiresAt: new Date(),
         },
     });
+};
+
+// Atomic guard: only succeeds if consumedAt was still null at the moment
+// of the write. Returns whether it actually consumed the row
+const consumeResourceValidation = async (id: string,tx?: Prisma.TransactionClient): Promise<boolean> => {
+    const prisma: PrismaClientOrTx = tx || getPrisma();
+    const result = await prisma.userResourceValidation.updateMany({
+        where: { id, consumedAt: null },
+        data: { consumedAt: new Date() },
+    });
+    
+    return result.count > 0;
 };
 
 // Reader
@@ -195,6 +207,12 @@ const findResourceValidationByEmail = async (email: string): Promise<ResourceVal
     return resourceValidation;
 };
 
+const findResourceValidationById = async (id: string): Promise<ResourceValidationRecord | null> => {
+    const prisma = getPrisma();
+    return prisma.userResourceValidation.findUnique({ where: { id } });
+};
+
+
 export default {
     // Writer
     create,
@@ -203,6 +221,7 @@ export default {
     confirmResourceValidationById,
     activateAndSetPassword,
     invalidateActiveEmailValidations,
+    consumeResourceValidation,
     // Reader
     existsByEmail,
     findById,
@@ -212,4 +231,5 @@ export default {
     markOutboxUserAsConsumed,
     findResourceValidationByUserId,
     findResourceValidationByEmail,
+    findResourceValidationById,
 };

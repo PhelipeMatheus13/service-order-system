@@ -12,8 +12,6 @@ import {
 
 vi.mock("../../../../src/shared/services/jwt.js");
 
-
-
 describe("Auth Middleware (Unit)", () => {
     let req: any;
     let res: any;
@@ -72,7 +70,7 @@ describe("Auth Middleware (Unit)", () => {
             req.headers.authorization = "Bearer valid.token";
 
             vi.mocked(decodeAccessToken).mockReturnValue({
-                id: "uuid",
+                sub: "uuid",
                 role: "user",
                 exp: Date.now() + 1000,
             });
@@ -119,22 +117,19 @@ describe("Auth Middleware (Unit)", () => {
 
         it("should extract token and attach user to request", () => {
             req.headers.authorization = "Bearer valid.token";
+            res.locals = {}; // 
 
             vi.mocked(decodeActivationToken).mockReturnValue({
-                id: "uuid",
-                role: "user",
+                sub: "uuid",
+                validationId: "validation-uuid",
                 exp: Date.now() + 1000,
             });
 
             checkActivationToken(req, res, next);
 
             expect(decodeActivationToken).toHaveBeenCalledWith("valid.token");
-
-            expect(req.user).toEqual({
-                id: "uuid",
-                role: "user",
-            });
-
+            expect(req.user).toEqual({ id: "uuid", });
+            expect(res.locals.validationId).toBe("validation-uuid");
             expect(next).toHaveBeenCalledWith();
         });
     });

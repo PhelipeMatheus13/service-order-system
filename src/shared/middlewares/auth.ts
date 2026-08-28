@@ -1,4 +1,4 @@
-import type { Request, RequestHandler } from "express";
+import type { RequestHandler } from "express";
 import { decodeAccessToken, decodeActivationToken } from "../services/jwt.js";
 import { unauthorized, forbidden } from "../errors/errors.js";
 
@@ -20,7 +20,7 @@ const checkAccessToken: RequestHandler = (req, _res, next) => {
     try {
         const decoded = decodeAccessToken(token);
         req.user = {
-            id: decoded.id,
+            id: decoded.sub,
             role: decoded.role,
         };
         
@@ -37,7 +37,7 @@ const checkAccessToken: RequestHandler = (req, _res, next) => {
  * If the token is valid, attaches the user information to `req.user`.
  * Otherwise, throws a 401 Unauthorized error.
  */
-const checkActivationToken: RequestHandler = (req, _res, next) => {
+const checkActivationToken: RequestHandler = (req, res, next) => {
     const authHeader = req.headers["authorization"];
     const token = authHeader && authHeader.split(" ")[1];
 
@@ -48,9 +48,10 @@ const checkActivationToken: RequestHandler = (req, _res, next) => {
     try {
         const decoded = decodeActivationToken(token);
         req.user = {
-            id: decoded.id,
-            role: decoded.role,
+            id: decoded.sub,
         };
+
+        res.locals.validationId = decoded.validationId;
         
         next();
     } catch (error) {
@@ -69,7 +70,7 @@ const checkActivationToken: RequestHandler = (req, _res, next) => {
  * @param roles - Roles authorized to access a route.
  */
 const authorize = (...roles: string[]): RequestHandler => (req, _res, next) => {
-    if (!req.user || !roles.includes(req.user.role)) {
+    if (!req.user || !req.user.role || !roles.includes(req.user.role)) {
         throw forbidden({ message: "Access denied" });
     }
 

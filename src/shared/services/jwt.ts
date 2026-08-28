@@ -5,11 +5,11 @@ import { getRequiredEnv } from "../config/env.js";
 
 const generateAccessToken = (userId: string, role: string): string => {
     const secret = getRequiredEnv("SECRET");
-    return jwt.sign({ id: userId, role: role }, secret, { expiresIn: "15m" });
+    return jwt.sign({ sub: userId, role: role }, secret, { expiresIn: "15m" });
 };
 
 interface AccessTokenPayload {
-    id: string;
+    sub: string;
     role: string;
     exp: number;
 }
@@ -48,11 +48,11 @@ const decodeAccessToken = (token: string): AccessTokenPayload => {
 
 const generateRefreshToken = (userId: string, role: string, jti: string): string => {
     const secret = getRequiredEnv("REFRESH_SECRET");
-    return jwt.sign({ id: userId, role: role, jti: jti }, secret, { expiresIn: "7d" });
+    return jwt.sign({ sub: userId, role: role, jti: jti }, secret, { expiresIn: "7d" });
 };
 
 interface RefreshTokenPayload {
-    id: string;
+    sub: string;
     role: string;
     jti: string;
     exp: number;
@@ -91,14 +91,14 @@ const decodeRefreshToken = (token: string): RefreshTokenPayload => {
 };
 
 
-const generateActivationToken = (userId: string): string => {
+const generateActivationToken = (userId: string, validationId: string): string => {
     const secret = getRequiredEnv("ACTIVATION_SECRET");
-    return jwt.sign({ id: userId }, secret, { expiresIn: "15m" });
+    return jwt.sign({ sub: userId, validationId }, secret, { expiresIn: "15m" });
 };
 
 interface ActivationTokenPayload {
-    id: string;
-    role: string;
+    sub: string;
+    validationId: string;
     exp: number;
 }
 

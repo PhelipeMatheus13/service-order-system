@@ -47,6 +47,7 @@ interface ConfirmEmailInput {
 
 interface ActivateUserInput {
     userId: string;
+    validationId: string;
     password: string;
 }
 

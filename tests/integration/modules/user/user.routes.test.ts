@@ -86,6 +86,7 @@ describe("User Routes (Integration)", () => {
                     userId: user.id,
                     challengerNumber: "123456",
                     resourceType: "EMAIL",
+                    expiresAt: new Date(Date.now() + 10 * 60 * 1000), // expires in 10 minutes
                 },
             });
 
@@ -227,7 +228,17 @@ describe("User Routes (Integration)", () => {
                 },
             });
 
-            const activationToken = generateActivationToken(user.id);
+            const resourceValidation = await prisma.userResourceValidation.create({
+                data: {
+                    userId: user.id,
+                    challengerNumber: "123456",
+                    resourceType: "EMAIL",
+                    confirmedAt: new Date(),
+                    expiresAt: new Date(Date.now() + 10 * 60 * 1000), // expires in 10 minutes
+                },
+            });
+
+            const activationToken = generateActivationToken(user.id, resourceValidation.id);
 
             const res = await request(app)
                 .post("/users/activate")

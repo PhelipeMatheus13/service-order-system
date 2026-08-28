@@ -38,7 +38,7 @@ const sendEmailConfirmationCodeSubscriber: Subscriber = {
             return;
         }
 
-        if (resourceValidation && resourceValidation.expiresAt !== null && resourceValidation.expiresAt > new Date()) {
+        if (resourceValidation && resourceValidation.expiresAt > new Date()) {
             await sendConfirmationCode({
                 to: payload.after.email,
                 name: `${payload.after.firstName} ${payload.after.lastName}`,

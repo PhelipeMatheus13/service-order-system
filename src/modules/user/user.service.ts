@@ -53,19 +53,38 @@ const confirmEmail = async (input: ConfirmEmailInput): Promise<string> => {
         throw conflict({ message: "Resource validation already confirmed" });
     }
 
-    if (resourceValidation.expiresAt && resourceValidation.expiresAt <= new Date()) {
+    if (resourceValidation.expiresAt <= new Date()) {
         throw unauthorized({ message: "Challenger number expired", code: "CHALLENGER_NUMBER_EXPIRED" });
     }
 
-    const activationToken = generateActivationToken(resourceValidation.userId);
+    const activationToken = generateActivationToken(resourceValidation.userId, resourceValidation.id);
     await userRepository.confirmResourceValidationById(resourceValidation?.id);
 
     return activationToken;
 };
 
 const activateUser = async (input: ActivateUserInput): Promise<void> => {
+    const resourceValidation = await userRepository.findResourceValidationById(input.validationId);
+    if (!resourceValidation) {
+        throw notFound({ message: "Resource validation not found" });
+    }
+
+    if (resourceValidation.consumedAt) {
+        throw conflict({ message: "Activation token already used" });
+    }
+
     const passwordHash = await hashPassword(input.password);
-    await userRepository.activateAndSetPassword(input.userId, passwordHash)
+
+    await getPrisma().$transaction(async (tx) => {
+        const consumed = await userRepository.consumeResourceValidation(input.validationId, tx);
+
+        if (!consumed) {
+            // race condition: another transaction might have consumed the validation before this one
+            throw conflict({ message: "Activation token already used" });
+        }
+
+        await userRepository.activateAndSetPassword(input.userId, passwordHash, tx);
+    });
 };
 
 const resendEmailConfirmationCode = async (email: string): Promise<void> => {

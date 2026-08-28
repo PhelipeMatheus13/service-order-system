@@ -58,7 +58,7 @@ describe("JWT Service (Unit)", () => {
             sign.mockReturnValue("access-token");
             const token = generateAccessToken("user-123", "admin");
             expect(token).toBe("access-token");
-            expect(sign).toHaveBeenCalledWith({ id: "user-123", role: "admin" }, "secret", { expiresIn: "15m" });
+            expect(sign).toHaveBeenCalledWith({ sub: "user-123", role: "admin" }, "secret", { expiresIn: "15m" });
         });
     });
 
@@ -141,9 +141,9 @@ describe("JWT Service (Unit)", () => {
         });
 
         it("should decode a valid token", () => {
-            verify.mockReturnValue({ id: "user-123", role: "admin", iat: 123, exp: 456 });
+            verify.mockReturnValue({ sub: "user-123", role: "admin", iat: 123, exp: 456 });
             const decoded = decodeAccessToken("valid-token");
-            expect(decoded).toEqual({ id: "user-123", role: "admin", iat: 123, exp: 456 });
+            expect(decoded).toEqual({ sub: "user-123", role: "admin", iat: 123, exp: 456 });
             expect(verify).toHaveBeenCalledWith("valid-token", "secret");
         });
     });
@@ -162,7 +162,7 @@ describe("JWT Service (Unit)", () => {
             sign.mockReturnValue("refresh-token");
             const token = generateRefreshToken("user-123", "admin", "jti-uuid-123");
             expect(token).toBe("refresh-token");
-            expect(sign).toHaveBeenCalledWith({ id: "user-123", role: "admin", jti: "jti-uuid-123" }, "refresh", { expiresIn: "7d" });
+            expect(sign).toHaveBeenCalledWith({ sub: "user-123", role: "admin", jti: "jti-uuid-123" }, "refresh", { expiresIn: "7d" });
         });
     });
 
@@ -243,9 +243,9 @@ describe("JWT Service (Unit)", () => {
         });
 
         it("should decode a valid token", () => {
-            verify.mockReturnValue({ id: "user-123", role: "admin", iat: 123, exp: 456 });
+            verify.mockReturnValue({ sub: "user-123", role: "admin", iat: 123, exp: 456 });
             const decoded = decodeRefreshToken("valid-token");
-            expect(decoded).toEqual({ id: "user-123", role: "admin", iat: 123, exp: 456 });
+            expect(decoded).toEqual({ sub: "user-123", role: "admin", iat: 123, exp: 456 });
             expect(verify).toHaveBeenCalledWith("valid-token", "refresh");
         });
     });
@@ -254,7 +254,7 @@ describe("JWT Service (Unit)", () => {
         it("should throw if ACTIVATION_SECRET is not set", () => {
             delete process.env.ACTIVATION_SECRET;
 
-            expect(() => generateActivationToken("user-123"))
+            expect(() => generateActivationToken("user-123", "validation-123"))
                 .toThrow("Missing required environment variable: ACTIVATION_SECRET");
 
             expect(sign).not.toHaveBeenCalled();
@@ -262,9 +262,9 @@ describe("JWT Service (Unit)", () => {
 
         it("should generate refresh token using ACTIVATION_SECRET and expiration of 7d", () => {
             sign.mockReturnValue("activation-token");
-            const token = generateActivationToken("user-123");
+            const token = generateActivationToken("user-123", "validation-123");
             expect(token).toBe("activation-token");
-            expect(sign).toHaveBeenCalledWith({ id: "user-123" }, "activation", { expiresIn: "15m" });
+            expect(sign).toHaveBeenCalledWith({ sub: "user-123", validationId: "validation-123" }, "activation", { expiresIn: "15m" });
         });
     });
 
@@ -313,10 +313,7 @@ describe("JWT Service (Unit)", () => {
                     }),
                 );
 
-            expect(logger.warn).toHaveBeenCalledWith(
-                { err: jwtError },
-                "Invalid activation token",
-            );
+            expect(logger.warn).toHaveBeenCalledWith({ err: jwtError }, "Invalid activation token");
         });
 
         it("should log an error and throw INVALID_ACTIVATION_TOKEN for an unexpected error", () => {
@@ -335,10 +332,7 @@ describe("JWT Service (Unit)", () => {
                     }),
                 );
 
-            expect(logger.error).toHaveBeenCalledWith(
-                { err: unexpectedError },
-                "Unexpected error while verifying activation token",
-            );
+            expect(logger.error).toHaveBeenCalledWith({ err: unexpectedError }, "Unexpected error while verifying activation token");
         });
 
         it("should log a warning and throw INVALID_ACTIVATION_TOKEN when verify returns a string", () => {
@@ -353,28 +347,14 @@ describe("JWT Service (Unit)", () => {
                     }),
                 );
 
-            expect(logger.warn).toHaveBeenCalledWith(
-                { decoded: "invalid-string" },
-                "Activation token decoded as string, expected object",
-            );
+            expect(logger.warn).toHaveBeenCalledWith({ decoded: "invalid-string" }, "Activation token decoded as string, expected object");
         });
 
-        it("should decode a valid activation token", () => {
-            const payload = {
-                id: "user-123",
-                iat: 123,
-                exp: 456,
-            };
-
-            verify.mockReturnValue(payload);
-
+        it("should decode a valid token", () => {
+            verify.mockReturnValue({ sub: "user-123", validationId: "validation-123", iat: 123, exp: 456 });
             const decoded = decodeActivationToken("valid-token");
-
-            expect(decoded).toEqual(payload);
-            expect(verify).toHaveBeenCalledWith(
-                "valid-token",
-                "activation",
-            );
+            expect(decoded).toEqual({ sub: "user-123", validationId: "validation-123", iat: 123, exp: 456 });
+            expect(verify).toHaveBeenCalledWith("valid-token", "activation");
         });
     });
 });

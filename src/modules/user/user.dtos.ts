@@ -56,9 +56,10 @@ const confirmEmailDTO = (body: confirmEmailRequest): ConfirmEmailInput => ({
     challengerNumber: body.challengerNumber,
 });
 
-const activateUserDTO = (body: activateUserRequest, user: AuthenticatedUser): ActivateUserInput => ({
+const activateUserDTO = (user: AuthenticatedUser, validationId: string, body: activateUserRequest): ActivateUserInput => ({
+    userId: user.id,
+    validationId,
     password: body.password,
-    userId: user.id
 });
 
 export default {

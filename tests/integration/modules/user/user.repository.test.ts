@@ -3,7 +3,7 @@ import { PrismaClient } from "../../../../src/generated/prisma/client.js";
 import { setupTestDatabase } from "../../../helpers/testDatabase.js";
 import { setPrismaInstance } from "../../../../src/shared/config/database";
 import userRepository from "../../../../src/modules/user/user.repository.js";
-import { UserRecord, RegisterInput, CreateResourceValidationInput } from "../../../../src/modules/user/user.types.js";
+import { UserRecord, RegisterInput, CreateResourceValidationInput, ResourceValidationRecord } from "../../../../src/modules/user/user.types.js";
 
 
 describe("User Repository (Integration)", () => {
@@ -210,15 +210,33 @@ describe("User Repository (Integration)", () => {
                 );
 
                 const userUpdated = await prisma.user.findUnique({
-                    where: {
-                        id: userCreated.id,
-                    },
+                    where: { id: userCreated.id },
                 });
 
                 expect(userUpdated).toBeTruthy();
                 expect(userUpdated?.passwordHash).toBe(passwordHash);
                 expect(userUpdated?.active).toBe(true);
                 expect(userUpdated?.updatedAt).toBeTruthy();
+            });
+
+            it("should use the transaction client when provided", async () => {
+                const passwordHash = "hashed-password";
+
+                await expect(
+                    prisma.$transaction(async (tx) => {
+                        await userRepository.activateAndSetPassword(userCreated.id, passwordHash, tx);
+
+                        throw new Error("rollback");
+                    })
+                ).rejects.toThrow("rollback");
+
+                const userUpdated = await prisma.user.findUnique({
+                    where: { id: userCreated.id },
+                });
+
+                expect(userUpdated?.passwordHash).toBeNull();
+                expect(userUpdated?.active).toBe(false);
+                expect(userUpdated?.updatedAt).toBeNull();
             });
         });
 
@@ -332,6 +350,84 @@ describe("User Repository (Integration)", () => {
                 expect(afterRollback?.expiresAt?.getTime()).toBe(
                     originalExpiresAt.getTime(),
                 );
+            });
+        });
+
+        describe("consumeResourceValidation", () => {
+            let userCreated: UserRecord;
+            let validation: ResourceValidationRecord;
+
+            beforeEach(async () => {
+                const userData: RegisterInput = {
+                    firstName: "Jhon",
+                    lastName: "Doe",
+                    phoneNumber: "5521995437105",
+                    email: "jhon@example.com",
+                    role: "ATTENDANT",
+                };
+
+                userCreated = await userRepository.create(userData);
+
+                validation = await prisma.userResourceValidation.create({
+                    data: {
+                        userId: userCreated.id,
+                        challengerNumber: "123456",
+                        resourceType: "EMAIL",
+                        expiresAt: new Date(Date.now() + 60_000), // 1min
+                        consumedAt: null, // not consumed yet
+                    },
+                });
+            });
+
+            it("should consume the validation when consumedAt is null and return true", async () => {
+                const result = await userRepository.consumeResourceValidation(validation.id);
+
+                expect(result).toBe(true);
+
+                const updated = await prisma.userResourceValidation.findUnique({
+                    where: { id: validation.id },
+                });
+
+                expect(updated?.consumedAt).toBeTruthy();
+            });
+
+            it("should not consume the validation when consumedAt is already set and return false", async () => {
+                // consume the validation first
+                const now = new Date();
+                await prisma.userResourceValidation.update({
+                    where: { id: validation.id },
+                    data: { consumedAt: now },
+                });
+
+                const result = await userRepository.consumeResourceValidation(validation.id);
+
+                expect(result).toBe(false);
+
+                const updated = await prisma.userResourceValidation.findUnique({
+                    where: { id: validation.id },
+                });
+
+                expect(updated?.consumedAt).toEqual(now);
+            });
+
+            it("should use the transaction client when provided", async () => {
+                await expect(
+                    prisma.$transaction(async (tx) => {
+                        const consumed = await userRepository.consumeResourceValidation(
+                            validation.id,
+                            tx,
+                        );
+                        expect(consumed).toBe(true);
+
+                        throw new Error("rollback");
+                    }),
+                ).rejects.toThrow("rollback");
+
+                const afterRollback = await prisma.userResourceValidation.findUnique({
+                    where: { id: validation.id },
+                });
+
+                expect(afterRollback?.consumedAt).toBeNull();
             });
         });
     });
@@ -660,6 +756,50 @@ describe("User Repository (Integration)", () => {
 
             it("should return null when the resource validation does not exist", async () => {
                 const resourceValidationFound = await userRepository.findResourceValidationByEmail(userCreated.email);
+
+                expect(resourceValidationFound).toBeNull();
+            });
+        });
+
+        describe("findResourceValidationById", async () => {
+            let userCreated: UserRecord;
+
+            beforeEach(async () => {
+                const userData: RegisterInput = {
+                    firstName: "Jhon",
+                    lastName: "Doe",
+                    phoneNumber: "5521995437105",
+                    email: "jhon@example.com",
+                    role: "ATTENDANT",
+                };
+
+                userCreated = await userRepository.create(userData);
+            });
+
+            it("should find a resource validation for an existing user", async () => {
+                const resourceValidationData: CreateResourceValidationInput = {
+                    userId: userCreated.id,
+                    challengerNumber: "123456",
+                    resourceType: "EMAIL",
+                };
+
+                const resourceValidationCreated = await userRepository.createResourceValidation(resourceValidationData);
+
+                const resourceValidationFound = await userRepository.findResourceValidationById(resourceValidationCreated.id);
+
+                expect(resourceValidationFound).toBeTruthy();
+
+                expect(resourceValidationFound?.id).toBe(resourceValidationCreated.id);
+                expect(resourceValidationFound?.userId).toBe(userCreated.id);
+                expect(resourceValidationFound?.challengerNumber).toBe("123456");
+                expect(resourceValidationFound?.resourceType).toBe("EMAIL");
+                expect(resourceValidationFound?.createdAt).toBeTruthy();
+                expect(resourceValidationFound?.expiresAt).toBeTruthy();
+                expect(resourceValidationFound?.confirmedAt).toBeNull();
+            });
+
+            it("should return null when the resource validation does not exist", async () => {
+                const resourceValidationFound = await userRepository.findResourceValidationById("4b34267a-4f0f-4627-9b6b-397599d4c7a0");
 
                 expect(resourceValidationFound).toBeNull();
             });

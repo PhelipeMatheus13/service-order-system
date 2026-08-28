@@ -8,8 +8,9 @@ CREATE TABLE "user_resource_validations" (
     "resource_type" "user_resource_validation_type" NOT NULL,
     "challenger_number" VARCHAR(6) NOT NULL,
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "expires_at" TIMESTAMPTZ,
+    "expires_at" TIMESTAMPTZ NOT NULL,
     "confirmed_at" TIMESTAMPTZ,
+    "consumed_at" TIMESTAMPTZ,
 
     CONSTRAINT "user_resource_validations_pkey" PRIMARY KEY ("id")
 );

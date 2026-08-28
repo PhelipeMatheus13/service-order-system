@@ -64,11 +64,11 @@ const confirmEmail = asyncHandler(async (req, res) => {
 
 const activateUser = asyncHandler(async (req, res) => {
     const user = req.user;
-    if (!user) {
-        throw unauthorized({ message: "User not authenticated" });
-    }
+    if (!user) throw unauthorized({ message: "User not authenticated" });
+    
+    const validationId = res.locals.validationId as string;
 
-    const input = userDTO.activateUserDTO(req.body, user);
+    const input = userDTO.activateUserDTO(user, validationId, req.body);
     await userService.activateUser(input);
     res.status(200).json({
         success: true,
