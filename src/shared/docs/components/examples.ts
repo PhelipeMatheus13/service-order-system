@@ -55,10 +55,22 @@ const invalidActivationToken = registry.registerComponent("examples", "invalidAc
     },
 });
 
+const tokenReuseDetected = registry.registerComponent("examples", "tokenReuseDetected", {
+    summary: "Token reuse detected",
+    value: {
+        success: false,
+        error: {
+            code: "TOKEN_REUSE_DETECTED",
+            message: "Token reuse detected",
+        },
+    },
+});
+
 export {
     invalidChallengerNumber,
     challengerNumberExpired,
     missingActivationToken,
     activationTokenExpired,
     invalidActivationToken,
+    tokenReuseDetected,
 };

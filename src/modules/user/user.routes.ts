@@ -201,18 +201,19 @@ registry.registerPath({
                         missingActivationToken: { $ref: "#/components/examples/missingActivationToken" },
                         activationTokenExpired: { $ref: "#/components/examples/activationTokenExpired" },
                         invalidActivationToken: { $ref: "#/components/examples/invalidActivationToken" },
+                        tokenReuseDetected: { $ref: "#/components/examples/tokenReuseDetected" },
                     },
                 },
             },
         },
         404: {
-            description: "Resource validation not found",
+            description: "Activation token not found",
             content: {
                 "application/json": {
                     schema: errorSchema,
                     example: {
                         success: false,
-                        error: { code: "NOT_FOUND", message: "Resource validation not found" },
+                        error: { code: "TOKEN_NOT_FOUND", message: "Activation token not found" },
                     },
                 },
             },

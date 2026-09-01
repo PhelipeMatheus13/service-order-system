@@ -1,5 +1,3 @@
-import { getPrisma } from "../../shared/config/database.js";
-import { Prisma, PrismaClient } from "../../generated/prisma/client.js";
 import type {
     RegisterInput,
     UserRecord,
@@ -8,7 +6,12 @@ import type {
     ResourceValidationRecord,
     CreateResourceValidationInput,
     ResourceValidationType,
+    CreateUserActivationTokenInput,
+    UserActivationTokenRecord
 } from "./user.types.js";
+import { getPrisma } from "../../shared/config/database.js";
+import { Prisma, PrismaClient } from "../../generated/prisma/client.js";
+
 
 // Represents either the main Prisma client or a transaction client.
 // Used in repository methods to support optional transactions:
@@ -46,13 +49,10 @@ const deleteById = async (id: string): Promise<boolean> => {
     }
 };
 
-const createResourceValidation = async (
-    input: CreateResourceValidationInput, 
-    tx?: Prisma.TransactionClient
-): Promise<ResourceValidationRecord> => {
+const createResourceValidation = async (input: CreateResourceValidationInput, tx?: Prisma.TransactionClient): Promise<ResourceValidationRecord> => {
     const prisma: PrismaClientOrTx = tx || getPrisma();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes from now
-    
+
     const resourceValidation = await prisma.userResourceValidation.create({
         data: {
             userId: input.userId,
@@ -65,17 +65,16 @@ const createResourceValidation = async (
     return resourceValidation;
 };
 
-const confirmResourceValidationById = async (id: string): Promise<void> => {
-    const prisma = getPrisma();
-
-    await prisma.userResourceValidation.update({
-        where: {
-            id,
-        },
-        data: {
-            confirmedAt: new Date(),
-        },
+// Atomic guard: only succeeds if confirmedAt was still null at the moment
+// of the write. Returns whether it actually confirmed the row
+const confirmResourceValidationById = async (id: string, tx?: Prisma.TransactionClient): Promise<boolean> => {
+    const prisma: PrismaClientOrTx = tx || getPrisma();
+    const result = await prisma.userResourceValidation.updateMany({
+        where: { id, confirmedAt: null },
+        data: { confirmedAt: new Date() },
     });
+
+    return result.count > 0;
 };
 
 const activateAndSetPassword = async (userId: string, passwordHash: string, tx?: Prisma.TransactionClient): Promise<void> => {
@@ -109,17 +108,31 @@ const invalidateActiveEmailValidations = async (email: string, tx?: Prisma.Trans
     });
 };
 
-// Atomic guard: only succeeds if consumedAt was still null at the moment
-// of the write. Returns whether it actually consumed the row
-const consumeResourceValidation = async (id: string,tx?: Prisma.TransactionClient): Promise<boolean> => {
+const createUserActivationToken = async (input: CreateUserActivationTokenInput, tx?: Prisma.TransactionClient): Promise<UserActivationTokenRecord> => {
     const prisma: PrismaClientOrTx = tx || getPrisma();
-    const result = await prisma.userResourceValidation.updateMany({
-        where: { id, consumedAt: null },
-        data: { consumedAt: new Date() },
+    const userActivationToken = await prisma.userActivationToken.create({
+        data: {
+            userId: input.userId,
+            jti: input.jti,
+            tokenHash: input.tokenHash,
+            expiresAt: input.expiresAt,
+        },
     });
     
+    return userActivationToken;
+}
+
+// Atomic guard: only succeeds if consumedAt was still null at the moment
+// of the write. Returns whether it actually consumed the row
+const consumeUserActivationTokenByJti = async (jti: string, tx?: Prisma.TransactionClient): Promise<boolean> => {
+    const prisma: PrismaClientOrTx = tx || getPrisma();
+    const result = await prisma.userActivationToken.updateMany({
+        where: { jti, consumedAt: null },
+        data: { consumedAt: new Date() },
+    });
+
     return result.count > 0;
-};
+}
 
 // Reader
 const existsByEmail = async (email: string): Promise<boolean> => {
@@ -207,11 +220,10 @@ const findResourceValidationByEmail = async (email: string): Promise<ResourceVal
     return resourceValidation;
 };
 
-const findResourceValidationById = async (id: string): Promise<ResourceValidationRecord | null> => {
+const findUserActivationTokenByJti = async (jti: string): Promise<UserActivationTokenRecord | null> => {
     const prisma = getPrisma();
-    return prisma.userResourceValidation.findUnique({ where: { id } });
-};
-
+    return prisma.userActivationToken.findUnique({ where: { jti } });
+}
 
 export default {
     // Writer
@@ -221,7 +233,8 @@ export default {
     confirmResourceValidationById,
     activateAndSetPassword,
     invalidateActiveEmailValidations,
-    consumeResourceValidation,
+    createUserActivationToken,
+    consumeUserActivationTokenByJti,
     // Reader
     existsByEmail,
     findById,
@@ -231,5 +244,5 @@ export default {
     markOutboxUserAsConsumed,
     findResourceValidationByUserId,
     findResourceValidationByEmail,
-    findResourceValidationById,
+    findUserActivationTokenByJti
 };

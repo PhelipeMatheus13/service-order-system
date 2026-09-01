@@ -3,7 +3,8 @@ import { PrismaClient } from "../../../../src/generated/prisma/client.js";
 import { setupTestDatabase } from "../../../helpers/testDatabase.js";
 import { setPrismaInstance } from "../../../../src/shared/config/database";
 import userRepository from "../../../../src/modules/user/user.repository.js";
-import { UserRecord, RegisterInput, CreateResourceValidationInput, ResourceValidationRecord } from "../../../../src/modules/user/user.types.js";
+const { randomUUID } = require("crypto");
+import { UserRecord, RegisterInput, CreateResourceValidationInput, CreateUserActivationTokenInput } from "../../../../src/modules/user/user.types.js";
 
 
 describe("User Repository (Integration)", () => {
@@ -23,6 +24,8 @@ describe("User Repository (Integration)", () => {
     beforeEach(async () => {
         await prisma.outboxUser.deleteMany();
         await prisma.user.deleteMany();
+        await prisma.userResourceValidation.deleteMany();
+        await prisma.userActivationToken.deleteMany();
     });
 
     describe("Writer repository", () => {
@@ -353,9 +356,8 @@ describe("User Repository (Integration)", () => {
             });
         });
 
-        describe("consumeResourceValidation", () => {
+        describe("createUserActivationToken", () => {
             let userCreated: UserRecord;
-            let validation: ResourceValidationRecord;
 
             beforeEach(async () => {
                 const userData: RegisterInput = {
@@ -367,64 +369,120 @@ describe("User Repository (Integration)", () => {
                 };
 
                 userCreated = await userRepository.create(userData);
-
-                validation = await prisma.userResourceValidation.create({
-                    data: {
-                        userId: userCreated.id,
-                        challengerNumber: "123456",
-                        resourceType: "EMAIL",
-                        expiresAt: new Date(Date.now() + 60_000), // 1min
-                        consumedAt: null, // not consumed yet
-                    },
-                });
             });
 
-            it("should consume the validation when consumedAt is null and return true", async () => {
-                const result = await userRepository.consumeResourceValidation(validation.id);
+            it("should create a activation token for an existing user", async () => {
+                const resourceValidationData: CreateUserActivationTokenInput = {
+                    userId: userCreated.id,
+                    jti: randomUUID(),
+                    tokenHash: "hashed-token-01",
+                    expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+                };
 
-                expect(result).toBe(true);
+                const resourceValidationCreated = await userRepository.createUserActivationToken(resourceValidationData);
 
-                const updated = await prisma.userResourceValidation.findUnique({
-                    where: { id: validation.id },
-                });
+                expect(resourceValidationCreated).toBeTruthy();
 
-                expect(updated?.consumedAt).toBeTruthy();
-            });
-
-            it("should not consume the validation when consumedAt is already set and return false", async () => {
-                // consume the validation first
-                const now = new Date();
-                await prisma.userResourceValidation.update({
-                    where: { id: validation.id },
-                    data: { consumedAt: now },
-                });
-
-                const result = await userRepository.consumeResourceValidation(validation.id);
-
-                expect(result).toBe(false);
-
-                const updated = await prisma.userResourceValidation.findUnique({
-                    where: { id: validation.id },
-                });
-
-                expect(updated?.consumedAt).toEqual(now);
+                expect(resourceValidationCreated?.id).toBeTruthy();
+                expect(resourceValidationCreated?.userId).toBe(userCreated.id);
+                expect(resourceValidationCreated?.jti).toBe(resourceValidationData.jti);
+                expect(resourceValidationCreated?.tokenHash).toBe(resourceValidationData.tokenHash);
+                expect(resourceValidationCreated?.expiresAt).toStrictEqual(resourceValidationData.expiresAt);
+                expect(resourceValidationCreated?.createdAt).toBeTruthy();
             });
 
             it("should use the transaction client when provided", async () => {
+                const resourceValidationData: CreateUserActivationTokenInput = {
+                    userId: userCreated.id,
+                    jti: randomUUID(),
+                    tokenHash: "hashed-token-02",
+                    expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+                };
+
                 await expect(
                     prisma.$transaction(async (tx) => {
-                        const consumed = await userRepository.consumeResourceValidation(
-                            validation.id,
-                            tx,
-                        );
-                        expect(consumed).toBe(true);
+                        await userRepository.createUserActivationToken(resourceValidationData, tx,);
 
                         throw new Error("rollback");
                     }),
                 ).rejects.toThrow("rollback");
 
-                const afterRollback = await prisma.userResourceValidation.findUnique({
-                    where: { id: validation.id },
+                const afterRollback = await prisma.userActivationToken.findUnique({
+                    where: { jti: resourceValidationData.jti },
+                });
+
+                expect(afterRollback).toBeNull();
+            });
+        });
+
+        describe("consumeUserActivationTokenByJti", async () => {
+            let userCreated: UserRecord;
+
+            beforeEach(async () => {
+                const userData: RegisterInput = {
+                    firstName: "Jhon",
+                    lastName: "Doe",
+                    phoneNumber: "5521995437105",
+                    email: "jhon@example.com",
+                    role: "ATTENDANT",
+                };
+
+                userCreated = await userRepository.create(userData);
+            });
+
+            it("should consume a user activation token by JTI", async () => {
+                const userActivationTokenData: CreateUserActivationTokenInput = {
+                    userId: userCreated.id,
+                    jti: randomUUID(),
+                    tokenHash: "hashed-token-01",
+                    expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+                };
+
+                const userActivationTokenCreated = await userRepository.createUserActivationToken(userActivationTokenData);
+
+                await userRepository.consumeUserActivationTokenByJti(
+                    userActivationTokenCreated.jti,
+                );
+
+                const userActivationTokenConsumed = await prisma.userActivationToken.findUnique({
+                    where: { jti: userActivationTokenCreated.jti },
+                });
+
+                expect(userActivationTokenConsumed).toBeTruthy();
+                expect(userActivationTokenConsumed?.jti).toBe(userActivationTokenCreated.jti);
+                expect(userActivationTokenConsumed?.consumedAt).toBeTruthy();
+
+                // consume again should return false
+                const consumeAgain = await userRepository.consumeUserActivationTokenByJti(
+                    userActivationTokenCreated.jti,
+                );
+
+                expect(consumeAgain).toBe(false);
+            });
+
+            it("should use the transaction client when provided", async () => {
+                const userActivationTokenData: CreateUserActivationTokenInput = {
+                    userId: userCreated.id,
+                    jti: randomUUID(),
+                    tokenHash: "hashed-token-02",
+                    expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+                };
+
+                const userActivationTokenCreated = await userRepository.createUserActivationToken(userActivationTokenData);
+
+                await expect(
+                    prisma.$transaction(async (tx) => {
+                        await userRepository.consumeUserActivationTokenByJti(
+                            userActivationTokenCreated.jti,
+                            tx,
+                        );
+
+                        throw new Error("rollback");
+                    }),
+                ).rejects.toThrow("rollback");
+
+                const afterRollback = await prisma.userActivationToken.findUnique({
+                    where: { jti: userActivationTokenCreated.jti },
                 });
 
                 expect(afterRollback?.consumedAt).toBeNull();
@@ -761,7 +819,7 @@ describe("User Repository (Integration)", () => {
             });
         });
 
-        describe("findResourceValidationById", async () => {
+        describe("findUserActivationTokenByJti", async () => {
             let userCreated: UserRecord;
 
             beforeEach(async () => {
@@ -776,32 +834,29 @@ describe("User Repository (Integration)", () => {
                 userCreated = await userRepository.create(userData);
             });
 
-            it("should find a resource validation for an existing user", async () => {
-                const resourceValidationData: CreateResourceValidationInput = {
+            it("should find a user activation token for an existing user", async () => {
+                const userActivationTokenData: CreateUserActivationTokenInput = {
                     userId: userCreated.id,
-                    challengerNumber: "123456",
-                    resourceType: "EMAIL",
+                    jti: "test-jti",
+                    tokenHash: "hashed-token-01",
+                    expiresAt: new Date(Date.now() + 3600000), // 1 hour from now
                 };
 
-                const resourceValidationCreated = await userRepository.createResourceValidation(resourceValidationData);
+                const userActivationTokenCreated = await userRepository.createUserActivationToken(userActivationTokenData);
 
-                const resourceValidationFound = await userRepository.findResourceValidationById(resourceValidationCreated.id);
+                const userActivationTokenFound = await userRepository.findUserActivationTokenByJti(userActivationTokenCreated.jti);
 
-                expect(resourceValidationFound).toBeTruthy();
+                expect(userActivationTokenFound).toBeTruthy();
 
-                expect(resourceValidationFound?.id).toBe(resourceValidationCreated.id);
-                expect(resourceValidationFound?.userId).toBe(userCreated.id);
-                expect(resourceValidationFound?.challengerNumber).toBe("123456");
-                expect(resourceValidationFound?.resourceType).toBe("EMAIL");
-                expect(resourceValidationFound?.createdAt).toBeTruthy();
-                expect(resourceValidationFound?.expiresAt).toBeTruthy();
-                expect(resourceValidationFound?.confirmedAt).toBeNull();
+                expect(userActivationTokenFound?.id).toBe(userActivationTokenCreated.id);
+                expect(userActivationTokenFound?.jti).toBe("test-jti");
+                expect(userActivationTokenFound?.expiresAt).toBeTruthy();
             });
 
-            it("should return null when the resource validation does not exist", async () => {
-                const resourceValidationFound = await userRepository.findResourceValidationById("4b34267a-4f0f-4627-9b6b-397599d4c7a0");
+            it("should return null when the user activation token does not exist", async () => {
+                const userActivationTokenFound = await userRepository.findUserActivationTokenByJti("non-existent-jti");
 
-                expect(resourceValidationFound).toBeNull();
+                expect(userActivationTokenFound).toBeNull();
             });
         });
     });

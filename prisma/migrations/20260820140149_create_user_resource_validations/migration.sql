@@ -10,7 +10,6 @@ CREATE TABLE "user_resource_validations" (
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "expires_at" TIMESTAMPTZ NOT NULL,
     "confirmed_at" TIMESTAMPTZ,
-    "consumed_at" TIMESTAMPTZ,
 
     CONSTRAINT "user_resource_validations_pkey" PRIMARY KEY ("id")
 );

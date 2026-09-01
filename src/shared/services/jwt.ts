@@ -90,17 +90,29 @@ const decodeRefreshToken = (token: string): RefreshTokenPayload => {
     return decoded as RefreshTokenPayload;
 };
 
-
-const generateActivationToken = (userId: string, validationId: string): string => {
-    const secret = getRequiredEnv("ACTIVATION_SECRET");
-    return jwt.sign({ sub: userId, validationId }, secret, { expiresIn: "15m" });
-};
-
 interface ActivationTokenPayload {
     sub: string;
-    validationId: string;
+    jti: string;
     exp: number;
 }
+
+interface GenerateActivationTokenResult {
+    activationToken: string;
+    tokenPayload: ActivationTokenPayload;
+}
+
+const generateActivationToken = (userId: string, jti: string): GenerateActivationTokenResult => {
+    const secret = getRequiredEnv("ACTIVATION_SECRET");
+    
+    const iat = Math.floor(Date.now() / 1000);
+    const exp = iat + 15 * 60;
+
+    const activationToken = jwt.sign({ sub: userId, jti, iat, exp }, secret);
+    return { 
+        activationToken, 
+        tokenPayload: { sub: userId, jti, exp } 
+    };
+};
 
 const decodeActivationToken = (token: string): ActivationTokenPayload => {
     const secret = getRequiredEnv("ACTIVATION_SECRET");

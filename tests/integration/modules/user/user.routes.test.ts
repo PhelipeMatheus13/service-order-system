@@ -6,6 +6,7 @@ import { setupTestDatabase } from "../../../helpers/testDatabase.js";
 import { setPrismaInstance } from "../../../../src/shared/config/database";
 import { generateActivationToken } from "../../../../src/shared/services/jwt.js";
 import { resendConfirmationCode } from "../../../../src/modules/user/user.emails.js";
+import { randomUUID } from "node:crypto";
 
 vi.mock("../../../../src/modules/user/user.emails.js", () => ({
     resendConfirmationCode: vi.fn().mockResolvedValue(undefined),
@@ -238,7 +239,17 @@ describe("User Routes (Integration)", () => {
                 },
             });
 
-            const activationToken = generateActivationToken(user.id, resourceValidation.id);
+            const { activationToken, tokenPayload } = generateActivationToken(user.id, randomUUID());
+
+            await prisma.userActivationToken.create({
+                data: {
+                    userId: user.id,
+                    jti: tokenPayload.jti,
+                    tokenHash: activationToken, // In a real scenario, this should be hashed
+                    expiresAt: new Date(tokenPayload.exp * 1000),
+                    consumedAt: null,
+                },
+            });
 
             const res = await request(app)
                 .post("/users/activate")

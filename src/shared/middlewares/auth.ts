@@ -51,7 +51,7 @@ const checkActivationToken: RequestHandler = (req, res, next) => {
             id: decoded.sub,
         };
 
-        res.locals.validationId = decoded.validationId;
+        res.locals.jti = decoded.jti;
         
         next();
     } catch (error) {

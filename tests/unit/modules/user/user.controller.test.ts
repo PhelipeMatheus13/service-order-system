@@ -276,7 +276,7 @@ describe("User Controller (Unit)", () => {
     describe("activateUser", () => {
         it("should return 200 on successful activation", async () => {
             req.user = { id: "user-123" };
-            res.locals = { validationId: "validation-123" };
+            res.locals = { jti: "jti-123" };
             req.body = { password: "newPassword" };
 
             vi.mocked(userService.activateUser).mockResolvedValue(undefined);
@@ -285,7 +285,7 @@ describe("User Controller (Unit)", () => {
 
             expect(userService.activateUser).toHaveBeenCalledWith({
                 userId: "user-123",
-                validationId: "validation-123",
+                jti: "jti-123",
                 password: "newPassword",
             });
             expect(res.status).toHaveBeenCalledWith(200);

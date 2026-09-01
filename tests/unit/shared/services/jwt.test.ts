@@ -251,20 +251,39 @@ describe("JWT Service (Unit)", () => {
     });
 
     describe("generateActivationToken", () => {
+        const userId = "user-123";
+        const jti = "jti-123";
+
         it("should throw if ACTIVATION_SECRET is not set", () => {
             delete process.env.ACTIVATION_SECRET;
 
-            expect(() => generateActivationToken("user-123", "validation-123"))
+            expect(() => generateActivationToken(userId, jti))
                 .toThrow("Missing required environment variable: ACTIVATION_SECRET");
 
             expect(sign).not.toHaveBeenCalled();
         });
 
-        it("should generate refresh token using ACTIVATION_SECRET and expiration of 7d", () => {
+        it("should generate activation token with correct payload and expiration", () => {
             sign.mockReturnValue("activation-token");
-            const token = generateActivationToken("user-123", "validation-123");
-            expect(token).toBe("activation-token");
-            expect(sign).toHaveBeenCalledWith({ sub: "user-123", validationId: "validation-123" }, "activation", { expiresIn: "15m" });
+
+            const result = generateActivationToken(userId, jti);
+
+            expect(result.activationToken).toBe("activation-token");
+            expect(result.tokenPayload).toEqual({
+                sub: userId,
+                jti: jti,
+                exp: expect.any(Number),
+            });
+
+            expect(sign).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    sub: userId,
+                    jti: jti,
+                    iat: expect.any(Number),
+                    exp: expect.any(Number),
+                }),
+                "activation"
+            );
         });
     });
 
@@ -351,9 +370,12 @@ describe("JWT Service (Unit)", () => {
         });
 
         it("should decode a valid token", () => {
-            verify.mockReturnValue({ sub: "user-123", validationId: "validation-123", iat: 123, exp: 456 });
+            const mockPayload = { sub: "user-123", jti: "jti-123", exp: 456 };
+            verify.mockReturnValue(mockPayload);
+
             const decoded = decodeActivationToken("valid-token");
-            expect(decoded).toEqual({ sub: "user-123", validationId: "validation-123", iat: 123, exp: 456 });
+
+            expect(decoded).toEqual(mockPayload);
             expect(verify).toHaveBeenCalledWith("valid-token", "activation");
         });
     });

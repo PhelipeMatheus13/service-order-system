@@ -42,6 +42,7 @@ model User {
   updatedAt    DateTime? @map("updated_at") @db.Timestamptz()
 
   resourceValidations UserResourceValidation[]
+  activationTokens UserActivationToken[]
 
   @@index([createdAt(sort: Desc)])
   @@map("users")
@@ -67,10 +68,23 @@ model UserResourceValidation {
   createdAt        DateTime                   @default(now()) @map("created_at") @db.Timestamptz()
   expiresAt        DateTime                   @map("expires_at") @db.Timestamptz()
   confirmedAt      DateTime?                  @map("confirmed_at") @db.Timestamptz()
-  consumedAt       DateTime?                  @map("consumed_at") @db.Timestamptz()
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, resourceType, createdAt(sort: Desc)])
   @@map("user_resource_validations")
+}
+
+model UserActivationToken {
+  id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId               String    @map("user_id") @db.Uuid
+  jti                  String    @unique @db.VarChar(255)
+  tokenHash            String    @unique @map("token_hash") @db.VarChar(255)
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  expiresAt            DateTime  @map("expires_at") @db.Timestamptz()
+  consumedAt           DateTime? @map("consumed_at") @db.Timestamptz()
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_activation_tokens")
 }

@@ -3,7 +3,8 @@ import type {
     Role,
     OutboxUser,
     UserResourceValidation,
-    UserResourceValidationType
+    UserResourceValidationType,
+    UserActivationToken,
 } from "../../generated/prisma/client.js";
 
 interface RegisterInput {
@@ -47,9 +48,16 @@ interface ConfirmEmailInput {
 
 interface ActivateUserInput {
     userId: string;
-    validationId: string;
+    jti: string;
     password: string;
 }
+
+interface CreateUserActivationTokenInput {
+    userId: string;
+    jti: string;
+    tokenHash: string;
+    expiresAt: Date;
+} 
 
 export type {
     RegisterInput,
@@ -61,5 +69,7 @@ export type {
     CreateResourceValidationInput,
     UserResourceValidationType as ResourceValidationType,
     ConfirmEmailInput,
-    ActivateUserInput
+    ActivateUserInput,
+    UserActivationToken as UserActivationTokenRecord,
+    CreateUserActivationTokenInput
 };

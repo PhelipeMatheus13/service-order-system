@@ -1,6 +1,6 @@
+import { badRequest, unauthorized } from "../../shared/errors/errors.js";
 import asyncHandler from "../../shared/utils/async.js";
 import userService from "./user.service.js";
-import { badRequest, unauthorized } from "../../shared/errors/errors.js";
 import userDTO from "./user.dtos.js";
 
 const register = asyncHandler(async (req, res) => {
@@ -65,10 +65,10 @@ const confirmEmail = asyncHandler(async (req, res) => {
 const activateUser = asyncHandler(async (req, res) => {
     const user = req.user;
     if (!user) throw unauthorized({ message: "User not authenticated" });
-    
-    const validationId = res.locals.validationId as string;
 
-    const input = userDTO.activateUserDTO(user, validationId, req.body);
+    const jti = res.locals.jti as string;
+
+    const input = userDTO.activateUserDTO(user, jti, req.body);
     await userService.activateUser(input);
     res.status(200).json({
         success: true,

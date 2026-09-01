@@ -121,7 +121,7 @@ describe("Auth Middleware (Unit)", () => {
 
             vi.mocked(decodeActivationToken).mockReturnValue({
                 sub: "uuid",
-                validationId: "validation-uuid",
+                jti: "jti-123",
                 exp: Date.now() + 1000,
             });
 
@@ -129,7 +129,7 @@ describe("Auth Middleware (Unit)", () => {
 
             expect(decodeActivationToken).toHaveBeenCalledWith("valid.token");
             expect(req.user).toEqual({ id: "uuid", });
-            expect(res.locals.validationId).toBe("validation-uuid");
+            expect(res.locals.jti).toBe("jti-123");
             expect(next).toHaveBeenCalledWith();
         });
     });
