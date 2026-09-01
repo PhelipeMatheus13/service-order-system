@@ -30,7 +30,38 @@ services:
             interval: 5s
             timeout: 5s
             retries: 5
-
+    rabbitmq:
+        # Official RabbitMQ image with the management plugin enabled
+        # The management plugin provides the web interface and monitoring tools
+        image: rabbitmq:4-management-alpine
+        # Fixed container name for easier reference and management
+        container_name: service_order_system_rabbitmq_dev
+        # Automatically restarts the container unless it is manually stopped
+        restart: unless-stopped
+        environment:
+            # RabbitMQ username used by the application
+            # Uses environment variable if available, otherwise fallback value
+            RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+            # RabbitMQ password used by the application
+            # Uses environment variable if available, otherwise fallback value
+            RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+        ports:
+            # Maps local machine AMQP port -> container AMQP port
+            # Application uses this port to communicate with RabbitMQ
+            - "${RABBITMQ_PORT:-5672}:5672"
+            # Maps local machine management port -> RabbitMQ management UI
+            - "15672:15672"
+        volumes:
+            # Named Docker volume for persistent RabbitMQ data
+            # Preserves queues, exchanges and broker state between container recreations
+            - rabbitmq_data:/var/lib/rabbitmq
+        healthcheck:
+            # Verifies if RabbitMQ is running and responding
+            test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+            interval: 10s
+            timeout: 5s
+            retries: 5    
 volumes:
   # Docker creates and manages this volume automatically 
   postgres_data:
+  rabbitmq_data:

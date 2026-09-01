@@ -1,18 +1,75 @@
-import type { User } from "../../generated/prisma/client.js";
+import type {
+    User,
+    Role,
+    OutboxUser,
+    UserResourceValidation,
+    UserResourceValidationType,
+    UserActivationToken,
+} from "../../generated/prisma/client.js";
 
 interface RegisterInput {
-    name: string;
+    firstName: string;
+    lastName: string;
+    phoneNumber: string | null;
     email: string;
-    password: string;
+    role: Role;
 }
 
 interface UserOutput {
     id: string;
-    name: string;
+    firstName: string;
+    lastName: string;
+    phoneNumber: string | null;
     email: string;
+    role: Role;
+    active: boolean;
     createdAt: string;
-    updatedAt?: string;
+    updatedAt: string | null;
 }
 
-export type { RegisterInput, UserOutput };
-export type { User as UserRecord };
+interface ListUsersInput {
+    options: ListUsersOption;
+}
+
+interface ListUsersOption {
+    limit: number | null;
+}
+
+interface CreateResourceValidationInput {
+    userId: string;
+    resourceType: UserResourceValidationType;
+    challengerNumber: string;
+}
+
+interface ConfirmEmailInput {
+    email: string;
+    challengerNumber: string;
+}
+
+interface ActivateUserInput {
+    userId: string;
+    jti: string;
+    password: string;
+}
+
+interface CreateUserActivationTokenInput {
+    userId: string;
+    jti: string;
+    tokenHash: string;
+    expiresAt: Date;
+} 
+
+export type {
+    RegisterInput,
+    UserOutput,
+    User as UserRecord,
+    ListUsersInput,
+    OutboxUser as OutboxUserRecord,
+    UserResourceValidation as ResourceValidationRecord,
+    CreateResourceValidationInput,
+    UserResourceValidationType as ResourceValidationType,
+    ConfirmEmailInput,
+    ActivateUserInput,
+    UserActivationToken as UserActivationTokenRecord,
+    CreateUserActivationTokenInput
+};

@@ -16,7 +16,7 @@ const internalError = registry.registerComponent("responses", "InternalError", {
     },
 });
 
-const registerValidationErrorResponse = registry.registerComponent("responses", "RegisterValidationError", {
+const registerValidationError = registry.registerComponent("responses", "RegisterValidationError", {
     description: "Register validation error",
     content: {
         "application/json": {
@@ -27,10 +27,11 @@ const registerValidationErrorResponse = registry.registerComponent("responses", 
                     code: "VALIDATION_ERROR",
                     message: "Validation failed",
                     details: [
-                        { field: "name", message: "Name is required" },
+                        { field: "firstName", message: "First name must be at least 3 characters long" },
+                        { field: "lastName", message: "Last name must be at least 3 characters long" },
+                        { field: "phoneNumber", message: "Please provide a valid phone number" },
                         { field: "email", message: "Please provide a valid email address" },
-                        { field: "password", message: "Password must contain at least one special character" },
-                        { field: "confirmPassword", message: "Passwords do not match" },
+                        { field: "role", message: "Invalid option: expected one of \"ADMIN\"|\"ATTENDANT\"|\"TECHNICIAN\"" },
                     ],
                 },
             },
@@ -70,9 +71,50 @@ const userNotFoundError = registry.registerComponent("responses", "UserNotFoundE
     },
 });
 
+const confirmEmailValidationError = registry.registerComponent("responses", "confirmEmailValidationError", {
+    description: "Confirm email validation error",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/ValidationError" },
+            example: {
+                success: false,
+                error: {
+                    code: "VALIDATION_ERROR",
+                    message: "Validation failed",
+                    details: [
+                        { field: "email", message: "Please provide a valid email address" },
+                        { field: "challengerNumber", message: "Challenger number must contain exactly 6 digits" },
+                    ],
+                },
+            },
+        },
+    },
+});
+
+const activateUserValidationError = registry.registerComponent("responses", "activateUserValidationError", {
+    description: "Activate user validation error",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/ValidationError" },
+            example: {
+                success: false,
+                error: {
+                    code: "VALIDATION_ERROR",
+                    message: "Validation failed",
+                    details: [
+                        { field: "password", message: "Password must be at least 8 characters" },
+                        { field: "confirmPassword", message: "Passwords do not match" },
+                    ],
+                },
+            },
+        },
+    },
+});
+
 export {
     internalError,
-    registerValidationErrorResponse,
+    registerValidationError,
     missingUserIdError, 
     userNotFoundError,
+    confirmEmailValidationError
 };

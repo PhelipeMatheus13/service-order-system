@@ -1,19 +1,6 @@
-import type { Request, RequestHandler } from "express";
-import { decodeAccessToken } from "../services/jwt.js";
-import logger from "../config/logger.js";
+import type { RequestHandler } from "express";
+import { decodeAccessToken, decodeActivationToken } from "../services/jwt.js";
 import { unauthorized, forbidden } from "../errors/errors.js";
-
-interface AuthenticatedUser {
-    id: string;
-    role: string;
-}
-
-// For now, we are extending this interface only within this file, 
-// as we consider it the responsibility of this authorization mechanism; 
-// however, if this class needs to be declared elsewhere, it would be worth making it global.
-interface AuthenticatedRequest extends Request {
-    user: AuthenticatedUser;
-}
 
 /**
  * JWT authentication middleware.
@@ -22,24 +9,52 @@ interface AuthenticatedRequest extends Request {
  * If the token is valid, attaches the user information to `req.user`.
  * Otherwise, throws a 401 Unauthorized error.
  */
-const checkToken: RequestHandler = (req, _res, next) => {
+const checkAccessToken: RequestHandler = (req, _res, next) => {
     const authHeader = req.headers["authorization"];
     const token = authHeader && authHeader.split(" ")[1];
 
     if (!token) {
-        return next(unauthorized({ message: "Access denied" }));
+        return next(unauthorized({ message: "Missing access token", code: "MISSING_ACCESS_TOKEN" }));
     }
 
     try {
         const decoded = decodeAccessToken(token);
-        (req as AuthenticatedRequest).user = {
-            id: decoded.id,
+        req.user = {
+            id: decoded.sub,
             role: decoded.role,
         };
         
         next();
     } catch (error) {
-        logger.error({ err: error }, "Token validation failed:");
+        next(error);
+    }
+};
+
+/**
+ * JWT authentication middleware.
+ *
+ * Validates the activation token from the Authorization header.
+ * If the token is valid, attaches the user information to `req.user`.
+ * Otherwise, throws a 401 Unauthorized error.
+ */
+const checkActivationToken: RequestHandler = (req, res, next) => {
+    const authHeader = req.headers["authorization"];
+    const token = authHeader && authHeader.split(" ")[1];
+
+    if (!token) {
+        return next(unauthorized({ message: "Missing activation token", code: "MISSING_ACTIVATION_TOKEN" }));
+    }
+
+    try {
+        const decoded = decodeActivationToken(token);
+        req.user = {
+            id: decoded.sub,
+        };
+
+        res.locals.jti = decoded.jti;
+        
+        next();
+    } catch (error) {
         next(error);
     }
 };
@@ -55,9 +70,7 @@ const checkToken: RequestHandler = (req, _res, next) => {
  * @param roles - Roles authorized to access a route.
  */
 const authorize = (...roles: string[]): RequestHandler => (req, _res, next) => {
-    const { user } = req as AuthenticatedRequest;
-
-    if (!user || !roles.includes(user.role)) {
+    if (!req.user || !req.user.role || !roles.includes(req.user.role)) {
         throw forbidden({ message: "Access denied" });
     }
 
@@ -65,6 +78,7 @@ const authorize = (...roles: string[]): RequestHandler => (req, _res, next) => {
 };
 
 export {
-    checkToken,
+    checkAccessToken,
+    checkActivationToken,
     authorize,
 };

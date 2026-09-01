@@ -1,25 +1,71 @@
-import type { RegisterRequest } from "./user.schemas.js";
-import type { RegisterInput, UserRecord, UserOutput } from "./user.types.js";
+import type { RegisterRequest, confirmEmailRequest, activateUserRequest } from "./user.schemas.js";
+import { AuthenticatedUser } from "../../shared/types/auth.js";
+import type { 
+    RegisterInput, 
+    UserRecord, 
+    UserOutput, 
+    ConfirmEmailInput,
+    ActivateUserInput,
+} from "./user.types.js";
 
 // DTOs are exercised through the controller unit tests.
 // Since controllers are responsible for invoking these mappings,
 // dedicated DTO tests would only duplicate the same assertions.
 
+const sanitizePhoneNumber = (phone: string | null): string | null => {
+    if (!phone) return null;
+    return phone.replace(/\D/g, "");
+};
+
 const registerInputDTO = (body: RegisterRequest): RegisterInput => ({
-    name: body.name,
+    firstName: body.firstName,
+    lastName: body.lastName,
     email: body.email,
-    password: body.password,
+    phoneNumber: sanitizePhoneNumber(body.phoneNumber),
+    role: body.role,
 });
 
 const userOutputDTO = (user: UserRecord): UserOutput => ({
     id: user.id,
-    name: user.name,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    phoneNumber: user.phoneNumber,
     email: user.email,
+    role: user.role,
+    active: user.active,
     createdAt: String(user.createdAt),
-    updatedAt: String(user.updatedAt),
+    updatedAt: user.updatedAt ? String(user.updatedAt) : null,
 });
 
-export {
+
+const usersOutputDTO = (users: UserRecord[]): UserOutput[] =>
+    users.map((user) => ({
+        id: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        phoneNumber: user.phoneNumber,
+        email: user.email,
+        role: user.role,
+        active: user.active,
+        createdAt: String(user.createdAt),
+        updatedAt: user.updatedAt ? String(user.updatedAt) : null,
+    }));
+
+const confirmEmailDTO = (body: confirmEmailRequest): ConfirmEmailInput => ({
+    email: body.email,
+    challengerNumber: body.challengerNumber,
+});
+
+const activateUserDTO = (user: AuthenticatedUser, jti: string, body: activateUserRequest): ActivateUserInput => ({
+    userId: user.id,
+    jti,
+    password: body.password,
+});
+
+export default {
     registerInputDTO,
     userOutputDTO,
+    usersOutputDTO,
+    confirmEmailDTO,
+    activateUserDTO,
 };

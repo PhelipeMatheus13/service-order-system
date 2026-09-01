@@ -1,0 +1,69 @@
+import type { Subscriber } from "../../../shared/pubsub/subscriber.js";
+import PubsubError from "../../../shared/pubsub/error.js";
+import generateSecure6DigitCode from "../../../shared/utils/secure-code.js";
+import logger from "../../../shared/config/logger.js";
+import userRepository from "../user.repository.js";
+import { sendConfirmationCode } from "../user.emails.js";
+
+interface UserCreatedPayload {
+    id: string;
+    userId: string;
+    action: string;
+    after: {
+        id: string;
+        email: string;
+        role: string;
+        firstName: string;
+        lastName: string;
+    } | null;
+}
+
+const sendEmailConfirmationCodeSubscriber: Subscriber = {
+    config: {
+        topic: "public.users.created",
+        queue: "user-created.send-email-confirmation-code",
+        prefetch: 1,
+    },
+    handler: async (message) => {
+        const payload = message.content as UserCreatedPayload;
+
+        if (!payload.after) {
+            logger.error({ payload }, "Failed to process user-created event: payload is missing the 'after' state");
+            throw new PubsubError("user-created event missing 'after' state", false);
+        }
+
+        const resourceValidation = await userRepository.findResourceValidationByUserId(payload.userId, "EMAIL");
+
+        if (resourceValidation?.confirmedAt) {
+            return;
+        }
+
+        if (resourceValidation && resourceValidation.expiresAt > new Date()) {
+            await sendConfirmationCode({
+                to: payload.after.email,
+                name: `${payload.after.firstName} ${payload.after.lastName}`,
+                code: resourceValidation.challengerNumber,
+            });
+            return;
+        }
+
+        const verificationCode = generateSecure6DigitCode();
+
+        await userRepository.createResourceValidation({
+            userId: payload.userId,
+            challengerNumber: verificationCode,
+            resourceType: "EMAIL",
+        });
+
+        await sendConfirmationCode({
+            to: payload.after.email,
+            name: `${payload.after.firstName} ${payload.after.lastName}`,
+            code: verificationCode,
+        });
+    },
+    onError: (error, message) => {
+        logger.error({ err: error, message }, "Failed to process user-created event");
+    },
+};
+
+export { sendEmailConfirmationCodeSubscriber };
