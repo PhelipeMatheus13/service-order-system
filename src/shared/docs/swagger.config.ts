@@ -4,6 +4,7 @@ import  registry  from "./registry.js";
 import "./components/response.js";
 import "./components/examples.js"
 import "../../modules/user/user.routes.js";
+import "../../modules/auth/auth.routes.js"
  
 const generateOpenApiDocument = () => {
     return new OpenApiGeneratorV3(registry.definitions).generateDocument({
@@ -14,6 +15,10 @@ const generateOpenApiDocument = () => {
             description: "REST API for Service order management system",
         },
         servers: [{ url: "http://localhost:3000" }],
+        tags: [
+            { name: "User", description: "User manegement"},
+            { name: "Auth", description: "Authentication endpoints"},
+        ]
     });
 }
 

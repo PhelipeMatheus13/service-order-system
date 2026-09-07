@@ -8,6 +8,7 @@ import { globalLimiter } from "./shared/middlewares/rate-limiter.js";
 // Import routes
 import swaggerRoutes from "./shared/docs/swagger.routes.js";
 import userRoutes from "./modules/user/user.routes.js";
+import authRoutes from "./modules/auth/auth.routes.js"
 
 const app = express();
 
@@ -36,6 +37,7 @@ app.get("/", (req, res) => {
 
 // config routes
 app.use("/users", userRoutes);
+app.use("/auth", authRoutes);
 app.use("/api-docs", swaggerRoutes);
 
 

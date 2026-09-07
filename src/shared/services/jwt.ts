@@ -1,7 +1,7 @@
 import jwt from "jsonwebtoken";
 import logger from "../config/logger.js";
-import { unauthorized } from "../errors/errors.js";
 import { getRequiredEnv } from "../config/env.js";
+import { unauthorized } from "../errors/errors.js";
 
 const generateAccessToken = (userId: string, role: string): string => {
     const secret = getRequiredEnv("SECRET");
@@ -46,17 +46,30 @@ const decodeAccessToken = (token: string): AccessTokenPayload => {
     return decoded as AccessTokenPayload;
 };
 
-const generateRefreshToken = (userId: string, role: string, jti: string): string => {
-    const secret = getRequiredEnv("REFRESH_SECRET");
-    return jwt.sign({ sub: userId, role: role, jti: jti }, secret, { expiresIn: "7d" });
-};
-
 interface RefreshTokenPayload {
     sub: string;
     role: string;
     jti: string;
     exp: number;
 }
+
+interface GenerateRefreshTokenResponse {
+    refreshToken: string;
+    refreshTokenPayload: RefreshTokenPayload;
+}
+
+const generateRefreshToken = (userId: string, role: string, jti: string): GenerateRefreshTokenResponse => {
+    const secret = getRequiredEnv("REFRESH_SECRET");
+
+    const iat = Math.floor(Date.now() / 1000);
+    const exp = iat + 7 * 24 * 60 * 60; // 7 days 
+
+    const refreshToken = jwt.sign({ sub: userId, role: role, jti: jti, exp }, secret);
+    return {
+        refreshToken,
+        refreshTokenPayload: { sub: userId, role, jti, exp }
+    }
+};
 
 const decodeRefreshToken = (token: string): RefreshTokenPayload => {
     const secret = getRequiredEnv("REFRESH_SECRET");
@@ -96,21 +109,21 @@ interface ActivationTokenPayload {
     exp: number;
 }
 
-interface GenerateActivationTokenResult {
+interface GenerateActivationTokenResponse {
     activationToken: string;
-    tokenPayload: ActivationTokenPayload;
+    activationTokenPayload: ActivationTokenPayload;
 }
 
-const generateActivationToken = (userId: string, jti: string): GenerateActivationTokenResult => {
+const generateActivationToken = (userId: string, jti: string): GenerateActivationTokenResponse => {
     const secret = getRequiredEnv("ACTIVATION_SECRET");
-    
+
     const iat = Math.floor(Date.now() / 1000);
     const exp = iat + 15 * 60;
 
     const activationToken = jwt.sign({ sub: userId, jti, iat, exp }, secret);
-    return { 
-        activationToken, 
-        tokenPayload: { sub: userId, jti, exp } 
+    return {
+        activationToken,
+        activationTokenPayload: { sub: userId, jti, exp }
     };
 };
 

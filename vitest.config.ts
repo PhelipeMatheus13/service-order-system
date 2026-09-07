@@ -21,6 +21,8 @@ export default defineConfig({
                 "src/shared/types/**",
                 "src/generated/**",
                 "src/modules/user/user.types.ts",
+                "src/modules/auth/auth.types.ts",
+                "src/modules/refresh-token/refresh-token.types.ts",
             ],
         },
     },

@@ -1,5 +1,40 @@
 import registry  from "../registry.js";
 
+// 400
+const missingUserIdError = registry.registerComponent("responses", "MissingUserIdError", {
+    description: "Invalid request, missing user id",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            example: {
+                success: false,
+                error: {
+                    code: "BAD_REQUEST",
+                    message: "User ID is required",
+                },
+            },
+        },
+    },
+});
+
+// 404
+const userNotFoundError = registry.registerComponent("responses", "UserNotFoundError", {
+    description: "User not found or does not exist",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            example: {
+                success: false,
+                error: {
+                    code: "NOT_FOUND",
+                    message: "User not found",
+                },
+            },
+        },
+    },
+});
+
+// 500
 const internalError = registry.registerComponent("responses", "InternalError", {
     description: "Internal error",
     content: {
@@ -16,6 +51,7 @@ const internalError = registry.registerComponent("responses", "InternalError", {
     },
 });
 
+// VALIDATION ERRORS (422)
 const registerValidationError = registry.registerComponent("responses", "RegisterValidationError", {
     description: "Register validation error",
     content: {
@@ -33,38 +69,6 @@ const registerValidationError = registry.registerComponent("responses", "Registe
                         { field: "email", message: "Please provide a valid email address" },
                         { field: "role", message: "Invalid option: expected one of \"ADMIN\"|\"ATTENDANT\"|\"TECHNICIAN\"" },
                     ],
-                },
-            },
-        },
-    },
-});
-
-const missingUserIdError = registry.registerComponent("responses", "MissingUserIdError", {
-    description: "Invalid request, missing user id",
-    content: {
-        "application/json": {
-            schema: { $ref: "#/components/schemas/Error" },
-            example: {
-                success: false,
-                error: {
-                    code: "BAD_REQUEST",
-                    message: "User ID is required",
-                },
-            },
-        },
-    },
-});
-
-const userNotFoundError = registry.registerComponent("responses", "UserNotFoundError", {
-    description: "User not found or does not exist",
-    content: {
-        "application/json": {
-            schema: { $ref: "#/components/schemas/Error" },
-            example: {
-                success: false,
-                error: {
-                    code: "NOT_FOUND",
-                    message: "User not found",
                 },
             },
         },
@@ -111,10 +115,52 @@ const activateUserValidationError = registry.registerComponent("responses", "act
     },
 });
 
+const loginValidationError = registry.registerComponent("responses", "loginValidationError", {
+    description: "Login validation error",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/ValidationError" },
+            example: {
+                success: false,
+                error: {
+                    code: "VALIDATION_ERROR",
+                    message: "Validation failed",
+                    details: [
+                        { field: "email", message: "Please provide a valid email address" },
+                        { field: "password", message: "Passwords is required" },
+                    ],
+                },
+            },
+        },
+    },
+});
+
+const refreshTokenValidationError = registry.registerComponent("responses", "refreshTokenValidationError", {
+    description: "Login validation error",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/ValidationError" },
+            example: {
+                success: false,
+                error: {
+                    code: "VALIDATION_ERROR",
+                    message: "Validation failed",
+                    details: [
+                        { field: "refreshToken", message: "Refresh token is required" },
+                    ],
+                },
+            },
+        },
+    },
+});
+
 export {
+    missingUserIdError,
+    userNotFoundError,
     internalError,
     registerValidationError,
-    missingUserIdError, 
-    userNotFoundError,
-    confirmEmailValidationError
+    confirmEmailValidationError,
+    activateUserValidationError,
+    loginValidationError,
+    refreshTokenValidationError,
 };
