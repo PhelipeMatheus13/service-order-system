@@ -239,14 +239,14 @@ describe("User Routes (Integration)", () => {
                 },
             });
 
-            const { activationToken, tokenPayload } = generateActivationToken(user.id, randomUUID());
+            const { activationToken, activationTokenPayload } = generateActivationToken(user.id, randomUUID());
 
             await prisma.userActivationToken.create({
                 data: {
                     userId: user.id,
-                    jti: tokenPayload.jti,
+                    jti: activationTokenPayload.jti,
                     tokenHash: activationToken, // In a real scenario, this should be hashed
-                    expiresAt: new Date(tokenPayload.exp * 1000),
+                    expiresAt: new Date(activationTokenPayload.exp * 1000),
                     consumedAt: null,
                 },
             });

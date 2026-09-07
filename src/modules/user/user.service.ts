@@ -1,6 +1,6 @@
-// (Node built‑ins)
+// Node built‑ins
 import { randomUUID } from "node:crypto";
-// (Types)
+// Types
 import type {
     ActivateUserInput,
     ConfirmEmailInput,
@@ -8,7 +8,7 @@ import type {
     RegisterInput,
     UserRecord,
 } from "./user.types.js";
-// (shared)
+// shared
 import { getPrisma } from "../../shared/config/database.js";
 import logger from "../../shared/config/logger.js";
 import { alreadyExists, conflict, notFound, unauthorized } from "../../shared/errors/errors.js";
@@ -16,7 +16,7 @@ import { hashPassword } from "../../shared/services/hash.js";
 import { generateActivationToken } from "../../shared/services/jwt.js";
 import { hashToken } from "../../shared/services/token-hash.js";
 import generateSecure6DigitCode from "../../shared/utils/secure-code.js";
-// (local modules)
+// local modules
 import { resendConfirmationCode } from "./user.emails.js";
 import userRepository from "./user.repository.js";
 
@@ -63,7 +63,7 @@ const confirmEmail = async (input: ConfirmEmailInput): Promise<string> => {
         throw unauthorized({ message: "Challenger number expired", code: "CHALLENGER_NUMBER_EXPIRED" });
     }
 
-    const { activationToken, tokenPayload } = generateActivationToken(resourceValidation.userId, randomUUID());
+    const { activationToken, activationTokenPayload } = generateActivationToken(resourceValidation.userId, randomUUID());
 
     await getPrisma().$transaction(async (tx) => {
         const confirmed = await userRepository.confirmResourceValidationById(resourceValidation?.id, tx);
@@ -74,9 +74,9 @@ const confirmEmail = async (input: ConfirmEmailInput): Promise<string> => {
 
         await userRepository.createUserActivationToken({
             userId: resourceValidation.userId,
-            jti: tokenPayload.jti,
+            jti: activationTokenPayload.jti,
             tokenHash: hashToken(activationToken),
-            expiresAt: new Date(tokenPayload.exp * 1000),
+            expiresAt: new Date(activationTokenPayload.exp * 1000),
         }, tx)
     });
 
@@ -86,7 +86,7 @@ const confirmEmail = async (input: ConfirmEmailInput): Promise<string> => {
 const activateUser = async (input: ActivateUserInput): Promise<void> => {
     const activationToken = await userRepository.findUserActivationTokenByJti(input.jti);
     if (!activationToken) {
-        throw notFound({ message: "Activation token not found", code: "TOKEN_NOT_FOUND" });
+        throw unauthorized({ message: "Activation token not found", code: "ACTIVATION_TOKEN_NOT_FOUND" });
     }
 
     if (activationToken.consumedAt) {
@@ -95,7 +95,7 @@ const activateUser = async (input: ActivateUserInput): Promise<void> => {
             jti: input.jti,
         }, "Activation token reuse detected");
 
-        throw unauthorized({ message: "Activation token reuse detected", code: "TOKEN_REUSE_DETECTED" });
+        throw unauthorized({ message: "Activation token reuse detected", code: "ACTIVATION_TOKEN_REUSE_DETECTED" });
     }
 
     const passwordHash = await hashPassword(input.password);
@@ -109,7 +109,7 @@ const activateUser = async (input: ActivateUserInput): Promise<void> => {
                 jti: input.jti,
             }, "Activation token reuse detected: race condition on token consumption");
 
-            throw unauthorized({ message: "Activation token reuse detected", code: "TOKEN_REUSE_DETECTED" });
+            throw unauthorized({ message: "Activation token reuse detected", code: "ACTIVATION_TOKEN_REUSE_DETECTED" });
         }
 
         await userRepository.activateAndSetPassword(input.userId, passwordHash, tx);
@@ -146,6 +146,8 @@ const resendEmailConfirmationCode = async (email: string): Promise<void> => {
     });
 };
 
+const findUserByEmail = async (email: string): Promise<UserRecord | null> => userRepository.findByEmail(email);
+
 export default {
     createUser,
     getUserById,
@@ -154,4 +156,5 @@ export default {
     confirmEmail,
     activateUser,
     resendEmailConfirmationCode,
+    findUserByEmail
 };

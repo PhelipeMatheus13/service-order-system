@@ -51,7 +51,7 @@ const listUsers = asyncHandler(async (req, res) => {
 });
 
 const confirmEmail = asyncHandler(async (req, res) => {
-    const input = userDTO.confirmEmailDTO(req.body);
+    const input = userDTO.confirmEmailInputDTO(req.body);
     const activationToken = await userService.confirmEmail(input);
     res.status(200).json({
         success: true,
@@ -68,7 +68,7 @@ const activateUser = asyncHandler(async (req, res) => {
 
     const jti = res.locals.jti as string;
 
-    const input = userDTO.activateUserDTO(user, jti, req.body);
+    const input = userDTO.activateUserInputDTO(user, jti, req.body);
     await userService.activateUser(input);
     res.status(200).json({
         success: true,

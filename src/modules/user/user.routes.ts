@@ -100,7 +100,7 @@ registry.registerPath({
         },
         500: { $ref: "#/components/responses/InternalError" },
     },
-})
+});
 router.post("/resend-email-confirmation", resendEmailConfirmationCodeLimiter, validate(resendEmailConfirmationSchema), userController.resendEmailConfirmationCode);
 
 registry.registerPath({
@@ -167,7 +167,7 @@ registry.registerPath({
         422: { $ref: "#/components/responses/confirmEmailValidationError" },
         500: { $ref: "#/components/responses/InternalError" },
     },
-})
+});
 router.post("/confirm-email", confirmEmailLimiter, validate(confirmEmailSchema), userController.confirmEmail);
 
 registry.registerPath({
@@ -193,7 +193,7 @@ registry.registerPath({
             },
         },
         401: {
-            description: "Missing, invalid, or expired activation token",
+            description: "Missing, invalid, expired, reused or not found activation token",
             content: {
                 "application/json": {
                     schema: errorSchema,
@@ -201,19 +201,8 @@ registry.registerPath({
                         missingActivationToken: { $ref: "#/components/examples/missingActivationToken" },
                         activationTokenExpired: { $ref: "#/components/examples/activationTokenExpired" },
                         invalidActivationToken: { $ref: "#/components/examples/invalidActivationToken" },
-                        tokenReuseDetected: { $ref: "#/components/examples/tokenReuseDetected" },
-                    },
-                },
-            },
-        },
-        404: {
-            description: "Activation token not found",
-            content: {
-                "application/json": {
-                    schema: errorSchema,
-                    example: {
-                        success: false,
-                        error: { code: "TOKEN_NOT_FOUND", message: "Activation token not found" },
+                        activationTokenReuseDetected: { $ref: "#/components/examples/activationTokenReuseDetected" },
+                        activationTokenNotFound: { $ref: "#/components/examples/activationTokenNotFound" },
                     },
                 },
             },
@@ -233,7 +222,7 @@ registry.registerPath({
         422: { $ref: "#/components/responses/activateUserValidationError" },
         500: { $ref: "#/components/responses/InternalError" },
     },
-})
+});
 router.post("/activate", checkActivationToken, validate(activateUserSchema), userController.activateUser);
 
 

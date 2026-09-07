@@ -248,7 +248,7 @@ describe("User Service (Unit)", () => {
             vi.mocked(userRepository.findResourceValidationByEmail).mockResolvedValue(resourceValidation);
             vi.mocked(generateActivationToken).mockReturnValue({
                 activationToken: mockActivationToken,
-                tokenPayload: { sub: resourceValidation.userId, jti: mockJti, exp: mockExp },
+                activationTokenPayload: { sub: resourceValidation.userId, jti: mockJti, exp: mockExp },
             });
             vi.mocked(userRepository.confirmResourceValidationById).mockResolvedValue(true);
             vi.mocked(hashToken).mockReturnValue("hashed-token");
@@ -471,9 +471,9 @@ describe("User Service (Unit)", () => {
 
             await expect(userService.activateUser(input))
                 .rejects.toMatchObject({
-                    statusCode: 404,
+                    statusCode: 401,
                     message: "Activation token not found",
-                    code: "TOKEN_NOT_FOUND",
+                    code: "ACTIVATION_TOKEN_NOT_FOUND",
                 });
 
             expect(userRepository.findUserActivationTokenByJti).toHaveBeenCalledWith(input.jti);
@@ -491,7 +491,7 @@ describe("User Service (Unit)", () => {
                 .rejects.toMatchObject({
                     statusCode: 401,
                     message: "Activation token reuse detected",
-                    code: "TOKEN_REUSE_DETECTED",
+                    code: "ACTIVATION_TOKEN_REUSE_DETECTED",
                 });
 
             expect(logger.error).toHaveBeenCalledWith(
@@ -538,7 +538,7 @@ describe("User Service (Unit)", () => {
                 .rejects.toMatchObject({
                     statusCode: 401,
                     message: "Activation token reuse detected",
-                    code: "TOKEN_REUSE_DETECTED",
+                    code: "ACTIVATION_TOKEN_REUSE_DETECTED",
                 });
 
             expect(logger.error).toHaveBeenCalledWith(
@@ -706,6 +706,48 @@ describe("User Service (Unit)", () => {
                 name: `${user.firstName} ${user.lastName}`,
                 code: expect.stringMatching(/^\d{6}$/),
             });
+        });
+    });
+
+    describe("findUserByEmail", () => {
+        const email = "john@example.com";
+
+        const mockUser = {
+            id: "uuid-123",
+            firstName: "John",
+            lastName: "Doe",
+            phoneNumber: null,
+            email: email,
+            passwordHash: "hashed-password",
+            role: "ATTENDANT",
+            active: true,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        } as UserRecord;
+
+        it("should return the user when found", async () => {
+            vi.mocked(userRepository.findByEmail).mockResolvedValue(mockUser);
+
+            const result = await userService.findUserByEmail(email);
+
+            expect(userRepository.findByEmail).toHaveBeenCalledWith(email);
+            expect(result).toBe(mockUser);
+        });
+
+        it("should return null when user not found", async () => {
+            vi.mocked(userRepository.findByEmail).mockResolvedValue(null);
+
+            const result = await userService.findUserByEmail(email);
+
+            expect(userRepository.findByEmail).toHaveBeenCalledWith(email);
+            expect(result).toBeNull();
+        });
+
+        it("should propagate repository errors", async () => {
+            const error = new Error("Database error");
+            vi.mocked(userRepository.findByEmail).mockRejectedValue(error);
+
+            await expect(userService.findUserByEmail(email)).rejects.toThrow(error);
         });
     });
 });
