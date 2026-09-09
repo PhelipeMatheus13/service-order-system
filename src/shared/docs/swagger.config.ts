@@ -2,9 +2,10 @@ import { OpenApiGeneratorV3 } from "@asteasolutions/zod-to-openapi";
 import  registry  from "./registry.js";
 
 import "./components/response.js";
-import "./components/examples.js"
+import "./components/examples.js";
+import "./components/security.js";
 import "../../modules/user/user.routes.js";
-import "../../modules/auth/auth.routes.js"
+import "../../modules/auth/auth.routes.js";
  
 const generateOpenApiDocument = () => {
     return new OpenApiGeneratorV3(registry.definitions).generateDocument({
@@ -20,6 +21,6 @@ const generateOpenApiDocument = () => {
             { name: "Auth", description: "Authentication endpoints"},
         ]
     });
-}
+};
 
-export { generateOpenApiDocument }
+export { generateOpenApiDocument };

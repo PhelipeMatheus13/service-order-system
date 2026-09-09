@@ -7,7 +7,7 @@ import { z } from "zod";
 import { registerLimiter, confirmEmailLimiter, resendEmailConfirmationCodeLimiter } from "../../shared/middlewares/rate-limiter.js";
 import validate from "../../shared/middlewares/validate.js";
 import { errorSchema } from "../../shared/docs/components/schemas.js"
-import { checkActivationToken } from "../../shared/middlewares/auth.js";
+import { checkActivationToken, checkAccessToken, authorize } from "../../shared/middlewares/auth.js";
 import {
     registerSchema,
     userSchema,
@@ -21,7 +21,8 @@ registry.registerPath({
     tags: ["User"],
     method: "post",
     path: "/users/register",
-    summary: "Registers a new user",
+    summary: "Registers a new user (Admin only)",
+    security: [{ bearerAuth: [] }],
     request: {
         body: {
             content: { "application/json": { schema: registerSchema } }, // inside RegisterPath → Zod object
@@ -37,6 +38,19 @@ registry.registerPath({
                         data: userSchema,
                         message: z.string().openapi({ example: "User created successfully" })
                     }),
+                },
+            },
+        },
+        401: {
+            description: "Unauthorized access",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
+                        invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
+                        accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
+                    },
                 },
             },
         },
@@ -56,7 +70,7 @@ registry.registerPath({
         500: { $ref: "#/components/responses/InternalError" },           // points to the entire response → $ref string
     },
 });
-router.post("/register", registerLimiter, validate(registerSchema), userController.register);
+router.post("/register", registerLimiter, checkAccessToken, authorize("ADMIN"), validate(registerSchema), userController.register);
 
 registry.registerPath({
     tags: ["User"],
@@ -231,7 +245,8 @@ registry.registerPath({
     tags: ["User"],
     method: "get",
     path: "/users/",
-    summary: "List users",
+    summary: "List users (Admin only)",
+    security: [{ bearerAuth: [] }],
     request: {
         query: z.object({
             limit: z.coerce.number().int().positive().optional().openapi({
@@ -251,16 +266,30 @@ registry.registerPath({
                 },
             },
         },
+        401: {
+            description: "Unauthorized access",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
+                        invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
+                        accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
+                    },
+                },
+            },
+        },
         500: { $ref: "#/components/responses/InternalError" },
     },
 });
-router.get("/", userController.listUsers);
+router.get("/", checkAccessToken, authorize("ADMIN"), userController.listUsers);
 
 registry.registerPath({
     tags: ["User"],
     method: "get",
     path: "/users/{id}",
     summary: "Retrieves a user by id",
+    security: [{ bearerAuth: [] }],
     request: {
         params: z.object({ id: z.string() }),
     },
@@ -273,19 +302,33 @@ registry.registerPath({
                 },
             },
         },
+        401: {
+            description: "Unauthorized access",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
+                        invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
+                        accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
+                    },
+                },
+            },
+        },
         400: { $ref: "#/components/responses/MissingUserIdError" },
         404: { $ref: "#/components/responses/UserNotFoundError" },
         500: { $ref: "#/components/responses/InternalError" },
     },
 });
-router.get("/:id", userController.getUser);
+router.get("/:id", checkAccessToken, userController.getUser);
 
 // DELETE
 registry.registerPath({
     tags: ["User"],
     method: "delete",
     path: "/users/{id}",
-    summary: "Deletes a user by id",
+    summary: "Deletes a user by id (Admin only)",
+    security: [{ bearerAuth: [] }],
     request: {
         params: z.object({ id: z.string() }),
     },
@@ -301,11 +344,24 @@ registry.registerPath({
                 },
             },
         },
+        401: {
+            description: "Unauthorized access",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
+                        invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
+                        accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
+                    },
+                },
+            },
+        },
         400: { $ref: "#/components/responses/MissingUserIdError" },
         404: { $ref: "#/components/responses/UserNotFoundError" },
         500: { $ref: "#/components/responses/InternalError" },
     },
 });
-router.delete("/:id", userController.deleteUser);
+router.delete("/:id", checkAccessToken, authorize("ADMIN"), userController.deleteUser);
 
 export default router;

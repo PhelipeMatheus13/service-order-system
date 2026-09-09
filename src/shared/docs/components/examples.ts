@@ -122,6 +122,39 @@ const refreshTokenNotFound = registry.registerComponent("examples", "refreshToke
     },
 });
 
+const missingAccessToken = registry.registerComponent("examples", "missingAccessToken", {
+    summary: "Missing missingAccessToken token",
+    value: {
+        success: false,
+        error: {
+            code: "MISSING_ACCESS_TOKEN",
+            message: "Missing access token",
+        },
+    },
+});
+
+const invalidAccessToken = registry.registerComponent("examples", "invalidAccessToken", {
+    summary: "Invalid access token",
+    value: {
+        success: false,
+        error: {
+            code: "INVALID_ACCESS_TOKEN",
+            message: "Invalid access token",
+        },
+    },
+});
+
+const accessTokenExpired = registry.registerComponent("examples", "accessTokenExpired", {
+    summary: "Access token expired",
+    value: {
+        success: false,
+        error: {
+            code: "ACCESS_TOKEN_EXPIRED",
+            message: "Access token expired",
+        },
+    },
+});
+
 export {
     invalidChallengerNumber,
     challengerNumberExpired,
@@ -134,4 +167,7 @@ export {
     invalidRefreshToken,
     refreshTokenExpired,
     refreshTokenNotFound,
+    missingAccessToken,
+    invalidAccessToken,
+    accessTokenExpired
 };
