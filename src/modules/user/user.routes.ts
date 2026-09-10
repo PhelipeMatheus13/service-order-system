@@ -302,6 +302,7 @@ registry.registerPath({
                 },
             },
         },
+        400: { $ref: "#/components/responses/MissingUserIdError" },
         401: {
             description: "Unauthorized access",
             content: {
@@ -315,7 +316,18 @@ registry.registerPath({
                 },
             },
         },
-        400: { $ref: "#/components/responses/MissingUserIdError" },
+        403: {
+            description: "The user does not have permission to access this resource",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    example: {
+                        success: false,
+                        error: { code: "FORBIDDEN", message: "You can only access your own data" },
+                    },
+                },
+            },
+        },
         404: { $ref: "#/components/responses/UserNotFoundError" },
         500: { $ref: "#/components/responses/InternalError" },
     },

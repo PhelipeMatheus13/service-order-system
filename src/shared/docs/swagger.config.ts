@@ -17,8 +17,8 @@ const generateOpenApiDocument = () => {
         },
         servers: [{ url: "http://localhost:3000" }],
         tags: [
-            { name: "User", description: "User manegement"},
             { name: "Auth", description: "Authentication endpoints"},
+            { name: "User", description: "User manegement"},
         ]
     });
 };
