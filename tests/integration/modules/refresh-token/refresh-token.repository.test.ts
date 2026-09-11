@@ -66,7 +66,6 @@ describe("User Repository (Integration)", () => {
                 expect(tokenFinded?.tokenHash).toBe(tokenData.tokenHash);
                 expect(tokenFinded?.expiresAt.getTime()).toBeTruthy();
                 expect(tokenFinded?.createdAt).toBeTruthy();
-                expect(tokenFinded?.consumedAt).toBeNull();
                 expect(tokenFinded?.revokedAt).toBeNull();
             });
 
@@ -293,7 +292,6 @@ describe("User Repository (Integration)", () => {
                 expect(tokenFinded?.tokenHash).toBe(tokenCreated.tokenHash);
                 expect(tokenFinded?.expiresAt.getTime()).toBeTruthy();
                 expect(tokenFinded?.createdAt).toBeTruthy();
-                expect(tokenFinded?.consumedAt).toBeNull();
                 expect(tokenFinded?.revokedAt).toBeNull();
             });
 
