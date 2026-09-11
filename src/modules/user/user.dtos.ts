@@ -51,12 +51,12 @@ const usersOutputDTO = (users: UserRecord[]): UserOutput[] =>
         updatedAt: user.updatedAt ? String(user.updatedAt) : null,
     }));
 
-const confirmEmailDTO = (body: confirmEmailRequest): ConfirmEmailInput => ({
+const confirmEmailInputDTO = (body: confirmEmailRequest): ConfirmEmailInput => ({
     email: body.email,
     challengerNumber: body.challengerNumber,
 });
 
-const activateUserDTO = (user: AuthenticatedUser, jti: string, body: activateUserRequest): ActivateUserInput => ({
+const activateUserInputDTO = (user: AuthenticatedUser, jti: string, body: activateUserRequest): ActivateUserInput => ({
     userId: user.id,
     jti,
     password: body.password,
@@ -66,6 +66,6 @@ export default {
     registerInputDTO,
     userOutputDTO,
     usersOutputDTO,
-    confirmEmailDTO,
-    activateUserDTO,
+    activateUserInputDTO,
+    confirmEmailInputDTO,
 };

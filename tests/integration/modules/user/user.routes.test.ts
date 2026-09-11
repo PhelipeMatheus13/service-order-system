@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from "vitest";
+import { randomUUID } from "node:crypto";
 import request from "supertest";
 import app from "../../../../src/app";
-import { PrismaClient } from "../../../../src/generated/prisma/client.js";
 import { setupTestDatabase } from "../../../helpers/testDatabase.js";
+import { PrismaClient } from "../../../../src/generated/prisma/client.js";
 import { setPrismaInstance } from "../../../../src/shared/config/database";
-import { generateActivationToken } from "../../../../src/shared/services/jwt.js";
+import { generateAccessToken, generateActivationToken } from "../../../../src/shared/services/jwt.js";
 import { resendConfirmationCode } from "../../../../src/modules/user/user.emails.js";
-import { randomUUID } from "node:crypto";
 
 vi.mock("../../../../src/modules/user/user.emails.js", () => ({
     resendConfirmationCode: vi.fn().mockResolvedValue(undefined),
@@ -41,8 +41,12 @@ describe("User Routes (Integration)", () => {
         };
 
         it("should register a new user successfully", async () => {
+            // Simulate an admin user making the request by generating an access token
+            const accessToken =  generateAccessToken("fake-user-id", "ADMIN");
+
             const res = await request(app)
                 .post("/users/register")
+                .set("Authorization", `Bearer ${accessToken}`)
                 .send(validUser);
 
             expect(res.statusCode).toBe(201);
@@ -56,9 +60,12 @@ describe("User Routes (Integration)", () => {
         });
 
         it("should return 422 if validation fails (e.g., short password)", async () => {
+            const accessToken =  generateAccessToken("fake-user-id", "ADMIN");
             const invalidUser = { ...validUser, email: "john@example" };
+
             const res = await request(app)
                 .post("/users/register")
+                .set("Authorization", `Bearer ${accessToken}`)
                 .send(invalidUser);
 
             expect(res.statusCode).toBe(422);
@@ -107,49 +114,55 @@ describe("User Routes (Integration)", () => {
 
     describe("GET /users", () => {
         it("should return users ordered by creation date descending and respect the given limit", async () => {
-            const now = new Date;
+            const now = new Date();
+            const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
 
-            await prisma.user.create({
-                data: {
-                    firstName: "John",
-                    lastName: "Doe",
-                    phoneNumber: "5521995437105",
-                    email: "john@example.com",
-                    passwordHash: "passwordHash",
-                    role: "ATTENDANT",
-                    active: true,
-                    createdAt: new Date(now.getTime() - 60 * 60 * 1000), // 1 hour ago
-                },
+            // Single insert operation that returns both users
+            const users = await prisma.user.createManyAndReturn({
+                data: [
+                    {
+                        firstName: "John",
+                        lastName: "Doe",
+                        phoneNumber: "5521995437105",
+                        email: "john@example.com",
+                        passwordHash: "passwordHash",
+                        role: "ATTENDANT",
+                        active: true,
+                        createdAt: oneHourAgo,
+                    },
+                    {
+                        firstName: "Jane",
+                        lastName: "Doe",
+                        phoneNumber: "5521995437106",
+                        email: "jane@example.com",
+                        passwordHash: "passwordHash",
+                        role: "TECHNICIAN",
+                        active: true,
+                        createdAt: now,
+                    },
+                ],
             });
 
-            const userCreated = await prisma.user.create({
-                data: {
-                    firstName: "Jane",
-                    lastName: "Doe",
-                    phoneNumber: "5521995437106",
-                    email: "jane@example.com",
-                    passwordHash: "passwordHash",
-                    role: "TECHNICIAN",
-                    active: true,
-                    createdAt: now,
-                },
-            });
+            const newerUser = users.find(u => u.email === "jane@example.com")!;
+
+            const accessToken = generateAccessToken("fake-user-id", "ADMIN");
 
             const res = await request(app)
                 .get("/users")
+                .set("Authorization", `Bearer ${accessToken}`)
                 .query({ limit: 1 });
 
             expect(res.statusCode).toBe(200);
             expect(res.body.success).toBe(true);
 
             expect(res.body.data).toHaveLength(1);
-            expect(res.body.data[0].id).toBe(userCreated.id);
-            expect(res.body.data[0].firstName).toBe(userCreated.firstName);
-            expect(res.body.data[0].lastName).toBe(userCreated.lastName);
-            expect(res.body.data[0].phoneNumber).toBe(userCreated.phoneNumber);
-            expect(res.body.data[0].email).toBe(userCreated.email);
-            expect(res.body.data[0].role).toBe(userCreated.role);
-            expect(res.body.data[0].active).toBe(userCreated.active);
+            expect(res.body.data[0].id).toBe(newerUser.id);
+            expect(res.body.data[0].firstName).toBe(newerUser.firstName);
+            expect(res.body.data[0].lastName).toBe(newerUser.lastName);
+            expect(res.body.data[0].phoneNumber).toBe(newerUser.phoneNumber);
+            expect(res.body.data[0].email).toBe(newerUser.email);
+            expect(res.body.data[0].role).toBe(newerUser.role);
+            expect(res.body.data[0].active).toBe(newerUser.active);
             expect(res.body.data[0].createdAt).toBeTruthy();
             expect(res.body.data[0].updatedAt).toBeNull();
             expect(res.body.data[0].passwordHash).toBeUndefined();
@@ -174,8 +187,12 @@ describe("User Routes (Integration)", () => {
         });
 
         it("should return user data", async () => {
+            // same userId as created in beforeEach(a user can search for their own data)
+            const accessToken = generateAccessToken(userId, "ATTENDANT");
+
             const res = await request(app)
-                .get(`/users/${userId}`);
+                .get(`/users/${userId}`)
+                .set("Authorization", `Bearer ${accessToken}`);
 
             expect(res.statusCode).toBe(200);
             expect(res.body.success).toBe(true);
@@ -208,8 +225,11 @@ describe("User Routes (Integration)", () => {
         });
 
         it("should delete user", async () => {
+            const accessToken = generateAccessToken("fake-user-id", "ADMIN");
             const res = await request(app)
-                .delete(`/users/${userId}`);
+                .delete(`/users/${userId}`)
+                .set("Authorization", `Bearer ${accessToken}`);
+
 
             expect(res.statusCode).toBe(200);
             expect(res.body.success).toBe(true);
@@ -229,7 +249,7 @@ describe("User Routes (Integration)", () => {
                 },
             });
 
-            const resourceValidation = await prisma.userResourceValidation.create({
+            await prisma.userResourceValidation.create({
                 data: {
                     userId: user.id,
                     challengerNumber: "123456",
@@ -239,14 +259,14 @@ describe("User Routes (Integration)", () => {
                 },
             });
 
-            const { activationToken, tokenPayload } = generateActivationToken(user.id, randomUUID());
+            const { activationToken, activationTokenPayload } = generateActivationToken(user.id, randomUUID());
 
             await prisma.userActivationToken.create({
                 data: {
                     userId: user.id,
-                    jti: tokenPayload.jti,
+                    jti: activationTokenPayload.jti,
                     tokenHash: activationToken, // In a real scenario, this should be hashed
-                    expiresAt: new Date(tokenPayload.exp * 1000),
+                    expiresAt: new Date(activationTokenPayload.exp * 1000),
                     consumedAt: null,
                 },
             });

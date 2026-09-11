@@ -80,22 +80,22 @@ describe("User Controller (Unit)", () => {
     });
 
     describe("getUser", () => {
-        it("should return 200 with user data", async () => {
-            const userId = "uuid-123";
-            req.params.id = userId;
+        const mockUserRecord = {
+            id: "uuid-123",
+            firstName: "John",
+            lastName: "Doe",
+            phoneNumber: null,
+            email: "johndoe@hotmail.com",
+            passwordHash: null,
+            role: "ATTENDANT",
+            active: false,
+            createdAt: new Date(),
+            updatedAt: null,
+        } as UserRecord;
 
-            const mockUserRecord = {
-                id: "uuid-123",
-                firstName: "John",
-                lastName: "Doe",
-                phoneNumber: null,
-                email: "johndoe@hotmail.com",
-                passwordHash: null,
-                role: "ATTENDANT",
-                active: false,
-                createdAt: new Date(),
-                updatedAt: null,
-            } as UserRecord;
+        it("should return 200 with user data when requester is admin", async () => {
+            req.params.id = "uuid-123";
+            req.user = { id: "admin-id", role: "ADMIN" };
 
             vi.mocked(userService).getUserById.mockResolvedValue(mockUserRecord);
 
@@ -104,7 +104,32 @@ describe("User Controller (Unit)", () => {
             expect(res.status).toHaveBeenCalledWith(200);
             expect(res.json).toHaveBeenCalledWith({
                 success: true,
-                // validates the behavior of userOutputDTO
+                data: {
+                    id: mockUserRecord.id,
+                    firstName: mockUserRecord.firstName,
+                    lastName: mockUserRecord.lastName,
+                    phoneNumber: mockUserRecord.phoneNumber,
+                    email: mockUserRecord.email,
+                    role: mockUserRecord.role,
+                    active: mockUserRecord.active,
+                    createdAt: String(mockUserRecord.createdAt),
+                    updatedAt: null,
+                },
+            });
+            expect(next).not.toHaveBeenCalled();
+        });
+
+        it("should return 200 with user data when requester is the owner", async () => {
+            req.params.id = "uuid-123";
+            req.user = { id: "uuid-123", role: "ATTENDANT" };
+
+            vi.mocked(userService).getUserById.mockResolvedValue(mockUserRecord);
+
+            await userController.getUser(req, res, next);
+
+            expect(res.status).toHaveBeenCalledWith(200);
+            expect(res.json).toHaveBeenCalledWith({
+                success: true,
                 data: {
                     id: mockUserRecord.id,
                     firstName: mockUserRecord.firstName,
@@ -121,6 +146,9 @@ describe("User Controller (Unit)", () => {
         });
 
         it("should call next with badRequest error if id is missing", async () => {
+            req.params = {};
+            req.user = { id: "admin-id", role: "ADMIN" };
+
             await userController.getUser(req, res, next);
 
             expect(next).toHaveBeenCalledWith(expect.objectContaining({
@@ -128,6 +156,35 @@ describe("User Controller (Unit)", () => {
                 code: "BAD_REQUEST",
                 message: "User ID is required",
             }));
+            expect(res.status).not.toHaveBeenCalled();
+        });
+
+        it("should call next with unauthorized error if req.user is missing", async () => {
+            req.params.id = "uuid-123";
+            req.user = undefined;
+
+            await userController.getUser(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(expect.objectContaining({
+                statusCode: 401,
+                code: "UNAUTHORIZED",
+                message: "Authentication required",
+            }));
+            expect(res.status).not.toHaveBeenCalled();
+        });
+
+        it("should call next with forbidden error if requester is neither admin nor owner", async () => {
+            req.params.id = "uuid-123";
+            req.user = { id: "other-user-id", role: "ATTENDANT" };
+
+            await userController.getUser(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(expect.objectContaining({
+                statusCode: 403,
+                code: "FORBIDDEN",
+                message: "You can only access your own data",
+            }));
+            expect(userService.getUserById).not.toHaveBeenCalled();
             expect(res.status).not.toHaveBeenCalled();
         });
     });

@@ -1,6 +1,6 @@
 import { vi, describe, beforeEach, it, expect } from "vitest";
 
-import { sendConfirmationCode } from "../../../../src/modules/user/user.emails.js";
+import { sendConfirmationCode, resendConfirmationCode } from "../../../../src/modules/user/user.emails.js";
 import { sendMail } from "../../../../src/shared/services/mailer.js";
 
 vi.mock("../../../../src/shared/services/mailer.js", () => ({
@@ -28,7 +28,7 @@ describe("User Emails (Unit)", () => {
                 }),
             ).rejects.toThrow(error);
         });
-        
+
         it("should send the account activation email", async () => {
             sendMailMock.mockResolvedValue(undefined);
 
@@ -48,6 +48,46 @@ describe("User Emails (Unit)", () => {
             expect(mail.html).toContain("<p>Hi, John Doe!</p>");
             expect(mail.html).toContain("<p>Use the code below to activate your account:</p>");
             expect(mail.html).toContain("<h2>123456</h2>");
+            expect(mail.html).toContain("<p>If you didn't request this, please ignore this email.</p>");
+        });
+    });
+
+    describe("resendConfirmationCode", () => {
+        it("should propagate the error when sending the email fails", async () => {
+            const error = new Error("Fake error");
+
+            sendMailMock.mockRejectedValue(error);
+
+            await expect(
+                resendConfirmationCode({
+                    to: "user@example.com",
+                    name: "John Doe",
+                    code: "123456",
+                }),
+            ).rejects.toThrow(error);
+        });
+
+        it("should send the account activation email", async () => {
+            sendMailMock.mockResolvedValue(undefined);
+
+            await resendConfirmationCode({
+                to: "user@example.com",
+                name: "John Doe",
+                code: "123456",
+            });
+
+            const [mail] = sendMailMock.mock.calls[0];
+
+            expect(mail).toMatchObject({
+                to: "user@example.com",
+                subject: "Resend: Confirm your registration",
+            });
+
+            expect(mail.html).toContain("<p>Hi, John Doe!</p>");
+            expect(mail.html).toContain("<p>We're sending you a new activation code as you requested.</p>");
+            expect(mail.html).toContain("<p>Use the code below to activate your account:</p>");
+            expect(mail.html).toContain("<h2>123456</h2>");
+            expect(mail.html).toContain("<p><strong>Note:</strong> This is your most recent code. Any previous codes you received are no longer valid.</p>");
             expect(mail.html).toContain("<p>If you didn't request this, please ignore this email.</p>");
         });
     });

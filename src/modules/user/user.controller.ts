@@ -1,4 +1,4 @@
-import { badRequest, unauthorized } from "../../shared/errors/errors.js";
+import { badRequest, unauthorized, forbidden } from "../../shared/errors/errors.js";
 import asyncHandler from "../../shared/utils/async.js";
 import userService from "./user.service.js";
 import userDTO from "./user.dtos.js";
@@ -16,6 +16,19 @@ const register = asyncHandler(async (req, res) => {
 const getUser = asyncHandler(async (req, res) => {
     const { id } = req.params;
     if (!id) throw badRequest({ message: "User ID is required" });
+
+    if (!req.user) {
+        throw unauthorized({ message: "Authentication required" });
+    }
+
+    // Only allow access if the user is an admin or the owner of the data
+    const isAdmin = req.user.role === "ADMIN";
+    const isOwner = id === req.user.id;
+
+    if (!isAdmin && !isOwner) {
+        throw forbidden({ message: "You can only access your own data" });
+    }
+
     const user = await userService.getUserById(String(id));
     res.status(200).json({
         success: true,
@@ -51,7 +64,7 @@ const listUsers = asyncHandler(async (req, res) => {
 });
 
 const confirmEmail = asyncHandler(async (req, res) => {
-    const input = userDTO.confirmEmailDTO(req.body);
+    const input = userDTO.confirmEmailInputDTO(req.body);
     const activationToken = await userService.confirmEmail(input);
     res.status(200).json({
         success: true,
@@ -68,7 +81,7 @@ const activateUser = asyncHandler(async (req, res) => {
 
     const jti = res.locals.jti as string;
 
-    const input = userDTO.activateUserDTO(user, jti, req.body);
+    const input = userDTO.activateUserInputDTO(user, jti, req.body);
     await userService.activateUser(input);
     res.status(200).json({
         success: true,

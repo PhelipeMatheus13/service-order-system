@@ -22,7 +22,8 @@
     "test": "cross-env NODE_ENV=test vitest --coverage --watch",
     "test:ci": "cross-env NODE_ENV=test vitest run --coverage",
     "test:unit": "cross-env NODE_ENV=test vitest run tests/unit",
-    "test:integration": "cross-env NODE_ENV=test vitest run tests/integration"
+    "test:integration": "cross-env NODE_ENV=test vitest run tests/integration",
+    "prisma:seed": "cross-env NODE_ENV=development npx prisma db seed"
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^12.0.4",

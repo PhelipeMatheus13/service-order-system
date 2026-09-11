@@ -1,6 +1,7 @@
 import { vi, describe, beforeEach, afterEach, it, expect } from "vitest";
 import jwt from "jsonwebtoken";
 
+// Mock dependencies
 import {
     generateAccessToken,
     generateRefreshToken,
@@ -160,9 +161,26 @@ describe("JWT Service (Unit)", () => {
 
         it("should generate refresh token using REFRESH_SECRET and expiration of 7d", () => {
             sign.mockReturnValue("refresh-token");
-            const token = generateRefreshToken("user-123", "admin", "jti-uuid-123");
-            expect(token).toBe("refresh-token");
-            expect(sign).toHaveBeenCalledWith({ sub: "user-123", role: "admin", jti: "jti-uuid-123" }, "refresh", { expiresIn: "7d" });
+
+            const result = generateRefreshToken("user-123", "admin", "jti-uuid-123");
+
+            expect(result.refreshToken).toBe("refresh-token");
+            expect(result.refreshTokenPayload).toEqual({
+                sub: "user-123",
+                role: "admin",
+                jti: "jti-uuid-123",
+                exp: expect.any(Number),
+            });
+
+            expect(sign).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    sub: "user-123",
+                    role: "admin",
+                    jti: "jti-uuid-123",
+                    exp: expect.any(Number),
+                }),
+                "refresh"
+            );
         });
     });
 
@@ -269,7 +287,7 @@ describe("JWT Service (Unit)", () => {
             const result = generateActivationToken(userId, jti);
 
             expect(result.activationToken).toBe("activation-token");
-            expect(result.tokenPayload).toEqual({
+            expect(result.activationTokenPayload).toEqual({
                 sub: userId,
                 jti: jti,
                 exp: expect.any(Number),

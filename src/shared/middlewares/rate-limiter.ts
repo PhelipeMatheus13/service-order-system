@@ -58,14 +58,30 @@ const confirmEmailLimiter = createRateLimiter({
 
 const resendEmailConfirmationCodeLimiter = createRateLimiter({
     identifier: "resend-code",
-    windowMs: 15 * 60 * 1000,
+    windowMs: 15 * 60 * 1000, // 15 min
     maxRequests: 3,
     errorMessage: "Too many resend requests, please try again later",
+});
+
+const loginLimiter = createRateLimiter({
+    identifier: "login",
+    windowMs: 60 * 1000, // 1 min
+    maxRequests: 3,
+    errorMessage: "Too many login attempts, please try again later",
+});
+
+const refreshLimiter = createRateLimiter({
+    identifier: "refresh",
+    windowMs: 60 * 1000, // 1 min
+    maxRequests: 3,
+    errorMessage: "Too many refresh attempts, please try again in a minute",
 });
 
 export {
     globalLimiter,
     registerLimiter,
     confirmEmailLimiter,
-    resendEmailConfirmationCodeLimiter
+    resendEmailConfirmationCodeLimiter,
+    loginLimiter,
+    refreshLimiter,
 };
