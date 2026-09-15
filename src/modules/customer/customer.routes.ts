@@ -66,7 +66,7 @@ registry.registerPath({
             },
         },
         422: { $ref: "#/components/responses/createCustomerValidationError" },
-        500: { $ref: "#/components/responses/InternalError" },
+        500: { $ref: "#/components/responses/internalError" },
     }
 });
 router.post("/", checkAccessToken, authorize("ADMIN", "ATTENDANT"), validate(createCustomerSchema), customerController.createCustomer);
@@ -124,7 +124,7 @@ registry.registerPath({
             },
         },
         404: { $ref: "#/components/responses/customerNotFoundError" },
-        500: { $ref: "#/components/responses/InternalError" },
+        500: { $ref: "#/components/responses/internalError" },
     }
 });
 router.get("/:id", checkAccessToken, authorize("ADMIN", "ATTENDANT"), customerController.getCustomer);
@@ -175,7 +175,7 @@ registry.registerPath({
                 },
             },
         },
-        500: { $ref: "#/components/responses/InternalError" },
+        500: { $ref: "#/components/responses/internalError" },
     }
 });
 router.get("/", checkAccessToken, authorize("ADMIN", "ATTENDANT"), customerController.listCustomers);
@@ -237,7 +237,7 @@ registry.registerPath({
         },
         404: { $ref: "#/components/responses/customerNotFoundError" },
         422: { $ref: "#/components/responses/updateCustomerValidationError" },
-        500: { $ref: "#/components/responses/InternalError" },
+        500: { $ref: "#/components/responses/internalError" },
     }
 });
 router.patch("/:id", checkAccessToken, authorize("ADMIN", "ATTENDANT"), validate(updateCustomerSchema), customerController.updateCustomer);

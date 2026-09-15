@@ -51,7 +51,7 @@ registry.registerPath({
             },
         },
         422: { $ref: "#/components/responses/loginValidationError" },
-        500: { $ref: "#/components/responses/InternalError" },
+        500: { $ref: "#/components/responses/internalError" },
     }
 });
 router.post("/login", loginLimiter, validate(loginSchema), authController.login);
@@ -93,7 +93,7 @@ registry.registerPath({
             },
         },
         422: { $ref: "#/components/responses/refreshTokenValidationError" },
-        500: { $ref: "#/components/responses/InternalError" },
+        500: { $ref: "#/components/responses/internalError" },
     }
 });
 router.post("/refresh", refreshLimiter, validate(refreshSchema), authController.refresh);
@@ -136,7 +136,7 @@ registry.registerPath({
         },
         404: { $ref: "#/components/responses/refreshTokenNotFoundError" },
         422: { $ref: "#/components/responses/refreshTokenValidationError" },
-        500: { $ref: "#/components/responses/InternalError" },
+        500: { $ref: "#/components/responses/internalError" },
     }
 });
 router.post("/logout", validate(logoutSchema), authController.logout);
@@ -179,7 +179,7 @@ registry.registerPath({
             },
         },
         422: { $ref: "#/components/responses/refreshTokenValidationError" },
-        500: { $ref: "#/components/responses/InternalError" },
+        500: { $ref: "#/components/responses/internalError" },
     }
 });
 router.post("/logout-all", validate(logoutAllSchema), authController.logoutAll);

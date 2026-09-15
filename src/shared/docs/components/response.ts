@@ -1,7 +1,7 @@
 import registry from "../registry.js";
 
 // 400
-const missingUserIdError = registry.registerComponent("responses", "MissingUserIdError", {
+const missingUserIdError = registry.registerComponent("responses", "missingUserIdError", {
     description: "Invalid request, missing user id",
     content: {
         "application/json": {
@@ -34,7 +34,7 @@ const missingCustomerIdError = registry.registerComponent("responses", "missingC
 });
 
 // 404
-const userNotFoundError = registry.registerComponent("responses", "UserNotFoundError", {
+const userNotFoundError = registry.registerComponent("responses", "userNotFoundError", {
     description: "User not found or does not exist",
     content: {
         "application/json": {
@@ -67,7 +67,7 @@ const customerNotFoundError = registry.registerComponent("responses", "customerN
 });
 
 // 500
-const internalError = registry.registerComponent("responses", "InternalError", {
+const internalError = registry.registerComponent("responses", "internalError", {
     description: "Internal error",
     content: {
         "application/json": {
@@ -84,7 +84,7 @@ const internalError = registry.registerComponent("responses", "InternalError", {
 });
 
 // VALIDATION ERRORS (422)
-const registerValidationError = registry.registerComponent("responses", "RegisterValidationError", {
+const registerValidationError = registry.registerComponent("responses", "registerValidationError", {
     description: "Register validation error",
     content: {
         "application/json": {
