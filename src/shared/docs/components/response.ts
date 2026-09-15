@@ -1,4 +1,4 @@
-import registry  from "../registry.js";
+import registry from "../registry.js";
 
 // 400
 const missingUserIdError = registry.registerComponent("responses", "MissingUserIdError", {
@@ -17,6 +17,22 @@ const missingUserIdError = registry.registerComponent("responses", "MissingUserI
     },
 });
 
+const missingCustomerIdError = registry.registerComponent("responses", "missingCustomerIdError", {
+    description: "Invalid request, missing customer id",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            example: {
+                success: false,
+                error: {
+                    code: "BAD_REQUEST",
+                    message: "Customer ID is required",
+                },
+            },
+        },
+    },
+});
+
 // 404
 const userNotFoundError = registry.registerComponent("responses", "UserNotFoundError", {
     description: "User not found or does not exist",
@@ -28,6 +44,22 @@ const userNotFoundError = registry.registerComponent("responses", "UserNotFoundE
                 error: {
                     code: "NOT_FOUND",
                     message: "User not found",
+                },
+            },
+        },
+    },
+});
+
+const customerNotFoundError = registry.registerComponent("responses", "customerNotFoundError", {
+    description: "Customer not found or does not exist",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            example: {
+                success: false,
+                error: {
+                    code: "NOT_FOUND",
+                    message: "Customer not found",
                 },
             },
         },
@@ -154,13 +186,80 @@ const refreshTokenValidationError = registry.registerComponent("responses", "ref
     },
 });
 
+const createCustomerValidationError = registry.registerComponent("responses", "createCustomerValidationError", {
+    description: "Create customer validation error",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/ValidationError" },
+            example: {
+                success: false,
+                error: {
+                    code: "VALIDATION_ERROR",
+                    message: "Validation failed",
+                    details: [
+                        { field: "firstName", message: "First name must be at least 3 characters long" },
+                        { field: "lastName", message: "Last name must be at least 3 characters long" },
+                        { field: "email", message: "Please provide a valid email address" },
+                        { field: "phoneNumber", message: "Please provide a valid phone number" },
+                    ],
+                },
+            },
+        },
+    },
+});
+
+const updateCustomerValidationError = registry.registerComponent("responses", "updateCustomerValidationError", {
+    description: "Update customer validation error",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/ValidationError" },
+            examples: {
+                invalidFields: {
+                    summary: "Invalid fields values",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "VALIDATION_ERROR",
+                            message: "Validation failed",
+                            details: [
+                                { field: "firstName", message: "First name must be at least 3 characters long" },
+                                { field: "lastName", message: "Last name must be at least 3 characters long" },
+                                { field: "email", message: "Please provide a valid email address" },
+                                { field: "phoneNumber", message: "Please provide a valid phone number" },
+                            ],
+                        },
+                    },
+                },
+                noFieldsProvided: {
+                    summary: "No fields provided for update",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "VALIDATION_ERROR",
+                            message: "Validation failed",
+                            details: [
+                                { field: "body", message: "At least one field must be provided for update" },
+                            ],
+                        },
+                    },
+                },
+            },
+        },
+    },
+});
+
+
 export {
     missingUserIdError,
+    missingCustomerIdError,
     userNotFoundError,
+    customerNotFoundError,
     internalError,
     registerValidationError,
     confirmEmailValidationError,
     activateUserValidationError,
     loginValidationError,
     refreshTokenValidationError,
+    createCustomerValidationError,
+    updateCustomerValidationError,
 };
