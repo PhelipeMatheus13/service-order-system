@@ -28,7 +28,7 @@ describe("Customer Controller (Unit)", () => {
                 firstName: "John",
                 lastName: "Doe",
                 email: "johndoe@hotmail.com",
-                phoneNumber: null,
+                phoneNumber: "21988887777",
             };
             req.body = requestBody;
 
@@ -78,7 +78,7 @@ describe("Customer Controller (Unit)", () => {
                 firstName: "Jane",
                 lastName: "Doe",
                 email: "johndoe@hotmail.com",
-                phoneNumber: null,
+                phoneNumber: "21988887777",
                 createdAt: new Date(),
                 updatedAt: new Date(),
             } as CustomerRecord;
@@ -125,7 +125,7 @@ describe("Customer Controller (Unit)", () => {
                 firstName: "John",
                 lastName: "Doe",
                 email: "johndoe@hotmail.com",
-                phoneNumber: null,
+                phoneNumber: "21988887777",
                 createdAt: new Date(),
                 updatedAt: null,
             } as CustomerRecord;

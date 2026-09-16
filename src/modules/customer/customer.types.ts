@@ -4,7 +4,7 @@ interface CreateCustomerInput {
     firstName: string;
     lastName: string;
     email: string;
-    phoneNumber: string | null;
+    phoneNumber: string;
 }
 
 interface UpdateCustomerInput {

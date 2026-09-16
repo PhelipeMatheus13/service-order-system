@@ -10,7 +10,7 @@ const customerSchema = registry.register(
         firstName: z.string(),
         lastName: z.string(),
         email: z.string(),
-        phoneNumber: z.string().nullable(),
+        phoneNumber: z.string(),
         createdAt: z.string(),
         updatedAt: z.string().nullable(),
     })
@@ -36,13 +36,9 @@ const createCustomerSchema = registry.register(
             .trim()
             .openapi({ example: "johndoe@hotmail.com" }),
 
-        phoneNumber: z.preprocess(
-            emptyToNull,
-            z.union([
-                z.null(),
-                z.string().refine(isValidPhoneNumber, { message: "Please provide a valid phone number" }),
-            ])
-        ).openapi({ example: "+55 (21) 98765-4321" }),
+        phoneNumber: z.string().refine(isValidPhoneNumber, {
+            message: "Please provide a valid phone number",
+        }).openapi({ example: "+55 (21) 98765-4321" }),
     })
 );
 

@@ -4,7 +4,7 @@ CREATE TABLE "customers" (
     "first_name" VARCHAR(255) NOT NULL,
     "last_name" VARCHAR(255) NOT NULL,
     "email" VARCHAR(254) NOT NULL,
-    "phone_number" VARCHAR(15),
+    "phone_number" VARCHAR(15) NOT NULL,
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMPTZ,
 

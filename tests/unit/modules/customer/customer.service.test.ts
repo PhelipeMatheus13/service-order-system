@@ -22,7 +22,7 @@ describe("Customer Service (Unit)", () => {
             firstName: "John",
             lastName: "Doe",
             email: "johndoe@hotmail.com",
-            phoneNumber: null,
+            phoneNumber: "21988887777",
         };
 
         it("should throw if fail in customerRepository.existsByEmail ", async () => {
@@ -107,7 +107,7 @@ describe("Customer Service (Unit)", () => {
                 id: validInput.customerId,
                 firstName: "John",
                 lastName: "Doe",
-                phoneNumber: null,
+                phoneNumber: "21988887777",
                 email: validInput.email,
                 createdAt: new Date(),
                 updatedAt: null,
@@ -148,7 +148,7 @@ describe("Customer Service (Unit)", () => {
                 id: customerId,
                 firstName: "John",
                 lastName: "Doe",
-                phoneNumber: null,
+                phoneNumber: "21988887777",
                 email: "johndoe@hotmail.com",
                 createdAt: new Date(),
                 updatedAt: null,
@@ -183,7 +183,7 @@ describe("Customer Service (Unit)", () => {
                     id: "uuid-123",
                     firstName: "John",
                     lastName: "Doe",
-                    phoneNumber: null,
+                    phoneNumber: "21988887777",
                     email: "johndoe@hotmail.com",
                     createdAt: new Date(),
                     updatedAt: null,
