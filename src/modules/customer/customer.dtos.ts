@@ -1,10 +1,6 @@
 import { CreateCustomerRequest, UpdateCustomerRequest } from "./customer.schemas.js";
 import type { CreateCustomerInput, UpdateCustomerInput } from "./customer.types.js";
-
-const sanitizePhoneNumber = (phone: string | null): string | null => {
-    if (!phone) return null;
-    return phone.replace(/\D/g, "");
-};
+import { sanitizePhoneNumber } from "../../shared/utils/phone.js";
 
 const createCustomerDTO = (body: CreateCustomerRequest): CreateCustomerInput => ({
     firstName: body.firstName,

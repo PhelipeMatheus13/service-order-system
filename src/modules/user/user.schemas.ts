@@ -1,36 +1,7 @@
 import { z } from "zod";
 import registry from "../../shared/docs/registry.js";
-import { parsePhoneNumberFromString } from "libphonenumber-js";
-
-const normalizeEmptyValue = (value: unknown): unknown => {
-    if (value === null || value === undefined) return null;
-
-    if (typeof value === "string") {
-        const trimmed = value.trim();
-        return trimmed === "" ? null : trimmed;
-    }
-
-    return value;
-};
-
-const isValidPhone = (value: string): boolean => {
-    try {
-        const phone = parsePhoneNumberFromString(value, "BR");
-        return phone?.isValid() ?? false;
-    } catch {
-        return false;
-    }
-};
-
-const phoneNumberSchema = z.preprocess(
-    normalizeEmptyValue,
-    z.union([
-        z.null(),
-        z.string().refine(isValidPhone, {
-            message: "Please provide a valid phone number",
-        }),
-    ])
-);
+import { emptyToNull } from "../../shared/utils/empty-to-null.js";
+import { isValidPhoneNumber } from "../../shared/utils/phone.js";
 
 const userSchema = registry.register(
     "User",
@@ -62,7 +33,13 @@ const registerSchema = registry.register(
             .min(3, "Last name must be at least 3 characters long")
             .openapi({ example: "Doe" }),
 
-        phoneNumber: phoneNumberSchema.openapi({ example: "+55 21 98765-4321" }),
+        phoneNumber: z.preprocess(
+            emptyToNull,
+            z.union([
+                z.null(),
+                z.string().refine(isValidPhoneNumber, { message: "Please provide a valid phone number" }),
+            ])
+        ).openapi({ example: "+55 (21) 98765-4321" }),
 
         email: z
             .email("Please provide a valid email address")
@@ -137,8 +114,6 @@ export {
     confirmEmailSchema,
     activateUserSchema,
     resendEmailConfirmationSchema,
-    normalizeEmptyValue,
-    isValidPhone,
 };
 
 export type {

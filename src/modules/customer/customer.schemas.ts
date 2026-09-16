@@ -1,37 +1,7 @@
 import { z } from "zod";
 import registry from "../../shared/docs/registry.js";
-import { parsePhoneNumberFromString } from "libphonenumber-js";
-
-const normalizeEmptyValue = (value: unknown): unknown => {
-    if (value === null || value === undefined) return null;
-
-    if (typeof value === "string") {
-        const trimmed = value.trim();
-        return trimmed === "" ? null : trimmed;
-    }
-
-    return value;
-};
-
-const isValidPhone = (value: string): boolean => {
-    try {
-        const phone = parsePhoneNumberFromString(value, "BR");
-        return phone?.isValid() ?? false;
-    } catch {
-        return false;
-    }
-};
-
-const phoneNumberSchema = z.preprocess(
-    normalizeEmptyValue,
-    z.union([
-        z.null(),
-        z.string().refine(isValidPhone, {
-            message: "Please provide a valid phone number",
-        }),
-    ])
-);
-
+import { emptyToNull } from "../../shared/utils/empty-to-null.js";
+import { isValidPhoneNumber } from "../../shared/utils/phone.js";
 
 const customerSchema = registry.register(
     "Customer",
@@ -66,7 +36,13 @@ const createCustomerSchema = registry.register(
             .trim()
             .openapi({ example: "johndoe@hotmail.com" }),
 
-        phoneNumber: phoneNumberSchema.openapi({ example: "+55 21 98765-4321" }),
+        phoneNumber: z.preprocess(
+            emptyToNull,
+            z.union([
+                z.null(),
+                z.string().refine(isValidPhoneNumber, { message: "Please provide a valid phone number" }),
+            ])
+        ).openapi({ example: "+55 (21) 98765-4321" }),
     })
 );
 
@@ -76,7 +52,7 @@ const updateCustomerSchema = registry.register(
     "UpdateCustomer",
     z.object({
         firstName: z.preprocess(
-            normalizeEmptyValue,
+            emptyToNull,
             z.union([
                 z.null(),
                 z.string().min(3, "First name must be at least 3 characters long"),
@@ -84,7 +60,7 @@ const updateCustomerSchema = registry.register(
         ).openapi({ example: "John" }),
 
         lastName: z.preprocess(
-            normalizeEmptyValue,
+            emptyToNull,
             z.union([
                 z.null(),
                 z.string().min(3, "Last name must be at least 3 characters long"),
@@ -92,14 +68,20 @@ const updateCustomerSchema = registry.register(
         ).openapi({ example: "Doe" }),
 
         email: z.preprocess(
-            normalizeEmptyValue,
+            emptyToNull,
             z.union([
                 z.null(),
                 z.email("Please provide a valid email address"),
             ])
         ).openapi({ example: "johndoe@hotmail.com" }),
 
-        phoneNumber: phoneNumberSchema.openapi({ example: "+55 21 98765-4321" }),
+        phoneNumber: z.preprocess(
+            emptyToNull,
+            z.union([
+                z.null(),
+                z.string().refine(isValidPhoneNumber, { message: "Please provide a valid phone number" }),
+            ])
+        ).openapi({ example: "+55 (21) 98765-4321" }),
     })
     .refine(
         (data) =>
@@ -107,7 +89,7 @@ const updateCustomerSchema = registry.register(
             data.lastName !== null ||
             data.email !== null ||
             data.phoneNumber !== null,
-        {  path: ["body"], message: "At least one field must be provided for update" }
+        { path: ["body"], message: "At least one field must be provided for update" }
     )
 );
 
