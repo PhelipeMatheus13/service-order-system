@@ -77,7 +77,7 @@ registry.registerPath({
     tags: ["Customer"],
     method: "get",
     path: "/customers/:id",
-    summary: "Get a customer by ID (requires ADMIN or ATTENDANT role)",
+    summary: "Get a customer by ID",
     security: [{ bearerAuth: [] }],
     request: {
         params: z.object({ id: z.string() }),
@@ -127,13 +127,13 @@ registry.registerPath({
         500: { $ref: "#/components/responses/internalError" },
     }
 });
-router.get("/:id", checkAccessToken, authorize("ADMIN", "ATTENDANT"), customerController.getCustomer);
+router.get("/:id", checkAccessToken, customerController.getCustomer);
 
 registry.registerPath({
     tags: ["Customer"],
     method: "get",
     path: "/customers",
-    summary: "List customers (requires ADMIN or ATTENDANT role)",
+    summary: "List customers",
     security: [{ bearerAuth: [] }],
     responses: {
         200: {
@@ -178,7 +178,7 @@ registry.registerPath({
         500: { $ref: "#/components/responses/internalError" },
     }
 });
-router.get("/", checkAccessToken, authorize("ADMIN", "ATTENDANT"), customerController.listCustomers);
+router.get("/", checkAccessToken, customerController.listCustomers);
 
 // PATCH
 registry.registerPath({
