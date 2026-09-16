@@ -62,7 +62,7 @@ const registerSchema = registry.register(
             .min(3, "Last name must be at least 3 characters long")
             .openapi({ example: "Doe" }),
 
-        phoneNumber: phoneNumberSchema.openapi({ example: "+55 (21) 98765-4321" }),
+        phoneNumber: phoneNumberSchema.openapi({ example: "+55 21 98765-4321" }),
 
         email: z
             .email("Please provide a valid email address")

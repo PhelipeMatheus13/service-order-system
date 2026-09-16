@@ -66,7 +66,7 @@ const createCustomerSchema = registry.register(
             .trim()
             .openapi({ example: "johndoe@hotmail.com" }),
 
-        phoneNumber: phoneNumberSchema.openapi({ example: "+55 (21) 98765-4321" }),
+        phoneNumber: phoneNumberSchema.openapi({ example: "+55 21 98765-4321" }),
     })
 );
 
@@ -77,27 +77,36 @@ const updateCustomerSchema = registry.register(
     z.object({
         firstName: z.preprocess(
             normalizeEmptyValue,
-            z.union([z.null(), z.string().min(3, "First name must be at least 3 characters long")])
-        ),
+            z.union([
+                z.null(),
+                z.string().min(3, "First name must be at least 3 characters long"),
+            ])
+        ).optional().openapi({ example: "John" }),
 
         lastName: z.preprocess(
             normalizeEmptyValue,
-            z.union([z.null(), z.string().min(3, "Last name must be at least 3 characters long")])
-        ),
+            z.union([
+                z.null(),
+                z.string().min(3, "Last name must be at least 3 characters long"),
+            ])
+        ).optional().openapi({ example: "Doe" }),
 
         email: z.preprocess(
             normalizeEmptyValue,
-            z.union([z.null(), z.email("Please provide a valid email address")])
-        ),
+            z.union([
+                z.null(),
+                z.email("Please provide a valid email address"),
+            ])
+        ).optional().openapi({ example: "johndoe@hotmail.com" }),
 
-        phoneNumber: phoneNumberSchema,
+        phoneNumber: phoneNumberSchema.optional().openapi({ example: "+55 21 98765-4321" }),
     })
     .refine(
         (data) =>
-            data.firstName !== null ||
-            data.lastName !== null ||
-            data.email !== null ||
-            data.phoneNumber !== null,
+            data.firstName !== undefined ||
+            data.lastName !== undefined ||
+            data.email !== undefined ||
+            data.phoneNumber !== undefined,
         { message: "At least one field must be provided for update" }
     )
 );
