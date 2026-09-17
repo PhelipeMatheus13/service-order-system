@@ -66,17 +66,17 @@ const customerNotFoundError = registry.registerComponent("responses", "customerN
     },
 });
 
-// 500
-const internalError = registry.registerComponent("responses", "internalError", {
-    description: "Internal error",
+// 409
+const emailAlreadyExistsError = registry.registerComponent("responses", "emailAlreadyExistsError", {
+    description: "Email already in use",
     content: {
         "application/json": {
             schema: { $ref: "#/components/schemas/Error" },
             example: {
                 success: false,
                 error: {
-                    code: "INTERNAL_ERROR",
-                    message: "Internal server error",
+                    code: "ALREADY_EXISTS",
+                    message: "Email already in use",
                 },
             },
         },
@@ -248,13 +248,29 @@ const updateCustomerValidationError = registry.registerComponent("responses", "u
     },
 });
 
+// 500
+const internalError = registry.registerComponent("responses", "internalError", {
+    description: "Internal error",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            example: {
+                success: false,
+                error: {
+                    code: "INTERNAL_ERROR",
+                    message: "Internal server error",
+                },
+            },
+        },
+    },
+});
 
 export {
     missingUserIdError,
     missingCustomerIdError,
     userNotFoundError,
     customerNotFoundError,
-    internalError,
+    emailAlreadyExistsError,
     registerValidationError,
     confirmEmailValidationError,
     activateUserValidationError,
@@ -262,4 +278,5 @@ export {
     refreshTokenValidationError,
     createCustomerValidationError,
     updateCustomerValidationError,
+    internalError,
 };

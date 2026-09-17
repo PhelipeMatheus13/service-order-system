@@ -107,6 +107,22 @@ describe("Customer Repository (Integration)", () => {
                 expect(customerUpdated?.email).toBe("john@example.com");
                 expect(customerUpdated?.phoneNumber).toBe("5521995437105");
             });
+
+            it("should return null when the customer does not exist", async () => {
+                const nonExistentId = "0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa";
+
+                const updateData: UpdateCustomerInput = {
+                    customerId: nonExistentId,
+                    firstName: "Jane",
+                    lastName: null,
+                    email: null,
+                    phoneNumber: null,
+                };
+
+                const customerUpdated = await customerRepository.update(updateData);
+
+                expect(customerUpdated).toBeNull();
+            });
         });
     });
 

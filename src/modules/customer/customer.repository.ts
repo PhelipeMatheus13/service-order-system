@@ -1,10 +1,11 @@
-import type { 
-    CustomerRecord, 
-    CreateCustomerInput, 
-    UpdateCustomerInput, 
+import type {
+    CustomerRecord,
+    CreateCustomerInput,
+    UpdateCustomerInput,
     ListCustomersInput,
 } from "./customer.types.js";
 import { getPrisma } from "../../shared/config/database.js";
+import { isNotFoundError } from "../../shared/utils/prisma-error.js";
 
 // Writer
 const create = async (input: CreateCustomerInput): Promise<CustomerRecord> => {
@@ -24,26 +25,21 @@ const create = async (input: CreateCustomerInput): Promise<CustomerRecord> => {
 const update = async (input: UpdateCustomerInput): Promise<CustomerRecord | null> => {
     const prisma = getPrisma();
 
-    const customer = await prisma.customer.update({
-        where: { id: input.customerId },
-        data: {
-            ...(input.firstName !== null && {
-                firstName: input.firstName,
-            }),
-            ...(input.lastName !== null && {
-                lastName: input.lastName,
-            }),
-            ...(input.email !== null && {
-                email: input.email,
-            }),
-            ...(input.phoneNumber !== null && {
-                phoneNumber: input.phoneNumber,
-            }),
-            updatedAt: new Date(),
-        },
-    });
-
-    return customer;
+    try {
+        return await prisma.customer.update({
+            where: { id: input.customerId },
+            data: {
+                ...(input.firstName !== null && { firstName: input.firstName }),
+                ...(input.lastName !== null && { lastName: input.lastName }),
+                ...(input.email !== null && { email: input.email }),
+                ...(input.phoneNumber !== null && { phoneNumber: input.phoneNumber }),
+                updatedAt: new Date(),
+            },
+        });
+    } catch (error) {
+        if (isNotFoundError(error)) return null;
+        throw error;
+    }
 };
 
 // Reader

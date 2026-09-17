@@ -9,8 +9,11 @@ import customerService from "../../../../src/modules/customer/customer.service.j
 
 // Mock dependencies
 import customerRepository from "../../../../src/modules/customer/customer.repository.js";
+import { isUniqueConstraintOn } from "../../../../src/shared/utils/prisma-error.js";
+
 
 vi.mock("../../../../src/modules/customer/customer.repository.js");
+vi.mock("../../../../src/shared/utils/prisma-error.js");
 
 describe("Customer Service (Unit)", () => {
     beforeEach(() => {
@@ -25,15 +28,10 @@ describe("Customer Service (Unit)", () => {
             phoneNumber: "21988887777",
         };
 
-        it("should throw if fail in customerRepository.existsByEmail ", async () => {
-            vi.mocked(customerRepository).existsByEmail.mockRejectedValue(new Error("fake error"));
-
-            await expect(customerService.createCustomer(validInput))
-                .rejects.toThrow("fake error");
-        });
-
-        it("should throw if email already exists ", async () => {
-            vi.mocked(customerRepository).existsByEmail.mockResolvedValue(true);
+        it("should throw ALREADY_EXISTS if email is a unique constraint violation", async () => {
+            const dbError = new Error("Unique constraint failed");
+            vi.mocked(customerRepository.create).mockRejectedValue(dbError);
+            vi.mocked(isUniqueConstraintOn).mockReturnValue(true);
 
             await expect(customerService.createCustomer(validInput))
                 .rejects.toMatchObject({
@@ -41,20 +39,21 @@ describe("Customer Service (Unit)", () => {
                     code: "ALREADY_EXISTS",
                     message: "Email already in use",
                 });
+
+            expect(isUniqueConstraintOn).toHaveBeenCalledWith(dbError, "email");
         });
 
-        it("should throw if fail in customerRepository.create", async () => {
-            vi.mocked(customerRepository).existsByEmail.mockResolvedValue(false);
-            vi.mocked(customerRepository).create.mockRejectedValue(new Error("fake error"));
+        it("should propagate error if it is not a unique constraint violation", async () => {
+            const error = new Error("fake error");
+            vi.mocked(customerRepository.create).mockRejectedValue(error);
+            vi.mocked(isUniqueConstraintOn).mockReturnValue(false);
 
             await expect(customerService.createCustomer(validInput))
-                .rejects.toThrow("fake error");
+                .rejects.toThrow(error);
         });
 
         it("should create customer successfully", async () => {
-            vi.mocked(customerRepository).existsByEmail.mockResolvedValue(false);
-
-            const mockUserRecord = {
+            const mockCustomerRecord = {
                 id: "uuid-123",
                 firstName: validInput.firstName,
                 lastName: validInput.lastName,
@@ -64,14 +63,12 @@ describe("Customer Service (Unit)", () => {
                 updatedAt: null,
             } as CustomerRecord;
 
-            vi.mocked(customerRepository).create.mockResolvedValue(mockUserRecord);
+            vi.mocked(customerRepository.create).mockResolvedValue(mockCustomerRecord);
 
             const result = await customerService.createCustomer(validInput);
 
-            expect(customerRepository.existsByEmail).toHaveBeenCalledWith(validInput.email);
             expect(customerRepository.create).toHaveBeenCalledWith(validInput);
-
-            expect(result).toBe(mockUserRecord);
+            expect(result).toBe(mockCustomerRecord);
         });
     });
 
@@ -84,15 +81,32 @@ describe("Customer Service (Unit)", () => {
             phoneNumber: null,
         };
 
-        it("should throw if fail in customerRepository.update", async () => {
-            vi.mocked(customerRepository).update.mockRejectedValue(new Error("fake error"))
+        it("should throw ALREADY_EXISTS if email is a unique constraint violation", async () => {
+            const dbError = new Error("Unique constraint failed");
+            vi.mocked(customerRepository.update).mockRejectedValue(dbError);
+            vi.mocked(isUniqueConstraintOn).mockReturnValue(true);
 
             await expect(customerService.updateCustomer(validInput))
-                .rejects.toThrow("fake error");
+                .rejects.toMatchObject({
+                    statusCode: 409,
+                    code: "ALREADY_EXISTS",
+                    message: "Email already in use",
+                });
+
+            expect(isUniqueConstraintOn).toHaveBeenCalledWith(dbError, "email");
         });
 
-        it("should throw if not found", async () => {
-            vi.mocked(customerRepository).update.mockResolvedValue(null)
+        it("should propagate error if it is not a unique constraint violation", async () => {
+            const error = new Error("fake error");
+            vi.mocked(customerRepository.update).mockRejectedValue(error);
+            vi.mocked(isUniqueConstraintOn).mockReturnValue(false);
+
+            await expect(customerService.updateCustomer(validInput))
+                .rejects.toThrow(error);
+        });
+
+        it("should throw NOT_FOUND if repository returns null", async () => {
+            vi.mocked(customerRepository.update).mockResolvedValue(null);
 
             await expect(customerService.updateCustomer(validInput))
                 .rejects.toMatchObject({
@@ -103,22 +117,22 @@ describe("Customer Service (Unit)", () => {
         });
 
         it("should update customer successfully", async () => {
-            const mockUserRecord = {
+            const mockCustomerRecord = {
                 id: validInput.customerId,
                 firstName: "John",
                 lastName: "Doe",
                 phoneNumber: "21988887777",
                 email: validInput.email,
                 createdAt: new Date(),
-                updatedAt: null,
+                updatedAt: new Date(),
             } as CustomerRecord;
 
-            vi.mocked(customerRepository).update.mockResolvedValue(mockUserRecord)
+            vi.mocked(customerRepository.update).mockResolvedValue(mockCustomerRecord);
 
             const result = await customerService.updateCustomer(validInput);
 
-
             expect(customerRepository.update).toHaveBeenCalledWith(validInput);
+            expect(result).toBe(mockCustomerRecord);
         });
     });
 

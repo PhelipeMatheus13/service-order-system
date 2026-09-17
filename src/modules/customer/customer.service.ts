@@ -5,17 +5,32 @@ import {
     ListCustomersInput,
 } from "./customer.types.js";
 import { alreadyExists, notFound } from "../../shared/errors/errors.js";
+import { isUniqueConstraintOn } from "../../shared/utils/prisma-error.js";
 import customerRepository from "./customer.repository.js";
 
 const createCustomer = async (input: CreateCustomerInput): Promise<CustomerRecord> => {
-    const exists = await customerRepository.existsByEmail(input.email);
-    if (exists) throw alreadyExists({ message: "Email already in use" });
-
-    return customerRepository.create(input);
+    try {
+        return await customerRepository.create(input);
+    } catch (error) {
+        if (isUniqueConstraintOn(error, "email")) {
+            throw alreadyExists({ message: "Email already in use" });
+        }
+        throw error;
+    }
 };
 
 const updateCustomer = async (input: UpdateCustomerInput): Promise<CustomerRecord> => {
-    const customer = await customerRepository.update(input);
+    let customer: CustomerRecord | null;
+
+    try {
+        customer = await customerRepository.update(input);
+    } catch (error) {
+        if (isUniqueConstraintOn(error, "email")) {
+            throw alreadyExists({ message: "Email already in use" });
+        }
+
+        throw error;
+    }
 
     if (!customer) {
         throw notFound({ message: "Customer not found" });

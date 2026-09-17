@@ -65,6 +65,7 @@ registry.registerPath({
                 },
             },
         },
+        409: { $ref: "#/components/responses/emailAlreadyExistsError" },
         422: { $ref: "#/components/responses/createCustomerValidationError" },
         500: { $ref: "#/components/responses/internalError" },
     }
@@ -236,6 +237,7 @@ registry.registerPath({
             },
         },
         404: { $ref: "#/components/responses/customerNotFoundError" },
+        409: { $ref: "#/components/responses/emailAlreadyExistsError" },
         422: { $ref: "#/components/responses/updateCustomerValidationError" },
         500: { $ref: "#/components/responses/internalError" },
     }
