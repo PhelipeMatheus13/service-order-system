@@ -1,7 +1,7 @@
-import registry  from "../registry.js";
+import registry from "../registry.js";
 
 // 400
-const missingUserIdError = registry.registerComponent("responses", "MissingUserIdError", {
+const missingUserIdError = registry.registerComponent("responses", "missingUserIdError", {
     description: "Invalid request, missing user id",
     content: {
         "application/json": {
@@ -17,8 +17,24 @@ const missingUserIdError = registry.registerComponent("responses", "MissingUserI
     },
 });
 
+const missingCustomerIdError = registry.registerComponent("responses", "missingCustomerIdError", {
+    description: "Invalid request, missing customer id",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            example: {
+                success: false,
+                error: {
+                    code: "BAD_REQUEST",
+                    message: "Customer ID is required",
+                },
+            },
+        },
+    },
+});
+
 // 404
-const userNotFoundError = registry.registerComponent("responses", "UserNotFoundError", {
+const userNotFoundError = registry.registerComponent("responses", "userNotFoundError", {
     description: "User not found or does not exist",
     content: {
         "application/json": {
@@ -34,17 +50,33 @@ const userNotFoundError = registry.registerComponent("responses", "UserNotFoundE
     },
 });
 
-// 500
-const internalError = registry.registerComponent("responses", "InternalError", {
-    description: "Internal error",
+const customerNotFoundError = registry.registerComponent("responses", "customerNotFoundError", {
+    description: "Customer not found or does not exist",
     content: {
         "application/json": {
             schema: { $ref: "#/components/schemas/Error" },
             example: {
                 success: false,
                 error: {
-                    code: "INTERNAL_ERROR",
-                    message: "Internal server error",
+                    code: "NOT_FOUND",
+                    message: "Customer not found",
+                },
+            },
+        },
+    },
+});
+
+// 409
+const emailAlreadyExistsError = registry.registerComponent("responses", "emailAlreadyExistsError", {
+    description: "Email already in use",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            example: {
+                success: false,
+                error: {
+                    code: "ALREADY_EXISTS",
+                    message: "Email already in use",
                 },
             },
         },
@@ -52,7 +84,7 @@ const internalError = registry.registerComponent("responses", "InternalError", {
 });
 
 // VALIDATION ERRORS (422)
-const registerValidationError = registry.registerComponent("responses", "RegisterValidationError", {
+const registerValidationError = registry.registerComponent("responses", "registerValidationError", {
     description: "Register validation error",
     content: {
         "application/json": {
@@ -154,13 +186,97 @@ const refreshTokenValidationError = registry.registerComponent("responses", "ref
     },
 });
 
+const createCustomerValidationError = registry.registerComponent("responses", "createCustomerValidationError", {
+    description: "Create customer validation error",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/ValidationError" },
+            example: {
+                success: false,
+                error: {
+                    code: "VALIDATION_ERROR",
+                    message: "Validation failed",
+                    details: [
+                        { field: "firstName", message: "First name must be at least 3 characters long" },
+                        { field: "lastName", message: "Last name must be at least 3 characters long" },
+                        { field: "email", message: "Please provide a valid email address" },
+                        { field: "phoneNumber", message: "Please provide a valid phone number" },
+                    ],
+                },
+            },
+        },
+    },
+});
+
+const updateCustomerValidationError = registry.registerComponent("responses", "updateCustomerValidationError", {
+    description: "Update customer validation error",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/ValidationError" },
+            examples: {
+                invalidFields: {
+                    summary: "Invalid fields values",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "VALIDATION_ERROR",
+                            message: "Validation failed",
+                            details: [
+                                { field: "firstName", message: "First name must be at least 3 characters long" },
+                                { field: "lastName", message: "Last name must be at least 3 characters long" },
+                                { field: "email", message: "Please provide a valid email address" },
+                                { field: "phoneNumber", message: "Please provide a valid phone number" },
+                            ],
+                        },
+                    },
+                },
+                noFieldsProvided: {
+                    summary: "No fields provided for update",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "VALIDATION_ERROR",
+                            message: "Validation failed",
+                            details: [
+                                { field: "body", message: "At least one field must be provided for update" },
+                            ],
+                        },
+                    },
+                },
+            },
+        },
+    },
+});
+
+// 500
+const internalError = registry.registerComponent("responses", "internalError", {
+    description: "Internal error",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            example: {
+                success: false,
+                error: {
+                    code: "INTERNAL_ERROR",
+                    message: "Internal server error",
+                },
+            },
+        },
+    },
+});
+
 export {
     missingUserIdError,
+    missingCustomerIdError,
     userNotFoundError,
-    internalError,
+    customerNotFoundError,
+    emailAlreadyExistsError,
     registerValidationError,
     confirmEmailValidationError,
     activateUserValidationError,
     loginValidationError,
     refreshTokenValidationError,
+    createCustomerValidationError,
+    updateCustomerValidationError,
+    internalError,
 };

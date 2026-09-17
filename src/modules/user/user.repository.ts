@@ -11,6 +11,8 @@ import type {
 } from "./user.types.js";
 import { getPrisma } from "../../shared/config/database.js";
 import { Prisma, PrismaClient } from "../../generated/prisma/client.js";
+import { isNotFoundError } from "../../shared/utils/prisma-error.js";
+
 
 
 // Represents either the main Prisma client or a transaction client.
@@ -41,10 +43,7 @@ const deleteById = async (id: string): Promise<boolean> => {
         await prisma.user.delete({ where: { id } });
         return true
     } catch (error) {
-        // if the user does not exist, Prisma will throw a known request error with code P2025
-        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
-            return false;
-        }
+        if (isNotFoundError(error)) return false;
         throw error
     }
 };
@@ -135,13 +134,6 @@ const consumeUserActivationTokenByJti = async (jti: string, tx?: Prisma.Transact
 }
 
 // Reader
-const existsByEmail = async (email: string): Promise<boolean> => {
-    const prisma = getPrisma();
-    const user = await prisma.user.findUnique({ where: { email } });
-
-    return !!user;
-};
-
 const findById = async (id: string): Promise<UserRecord | null> => {
     const prisma = getPrisma();
     return prisma.user.findUnique({ where: { id } });
@@ -236,7 +228,6 @@ export default {
     createUserActivationToken,
     consumeUserActivationTokenByJti,
     // Reader
-    existsByEmail,
     findById,
     findByEmail,
     list,

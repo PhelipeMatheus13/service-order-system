@@ -54,20 +54,9 @@ registry.registerPath({
                 },
             },
         },
-        409: {
-            description: "Email already in use",
-            content: {
-                "application/json": {
-                    schema: errorSchema, // inside RegisterPath → Zod object
-                    example: {
-                        success: false,
-                        error: { code: "ALREADY_EXISTS", message: "Email already in use, please choose another" },
-                    },
-                },
-            },
-        },
-        422: { $ref: "#/components/responses/RegisterValidationError" }, // points to the entire response → $ref string
-        500: { $ref: "#/components/responses/InternalError" },           // points to the entire response → $ref string
+        409: { $ref: "#/components/responses/emailAlreadyExistsError" }, // points to the entire response → $ref string
+        422: { $ref: "#/components/responses/registerValidationError" }, 
+        500: { $ref: "#/components/responses/internalError" },          
     },
 });
 router.post("/register", registerLimiter, checkAccessToken, authorize("ADMIN"), validate(registerSchema), userController.register);
@@ -112,7 +101,7 @@ registry.registerPath({
                 },
             },
         },
-        500: { $ref: "#/components/responses/InternalError" },
+        500: { $ref: "#/components/responses/internalError" },
     },
 });
 router.post("/resend-email-confirmation", resendEmailConfirmationCodeLimiter, validate(resendEmailConfirmationSchema), userController.resendEmailConfirmationCode);
@@ -179,7 +168,7 @@ registry.registerPath({
             },
         },
         422: { $ref: "#/components/responses/confirmEmailValidationError" },
-        500: { $ref: "#/components/responses/InternalError" },
+        500: { $ref: "#/components/responses/internalError" },
     },
 });
 router.post("/confirm-email", confirmEmailLimiter, validate(confirmEmailSchema), userController.confirmEmail);
@@ -234,7 +223,7 @@ registry.registerPath({
             },
         },
         422: { $ref: "#/components/responses/activateUserValidationError" },
-        500: { $ref: "#/components/responses/InternalError" },
+        500: { $ref: "#/components/responses/internalError" },
     },
 });
 router.post("/activate", checkActivationToken, validate(activateUserSchema), userController.activateUser);
@@ -279,7 +268,7 @@ registry.registerPath({
                 },
             },
         },
-        500: { $ref: "#/components/responses/InternalError" },
+        500: { $ref: "#/components/responses/internalError" },
     },
 });
 router.get("/", checkAccessToken, authorize("ADMIN"), userController.listUsers);
@@ -302,7 +291,7 @@ registry.registerPath({
                 },
             },
         },
-        400: { $ref: "#/components/responses/MissingUserIdError" },
+        400: { $ref: "#/components/responses/missingUserIdError" },
         401: {
             description: "Unauthorized access",
             content: {
@@ -328,8 +317,8 @@ registry.registerPath({
                 },
             },
         },
-        404: { $ref: "#/components/responses/UserNotFoundError" },
-        500: { $ref: "#/components/responses/InternalError" },
+        404: { $ref: "#/components/responses/userNotFoundError" },
+        500: { $ref: "#/components/responses/internalError" },
     },
 });
 router.get("/:id", checkAccessToken, userController.getUser);
@@ -369,9 +358,9 @@ registry.registerPath({
                 },
             },
         },
-        400: { $ref: "#/components/responses/MissingUserIdError" },
-        404: { $ref: "#/components/responses/UserNotFoundError" },
-        500: { $ref: "#/components/responses/InternalError" },
+        400: { $ref: "#/components/responses/missingUserIdError" },
+        404: { $ref: "#/components/responses/userNotFoundError" },
+        500: { $ref: "#/components/responses/internalError" },
     },
 });
 router.delete("/:id", checkAccessToken, authorize("ADMIN"), userController.deleteUser);

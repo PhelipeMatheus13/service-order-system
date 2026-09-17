@@ -7,15 +7,12 @@ import type {
     ConfirmEmailInput,
     ActivateUserInput,
 } from "./user.types.js";
+import { sanitizePhoneNumber } from "../../shared/utils/phone.js";
 
 // DTOs are exercised through the controller unit tests.
 // Since controllers are responsible for invoking these mappings,
 // dedicated DTO tests would only duplicate the same assertions.
 
-const sanitizePhoneNumber = (phone: string | null): string | null => {
-    if (!phone) return null;
-    return phone.replace(/\D/g, "");
-};
 
 const registerInputDTO = (body: RegisterRequest): RegisterInput => ({
     firstName: body.firstName,

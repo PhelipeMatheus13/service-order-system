@@ -16,17 +16,20 @@ import { hashPassword } from "../../shared/services/hash.js";
 import { generateActivationToken } from "../../shared/services/jwt.js";
 import { hashToken } from "../../shared/services/token-hash.js";
 import generateSecure6DigitCode from "../../shared/utils/secure-code.js";
+import { isUniqueConstraintOn } from "../../shared/utils/prisma-error.js";
 // local modules
 import { resendConfirmationCode } from "./user.emails.js";
 import userRepository from "./user.repository.js";
 
 const createUser = async (input: RegisterInput): Promise<UserRecord> => {
-    const exists = await userRepository.existsByEmail(input.email);
-    if (exists) throw alreadyExists({ message: "Email already in use, please choose another" });
-
-    const userCreated = userRepository.create(input);
-
-    return userCreated;
+     try {
+        return await userRepository.create(input);
+    } catch (error) {
+        if (isUniqueConstraintOn(error, "email")) {
+            throw alreadyExists({ message: "Email already in use" });
+        }
+        throw error;
+    }
 };
 
 const getUserById = async (id: string): Promise<UserRecord> => {
