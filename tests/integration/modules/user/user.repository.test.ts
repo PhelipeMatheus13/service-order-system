@@ -491,27 +491,6 @@ describe("User Repository (Integration)", () => {
     });
 
     describe("Reader repository", () => {
-        describe("existsByEmail", () => {
-            it("should return true if a user with the given email exists", async () => {
-                const userData = {
-                    firstName: "Jhon",
-                    lastName: "Doe",
-                    email: "jhon@example.com",
-                    role: "ATTENDANT",
-                } as RegisterInput;
-
-                await prisma.user.create({ data: userData });
-
-                const exists = await userRepository.existsByEmail("jhon@example.com");
-                expect(exists).toBe(true);
-            });
-
-            it("should return false if a user with the given email does not exist", async () => {
-                const exists = await userRepository.existsByEmail("nonexistent@example.com");
-                expect(exists).toBe(false);
-            });
-        });
-
         describe("findById", () => {
             it("should return the user if a user with the given ID exists", async () => {
                 const userCreated = await prisma.user.create({

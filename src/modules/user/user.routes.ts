@@ -54,20 +54,9 @@ registry.registerPath({
                 },
             },
         },
-        409: {
-            description: "Email already in use",
-            content: {
-                "application/json": {
-                    schema: errorSchema, // inside RegisterPath → Zod object
-                    example: {
-                        success: false,
-                        error: { code: "ALREADY_EXISTS", message: "Email already in use, please choose another" },
-                    },
-                },
-            },
-        },
-        422: { $ref: "#/components/responses/registerValidationError" }, // points to the entire response → $ref string
-        500: { $ref: "#/components/responses/internalError" },           // points to the entire response → $ref string
+        409: { $ref: "#/components/responses/emailAlreadyExistsError" }, // points to the entire response → $ref string
+        422: { $ref: "#/components/responses/registerValidationError" }, 
+        500: { $ref: "#/components/responses/internalError" },          
     },
 });
 router.post("/register", registerLimiter, checkAccessToken, authorize("ADMIN"), validate(registerSchema), userController.register);

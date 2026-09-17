@@ -134,13 +134,6 @@ const consumeUserActivationTokenByJti = async (jti: string, tx?: Prisma.Transact
 }
 
 // Reader
-const existsByEmail = async (email: string): Promise<boolean> => {
-    const prisma = getPrisma();
-    const user = await prisma.user.findUnique({ where: { email } });
-
-    return !!user;
-};
-
 const findById = async (id: string): Promise<UserRecord | null> => {
     const prisma = getPrisma();
     return prisma.user.findUnique({ where: { id } });
@@ -235,7 +228,6 @@ export default {
     createUserActivationToken,
     consumeUserActivationTokenByJti,
     // Reader
-    existsByEmail,
     findById,
     findByEmail,
     list,

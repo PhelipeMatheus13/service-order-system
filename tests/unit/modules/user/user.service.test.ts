@@ -16,6 +16,8 @@ import { hashPassword } from "../../../../src/shared/services/hash.js";
 import { getPrisma } from "../../../../src/shared/config/database.js";
 import { resendConfirmationCode } from "../../../../src/modules/user/user.emails.js";
 import { hashToken } from "../../../../src/shared/services/token-hash.js";
+import { isUniqueConstraintOn } from "../../../../src/shared/utils/prisma-error.js";
+
 
 vi.mock("../../../../src/shared/config/logger.js", () => ({
     default: {
@@ -28,6 +30,7 @@ vi.mock("../../../../src/shared/services/hash.js");
 vi.mock("../../../../src/shared/config/database.js");
 vi.mock("../../../../src/modules/user/user.emails.js");
 vi.mock("../../../../src/shared/services/token-hash.js");
+vi.mock("../../../../src/shared/utils/prisma-error.js");
 
 describe("User Service (Unit)", () => {
     beforeEach(() => {
@@ -40,39 +43,34 @@ describe("User Service (Unit)", () => {
             lastName: "Doe",
             phoneNumber: null,
             email: "johndoe@hotmail.com",
-            role: "ATTENDANT"
+            role: "ATTENDANT",
         };
 
-
-        it("should throw if fail in email check ", async () => {
-            vi.mocked(userRepository).existsByEmail.mockRejectedValue(new Error("fake error"));
-
-            await expect(userService.createUser(registerData))
-                .rejects.toThrow("fake error");
-        });
-
-        it("should throw if email already exists ", async () => {
-            vi.mocked(userRepository).existsByEmail.mockResolvedValue(true);
+        it("should throw ALREADY_EXISTS if email is a unique constraint violation", async () => {
+            const dbError = new Error("Unique constraint failed");
+            vi.mocked(userRepository.create).mockRejectedValue(dbError);
+            vi.mocked(isUniqueConstraintOn).mockReturnValue(true);
 
             await expect(userService.createUser(registerData))
                 .rejects.toMatchObject({
                     statusCode: 409,
                     code: "ALREADY_EXISTS",
-                    message: "Email already in use, please choose another",
+                    message: "Email already in use",
                 });
+
+            expect(isUniqueConstraintOn).toHaveBeenCalledWith(dbError, "email");
         });
 
-        it("should throw if fail in userRepository.create", async () => {
-            vi.mocked(userRepository).existsByEmail.mockResolvedValue(false);
-            vi.mocked(userRepository).create.mockRejectedValue(new Error("fake error"));
+        it("should propagate error if it is not a unique constraint violation", async () => {
+            const error = new Error("fake error");
+            vi.mocked(userRepository.create).mockRejectedValue(error);
+            vi.mocked(isUniqueConstraintOn).mockReturnValue(false);
 
             await expect(userService.createUser(registerData))
-                .rejects.toThrow("fake error");
+                .rejects.toThrow(error);
         });
 
         it("should create user successfully", async () => {
-            vi.mocked(userRepository).existsByEmail.mockResolvedValue(false);
-
             const mockUserRecord = {
                 id: "uuid-123",
                 firstName: registerData.firstName,
@@ -86,19 +84,11 @@ describe("User Service (Unit)", () => {
                 updatedAt: null,
             } as UserRecord;
 
-            vi.mocked(userRepository).create.mockResolvedValue(mockUserRecord);
+            vi.mocked(userRepository.create).mockResolvedValue(mockUserRecord);
 
             const result = await userService.createUser(registerData);
 
-            expect(userRepository.existsByEmail).toHaveBeenCalledWith(registerData.email);
-            expect(userRepository.create).toHaveBeenCalledWith({
-                firstName: registerData.firstName,
-                lastName: registerData.lastName,
-                phoneNumber: registerData.phoneNumber,
-                email: registerData.email,
-                role: registerData.role,
-            });
-
+            expect(userRepository.create).toHaveBeenCalledWith(registerData);
             expect(result).toBe(mockUserRecord);
         });
     });

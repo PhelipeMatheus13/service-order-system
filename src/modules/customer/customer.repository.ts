@@ -61,13 +61,6 @@ const list = async (input: ListCustomersInput): Promise<CustomerRecord[]> => {
     });
 };
 
-const existsByEmail = async (email: string): Promise<boolean> => {
-    const prisma = getPrisma();
-    const customer = await prisma.customer.findUnique({ where: { email } });
-
-    return !!customer;
-};
-
 export default {
     // Writer
     create,
@@ -75,5 +68,4 @@ export default {
     // Reader
     findById,
     list,
-    existsByEmail
 };

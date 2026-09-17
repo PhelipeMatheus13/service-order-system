@@ -215,26 +215,5 @@ describe("Customer Repository (Integration)", () => {
                 expect(result).toHaveLength(1);
             });
         });
-
-        describe("existsByEmail", () => {
-            it("should return true if a user with the given email exists", async () => {
-                const customerData = {
-                    firstName: "Jhon",
-                    lastName: "Doe",
-                    email: "jhon@example.com",
-                    phoneNumber: "5521995437105",
-                } as CustomerRecord;
-
-                await prisma.customer.create({ data: customerData });
-
-                const exists = await customerRepository.existsByEmail("jhon@example.com");
-                expect(exists).toBe(true);
-            });
-
-            it("should return false if a user with the given email does not exist", async () => {
-                const exists = await customerRepository.existsByEmail("nonexistent@example.com");
-                expect(exists).toBe(false);
-            });
-        });
     });
 });
