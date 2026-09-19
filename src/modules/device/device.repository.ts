@@ -1,0 +1,24 @@
+import { DeviceRecord, CreateDeviceInput } from "./device.types.js";
+import { getPrisma } from "../../shared/config/database.js";
+
+// Writer
+const create = async (input: CreateDeviceInput): Promise<DeviceRecord> => {
+    const prisma = getPrisma();
+    const device = await prisma.device.create({
+        data: {
+            customerId: input.customerId,
+            type: input.type,
+            brand: input.brand,
+            model: input.model,
+            serialNumber: input.serialNumber,
+            imei: input.imei,
+            color: input.color,
+        },
+    });
+
+    return device;
+};
+
+export default { 
+    create,
+};

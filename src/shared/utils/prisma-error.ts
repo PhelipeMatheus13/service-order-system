@@ -10,6 +10,7 @@ export type PrismaDriverAdapterMeta = {
         cause?: {
             constraint?: {
                 fields?: string[];
+                index?: string; 
             };
         };
     };
@@ -35,6 +36,25 @@ const isUniqueConstraintOn = (error: unknown, field: string): boolean => {
 };
 
 /**
+ * Checks whether a Prisma error is a foreign key violation (P2003)
+ * involving the given field. The field is matched against the constraint
+ * index name (e.g. `devices_customer_id_fkey` contains `customer_id`).
+ * @param error - The error to check.
+ * @param field - The field name (snake_case, as declared in the database) to check for foreign key violation.
+ * @returns True if the error is a foreign key violation on the given field, false otherwise.
+ */
+const isForeignKeyConstraintOn = (error: unknown, field: string): boolean => {
+    if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
+    if (error.code !== "P2003") return false;
+
+    // Prisma 7+ with driver adapter: the field name is part of the constraint index
+    const meta = error.meta as PrismaDriverAdapterMeta | undefined;
+    const index = meta?.driverAdapterError?.cause?.constraint?.index;
+
+    return typeof index === "string" && index.includes(field);
+};
+
+/**
  * Checks whether a Prisma error is a "record not found" error (P2025).
  * Thrown by `update`, `delete`, and `findUniqueOrThrow` when the target
  * record does not exist.
@@ -48,5 +68,6 @@ const isNotFoundError = (error: unknown): boolean => {
 
 export {
     isUniqueConstraintOn,
+    isForeignKeyConstraintOn,
     isNotFoundError,
-}
+};
