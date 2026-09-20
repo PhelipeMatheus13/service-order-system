@@ -3,7 +3,7 @@ import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
 // (Types)
 import type {
     CreateDeviceInput,
-    DeviceRecord,
+    UpdateDeviceInput,
 } from "../../../../src/modules/device/device.types.js";
 // (shared / infra)
 import { PrismaClient } from "../../../../src/generated/prisma/client.js";
@@ -216,6 +216,99 @@ describe("Device Repository (Integration)", () => {
 
                 expect(result).toHaveLength(1);
             });
+        });
+    });
+
+    describe("update", () => {
+        let deviceCreatedId: string;
+
+        beforeEach(async () => {
+            const customerCreated = await prisma.customer.create({
+                data: {
+                    firstName: "John",
+                    lastName: "Doe",
+                    email: "john@example.com",
+                    phoneNumber: "5521995437105",
+                },
+            });
+
+            const deviceCreated = await prisma.device.create({
+                data: {
+                    customerId: customerCreated.id,
+                    type: "SMARTPHONE",
+                    brand: "Samsung",
+                    model: "Galaxy S23",
+                    serialNumber: "SN-123456",
+                    imei: "123456789012345",
+                    color: "Black",
+                },
+            });
+
+            deviceCreatedId = deviceCreated.id;
+        });
+
+        it("should update all provided fields", async () => {
+            const updateData: UpdateDeviceInput = {
+                deviceId: deviceCreatedId,
+                type: "LAPTOP",
+                brand: "Dell",
+                model: "XPS 15",
+                serialNumber: "SN-654321",
+                imei: "543210987654321",
+                color: "Silver",
+            };
+
+            const deviceUpdated = await deviceRepository.update(updateData);
+
+            expect(deviceUpdated).toBeTruthy();
+            expect(deviceUpdated?.id).toBe(deviceCreatedId);
+            expect(deviceUpdated?.type).toBe(updateData.type);
+            expect(deviceUpdated?.brand).toBe(updateData.brand);
+            expect(deviceUpdated?.model).toBe(updateData.model);
+            expect(deviceUpdated?.serialNumber).toBe(updateData.serialNumber);
+            expect(deviceUpdated?.imei).toBe(updateData.imei);
+            expect(deviceUpdated?.color).toBe(updateData.color);
+            expect(deviceUpdated?.updatedAt).toBeTruthy();
+        });
+
+        it("should update only the provided fields", async () => {
+            const updateData: UpdateDeviceInput = {
+                deviceId: deviceCreatedId,
+                type: "LAPTOP",
+                brand: null,
+                model: null,
+                serialNumber: null,
+                imei: null,
+                color: null,
+            };
+
+            const deviceUpdated = await deviceRepository.update(updateData);
+
+            expect(deviceUpdated).toBeTruthy();
+            expect(deviceUpdated?.type).toBe("LAPTOP");
+            expect(deviceUpdated?.brand).toBe("Samsung");
+            expect(deviceUpdated?.model).toBe("Galaxy S23");
+            expect(deviceUpdated?.serialNumber).toBe("SN-123456");
+            expect(deviceUpdated?.imei).toBe("123456789012345");
+            expect(deviceUpdated?.color).toBe("Black");
+        });
+
+        it("should return null when the device does not exist", async () => {
+            const nonExistentId = "0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa";
+
+            const updateData: UpdateDeviceInput = {
+                deviceId: nonExistentId,
+                type: "LAPTOP",
+                brand: null,
+                model: null,
+                serialNumber: null,
+                imei: null,
+                color: null,
+            };
+
+            const deviceUpdated = await deviceRepository.update(updateData);
+
+            expect(deviceUpdated).toBeNull();
         });
     });
 });

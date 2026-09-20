@@ -1,5 +1,5 @@
-import { createDeviceRequest } from "./device.schema.js";
-import { CreateDeviceInput } from "./device.types.js";
+import { createDeviceRequest, updateDeviceRequest } from "./device.schema.js";
+import { CreateDeviceInput, UpdateDeviceInput } from "./device.types.js";
 
 const createDeviceDTO = (body: createDeviceRequest): CreateDeviceInput => ({
     customerId: body.customerId,
@@ -11,4 +11,14 @@ const createDeviceDTO = (body: createDeviceRequest): CreateDeviceInput => ({
     imei: body.imei,
 });
 
-export default { createDeviceDTO };
+const updateDeviceDTO = (body: updateDeviceRequest, id: string): UpdateDeviceInput => ({
+    deviceId: id,
+    type: body.type,
+    brand: body.brand,
+    model: body.model,
+    color: body.color,
+    serialNumber: body.serialNumber,
+    imei: body.imei,
+});
+
+export default { createDeviceDTO, updateDeviceDTO };

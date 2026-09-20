@@ -18,9 +18,19 @@ interface ListDevicesInput {
     options: ListDevicesOption;
 }
 
+interface UpdateDeviceInput {
+    deviceId: string;
+    type: string | null;
+    brand: string | null;
+    model: string | null;
+    color: string | null;
+    serialNumber: string | null;
+    imei: string | null;
+}
 
 export {
     Device as DeviceRecord,
     CreateDeviceInput,
     ListDevicesInput,
+    UpdateDeviceInput,
 };

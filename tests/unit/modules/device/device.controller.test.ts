@@ -173,4 +173,66 @@ describe("Device Controller (Unit)", () => {
             expect(next).not.toHaveBeenCalled();
         });
     });
+
+    describe("updateDevice", () => {
+        it("should return 200 on successful update", async () => {
+            req.params.id = "uuid-123";
+            req.body = {
+                type: "LAPTOP",
+                brand: null,
+                model: null,
+                serialNumber: null,
+                imei: null,
+                color: null,
+            };
+
+            const mockDeviceRecord = {
+                id: "uuid-123",
+                customerId: "uuid-customer-123",
+                type: "LAPTOP",
+                brand: "Samsung",
+                model: "Galaxy S23",
+                serialNumber: "SN-123456",
+                imei: "123456789012345",
+                color: "Black",
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            } as DeviceRecord;
+
+            vi.mocked(deviceService).updateDevice.mockResolvedValue(mockDeviceRecord);
+
+            await deviceController.updateDevice(req, res, next);
+
+            expect(deviceService.updateDevice).toHaveBeenCalledWith({
+                deviceId: "uuid-123",
+                type: "LAPTOP",
+                brand: null,
+                model: null,
+                serialNumber: null,
+                imei: null,
+                color: null,
+            });
+
+            expect(res.status).toHaveBeenCalledWith(200);
+            expect(res.json).toHaveBeenCalledWith({
+                success: true,
+                data: mockDeviceRecord,
+                message: "Device updated successfully",
+            });
+            expect(next).not.toHaveBeenCalled();
+        });
+
+        it("should call next with badRequest error if id is missing", async () => {
+            req.params = {};
+
+            await deviceController.updateDevice(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(expect.objectContaining({
+                statusCode: 400,
+                code: "BAD_REQUEST",
+                message: "Device ID is required",
+            }));
+            expect(res.status).not.toHaveBeenCalled();
+        });
+    });
 });

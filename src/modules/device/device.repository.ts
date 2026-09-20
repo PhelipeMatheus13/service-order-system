@@ -1,5 +1,11 @@
-import { DeviceRecord, CreateDeviceInput, ListDevicesInput } from "./device.types.js";
+import { 
+    DeviceRecord, 
+    CreateDeviceInput, 
+    ListDevicesInput, 
+    UpdateDeviceInput 
+} from "./device.types.js";
 import { getPrisma } from "../../shared/config/database.js";
+import { isNotFoundError } from "../../shared/utils/prisma-error.js";
 
 // Writer
 const create = async (input: CreateDeviceInput): Promise<DeviceRecord> => {
@@ -17,6 +23,28 @@ const create = async (input: CreateDeviceInput): Promise<DeviceRecord> => {
     });
 
     return device;
+};
+
+const update = async (input: UpdateDeviceInput): Promise<DeviceRecord | null> => {
+    const prisma = getPrisma();
+
+    try {
+        return await prisma.device.update({
+            where: { id: input.deviceId },
+            data: {
+                ...(input.type !== null && { type: input.type }),
+                ...(input.brand !== null && { brand: input.brand }),
+                ...(input.model !== null && { model: input.model }),
+                ...(input.color !== null && { color: input.color }),
+                ...(input.imei !== null && { imei: input.imei }),
+                ...(input.serialNumber !== null && { serialNumber: input.serialNumber }),
+                updatedAt: new Date(),
+            },
+        });
+    } catch (error) {
+        if (isNotFoundError(error)) return null;
+        throw error;
+    }
 };
 
 // Reader
@@ -41,6 +69,7 @@ const list = async (input: ListDevicesInput): Promise<DeviceRecord[]> => {
 export default {
     // Writer
     create,
+    update,
     // Reader
     findById,
     list,

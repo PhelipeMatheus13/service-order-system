@@ -70,11 +70,83 @@ const createDeviceSchema = registry.register(
 
 type createDeviceRequest = z.infer<typeof createDeviceSchema>;
 
+const updateDeviceSchema = registry.register(
+    "UpdateDeviceSchema",
+    z.object({
+        type: z.preprocess(
+            emptyToNull,
+            z.union([
+                z.null(),
+                z.string()
+                    .max(100, "Type must contain at most 100 characters"),
+            ])
+        ).openapi({ example: "Smartphone" }),
+
+        brand: z.preprocess(
+            emptyToNull,
+            z.union([
+                z.null(),
+                z.string()
+                    .max(100, "Brand must contain at most 100 characters"),
+            ])
+        ).openapi({ example: "Apple" }),
+
+        model: z.preprocess(
+            emptyToNull,
+            z.union([
+                z.null(),
+                z.string()
+                    .max(255, "Model must contain at most 255 characters"),
+            ])
+        ).openapi({ example: "iPhone 14" }),
+
+        color: z.preprocess(
+            emptyToNull,
+            z.union([
+                z.null(),
+                z.string()
+                    .max(100, "Color must contain at most 100 characters"),
+            ])
+        ).openapi({ example: "Black" }),
+
+        serialNumber: z.preprocess(
+            emptyToNull,
+            z.union([
+                z.null(),
+                z.string().max(255, "Serial number must contain at most 255 characters"),
+            ])
+        ).openapi({ example: "SN123456789" }),
+
+        imei: z.preprocess(
+            emptyToNull,
+            z.union([
+                z.null(),
+                z.string().regex(/^\d{15}$/, "IMEI must contain exactly 15 digits"),
+            ])
+        ).openapi({ type: "string", example: "356938035643809" }),
+    })
+    .refine(
+        (data) =>
+            data.type !== null ||
+            data.brand !== null ||
+            data.model !== null ||
+            data.color !== null ||
+            data.serialNumber !== null ||
+            data.imei !== null,
+        { path: ["body"], message: "At least one field must be provided for update" }
+    )
+);
+
+type updateDeviceRequest = z.infer<typeof updateDeviceSchema>;
+
+
 export {
     deviceSchema,
     createDeviceSchema,
+    updateDeviceSchema,
 };
 
 export type {
     createDeviceRequest,
+    updateDeviceRequest,
 };

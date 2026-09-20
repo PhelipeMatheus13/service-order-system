@@ -325,9 +325,33 @@ const createDeviceValidationError = registry.registerComponent("responses", "cre
                     details: [
                         { field: "customerId", message: "Customer ID must be a valid UUID" },
                         { field: "type", message: "Type is required" },
-                        { field: "type", message: "Brand is required" },
+                        { field: "brand", message: "Brand is required" },
                         { field: "model", message: "Model is required" },
                         { field: "color", message: "Color is required" },
+                        { field: "serialNumber", message: "Serial number must contain at most 255 characters" },
+                        { field: "imei", message: "IMEI must contain exactly 15 digits" },
+                    ],
+                },
+            },
+        },
+    },
+});
+
+const updateDeviceValidationError = registry.registerComponent("responses", "updateDeviceValidationError", {
+    description: "Update device validation error",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/ValidationError" },
+            example: {
+                success: false,
+                error: {
+                    code: "VALIDATION_ERROR",
+                    message: "Validation failed",
+                    details: [
+                        { field: "type", message: "Type must contain at most 100 characters" },
+                        { field: "brand", message: "Brand must contain at most 100 characters" },
+                        { field: "model", message: "Model must contain at most 255 characters" },
+                        { field: "color", message: "Color must contain at most 100 characters" },
                         { field: "serialNumber", message: "Serial number must contain at most 255 characters" },
                         { field: "imei", message: "IMEI must contain exactly 15 digits" },
                     ],
@@ -371,5 +395,6 @@ export {
     createCustomerValidationError,
     updateCustomerValidationError,
     createDeviceValidationError,
+    updateDeviceValidationError,
     internalError,
 };

@@ -164,4 +164,49 @@ describe("Device Routes (Integration)", () => {
             expect(res.body.data[0].updatedAt).toBeNull();
         });
     });
+
+    describe("PATCH /devices/:id", () => {
+        let deviceId: string;
+
+        beforeEach(async () => {
+            const device = await prisma.device.create({
+                data: {
+                    customerId: customerId,
+                    type: "SMARTPHONE",
+                    brand: "Samsung",
+                    model: "Galaxy S23",
+                    serialNumber: "SN-123456",
+                    imei: "123456789012345",
+                    color: "Black",
+                },
+                select: { id: true },
+            });
+
+            deviceId = device.id;
+        });
+
+        it("should update the device successfully", async () => {
+            const res = await request(app)
+                .patch(`/devices/${deviceId}`)
+                .set("Authorization", `Bearer ${accessToken}`)
+                .send({
+                    type: "LAPTOP",
+                    color: "Silver",
+                });
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(res.body.message).toBe("Device updated successfully");
+
+            const updated = await prisma.device.findUnique({
+                where: { id: deviceId },
+            });
+
+            expect(updated?.type).toBe("LAPTOP");
+            expect(updated?.color).toBe("Silver");
+            expect(updated?.brand).toBe("Samsung");
+            expect(updated?.model).toBe("Galaxy S23");
+            expect(updated?.updatedAt).toBeTruthy();
+        });
+    });
 });

@@ -5,6 +5,7 @@ import {
     CreateDeviceInput,
     DeviceRecord,
     ListDevicesInput,
+    UpdateDeviceInput,
 } from "../../../../src/modules/device/device.types.js";
 // (shared)
 import { isUniqueConstraintOn, isForeignKeyConstraintOn } from "../../../../src/shared/utils/prisma-error.js";
@@ -195,6 +196,94 @@ describe("Device Service (Unit)", () => {
 
             expect(deviceRepository.list).toHaveBeenCalledWith(input);
             expect(result).toEqual(mockDevices);
+        });
+    });
+
+    describe("updateDevice", () => {
+        const validInput: UpdateDeviceInput = {
+            deviceId: "uuid-123",
+            type: "LAPTOP",
+            brand: null,
+            model: null,
+            serialNumber: null,
+            imei: null,
+            color: null,
+        };
+
+        it("should throw ALREADY_EXISTS if serial number is a unique constraint violation", async () => {
+            const dbError = new Error("Unique constraint failed");
+            vi.mocked(deviceRepository.update).mockRejectedValue(dbError);
+            vi.mocked(isUniqueConstraintOn).mockImplementation(
+                (_error, field) => field === "serial_number",
+            );
+
+            await expect(deviceService.updateDevice(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 409,
+                    code: "ALREADY_EXISTS",
+                    message: "Device with this serial number already exists",
+                });
+
+            expect(isUniqueConstraintOn).toHaveBeenCalledWith(dbError, "serial_number");
+        });
+
+        it("should throw ALREADY_EXISTS if IMEI is a unique constraint violation", async () => {
+            const dbError = new Error("Unique constraint failed");
+            vi.mocked(deviceRepository.update).mockRejectedValue(dbError);
+            vi.mocked(isUniqueConstraintOn).mockImplementation(
+                (_error, field) => field === "imei",
+            );
+
+            await expect(deviceService.updateDevice(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 409,
+                    code: "ALREADY_EXISTS",
+                    message: "Device with this IMEI already exists",
+                });
+
+            expect(isUniqueConstraintOn).toHaveBeenCalledWith(dbError, "imei");
+        });
+
+        it("should propagate error if it is not a unique constraint violation", async () => {
+            const error = new Error("fake error");
+            vi.mocked(deviceRepository.update).mockRejectedValue(error);
+            vi.mocked(isUniqueConstraintOn).mockReturnValue(false);
+
+            await expect(deviceService.updateDevice(validInput))
+                .rejects.toThrow(error);
+        });
+
+        it("should throw NOT_FOUND if repository returns null", async () => {
+            vi.mocked(deviceRepository.update).mockResolvedValue(null);
+
+            await expect(deviceService.updateDevice(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 404,
+                    code: "NOT_FOUND",
+                    message: "Device not found",
+                });
+        });
+
+        it("should update device successfully", async () => {
+            const mockDeviceRecord = {
+                id: validInput.deviceId,
+                customerId: "uuid-customer-123",
+                type: validInput.type,
+                brand: "Samsung",
+                model: "Galaxy S23",
+                serialNumber: "SN-123456",
+                imei: "123456789012345",
+                color: "Black",
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            } as DeviceRecord;
+
+            vi.mocked(deviceRepository.update).mockResolvedValue(mockDeviceRecord);
+
+            const result = await deviceService.updateDevice(validInput);
+
+            expect(deviceRepository.update).toHaveBeenCalledWith(validInput);
+            expect(result).toBe(mockDeviceRecord);
         });
     });
 });

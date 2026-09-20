@@ -1,4 +1,9 @@
-import { DeviceRecord, CreateDeviceInput, ListDevicesInput } from "./device.types.js";
+import { 
+    DeviceRecord, 
+    CreateDeviceInput, 
+    ListDevicesInput, 
+    UpdateDeviceInput 
+} from "./device.types.js";
 import { notFound, alreadyExists } from "../../shared/errors/errors.js";
 import { isForeignKeyConstraintOn,isUniqueConstraintOn } from "../../shared/utils/prisma-error.js";
 import deviceRepository from "./device.repository.js";
@@ -32,8 +37,34 @@ const listDevices = async (input: ListDevicesInput): Promise<DeviceRecord[]> => 
     return deviceRepository.list(input);
 };
 
+const updateDevice = async (input: UpdateDeviceInput): Promise<DeviceRecord> => {
+    let device: DeviceRecord | null;
+
+    try {
+        device = await deviceRepository.update(input);
+    } catch (error) {
+        if (isUniqueConstraintOn(error, "serial_number")) {
+            throw alreadyExists({ message: "Device with this serial number already exists" });
+        }
+
+        if (isUniqueConstraintOn(error, "imei")) {
+            throw alreadyExists({ message: "Device with this IMEI already exists" });
+        }
+
+        throw error;
+    }
+
+    if (!device) {
+        throw notFound({ message: "Device not found" });
+    }
+
+    return device;
+};
+
+
 export default {
     createDevice,
     getDeviceById,
     listDevices,
+    updateDevice,
 };

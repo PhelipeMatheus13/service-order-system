@@ -41,8 +41,23 @@ const listDevices = asyncHandler(async (req, res) => {
     });
 });
 
+const updateDevice = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (!id) throw badRequest({ message: "Device ID is required" });
+
+    const input = deviceDTO.updateDeviceDTO(req.body, String(id));
+
+    const device = await deviceService.updateDevice(input);
+    res.status(200).json({
+        success: true,
+        data: device, 
+        message: "Device updated successfully",
+    });
+});
+
 export default {
     createDevice,
     getDevice,
     listDevices,
+    updateDevice,
 };
