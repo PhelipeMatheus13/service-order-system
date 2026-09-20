@@ -22,6 +22,13 @@ const createDevice = async (input: CreateDeviceInput): Promise<DeviceRecord> => 
     }
 };
 
+const getDeviceById = async (id: string): Promise<DeviceRecord> => {
+    const device = await deviceRepository.findById(id);
+    if (!device) throw notFound({ message: "Device not found" });
+    return device;
+};
+
 export default {
     createDevice,
+    getDeviceById,
 };

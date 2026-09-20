@@ -33,6 +33,22 @@ const missingCustomerIdError = registry.registerComponent("responses", "missingC
     },
 });
 
+const missingDeviceIdError = registry.registerComponent("responses", "missingDeviceIdError", {
+    description: "Invalid request, missing device id",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            example: {
+                success: false,
+                error: {
+                    code: "BAD_REQUEST",
+                    message: "Device ID is required",
+                },
+            },
+        },
+    },
+});
+
 // 404
 const userNotFoundError = registry.registerComponent("responses", "userNotFoundError", {
     description: "User not found or does not exist",
@@ -60,6 +76,22 @@ const customerNotFoundError = registry.registerComponent("responses", "customerN
                 error: {
                     code: "NOT_FOUND",
                     message: "Customer not found",
+                },
+            },
+        },
+    },
+});
+
+const deviceNotFoundError = registry.registerComponent("responses", "deviceNotFoundError", {
+    description: "Device not found or does not exist",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            example: {
+                success: false,
+                error: {
+                    code: "NOT_FOUND",
+                    message: "Device not found",
                 },
             },
         },
@@ -325,8 +357,10 @@ const internalError = registry.registerComponent("responses", "internalError", {
 export {
     missingUserIdError,
     missingCustomerIdError,
+    missingDeviceIdError,
     userNotFoundError,
     customerNotFoundError,
+    deviceNotFoundError,
     emailAlreadyExistsError,
     deviceUniqueConstraintError,
     registerValidationError,

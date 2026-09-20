@@ -19,6 +19,13 @@ const create = async (input: CreateDeviceInput): Promise<DeviceRecord> => {
     return device;
 };
 
+// Reader
+const findById = async (id: string): Promise<DeviceRecord | null> => {
+    const prisma = getPrisma();
+    return prisma.device.findUnique({ where: { id } });
+};
+
 export default { 
     create,
+    findById,
 };

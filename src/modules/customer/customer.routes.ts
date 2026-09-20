@@ -109,21 +109,6 @@ registry.registerPath({
                 },
             },
         },
-        403: {
-            description: "Forbidden, user does not have the required role",
-            content: {
-                "application/json": {
-                    schema: errorSchema,
-                    example: {
-                        success: false,
-                        error: {
-                            code: "FORBIDDEN",
-                            message: "Access denied",
-                        },
-                    },
-                },
-            },
-        },
         404: { $ref: "#/components/responses/customerNotFoundError" },
         500: { $ref: "#/components/responses/internalError" },
     }
@@ -157,21 +142,6 @@ registry.registerPath({
                         missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
                         invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
                         accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
-                    },
-                },
-            },
-        },
-        403: {
-            description: "Forbidden, user does not have the required role",
-            content: {
-                "application/json": {
-                    schema: errorSchema,
-                    example: {
-                        success: false,
-                        error: {
-                            code: "FORBIDDEN",
-                            message: "Access denied",
-                        },
                     },
                 },
             },

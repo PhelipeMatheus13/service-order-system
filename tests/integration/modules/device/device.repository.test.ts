@@ -81,4 +81,56 @@ describe("Device Repository (Integration)", () => {
             });
         });
     });
+
+    describe("Reader repository", () => {
+        describe("findById", () => {
+            let deviceCreatedId: string;
+
+            beforeEach(async () => {
+                const customerCreated = await prisma.customer.create({
+                    data: {
+                        firstName: "John",
+                        lastName: "Doe",
+                        email: "john@example.com",
+                        phoneNumber: "5521995437105",
+                    },
+                });
+
+                const deviceCreated = await prisma.device.create({
+                    data: {
+                        customerId: customerCreated.id,
+                        type: "SMARTPHONE",
+                        brand: "Samsung",
+                        model: "Galaxy S23",
+                        serialNumber: "SN-123456",
+                        imei: "123456789012345",
+                        color: "Black",
+                    },
+                });
+
+                deviceCreatedId = deviceCreated.id;
+            });
+
+            it("should return the device if a device with the given ID exists", async () => {
+                const device = await deviceRepository.findById(deviceCreatedId);
+
+                expect(device).toBeTruthy();
+                expect(device?.id).toBe(deviceCreatedId);
+                expect(device?.type).toBe("SMARTPHONE");
+                expect(device?.brand).toBe("Samsung");
+                expect(device?.model).toBe("Galaxy S23");
+                expect(device?.serialNumber).toBe("SN-123456");
+                expect(device?.imei).toBe("123456789012345");
+                expect(device?.color).toBe("Black");
+                expect(device?.createdAt).toBeTruthy();
+                expect(device?.updatedAt).toBeNull();
+            });
+
+            it("should return null if a device with the given ID does not exist", async () => {
+                const device = await deviceRepository.findById("0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa");
+
+                expect(device).toBeNull();
+            });
+        });
+    });
 });

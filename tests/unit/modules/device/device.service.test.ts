@@ -113,4 +113,48 @@ describe("Device Service (Unit)", () => {
             expect(result).toBe(mockDeviceRecord);
         });
     });
+
+    describe("getDeviceById", () => {
+        const deviceId = "uuid-123";
+
+        it("should throw if deviceRepository.findById fails", async () => {
+            vi.mocked(deviceRepository).findById.mockRejectedValue(new Error("fake error"));
+
+            await expect(deviceService.getDeviceById(deviceId))
+                .rejects.toThrow("fake error");
+        });
+
+        it("should throw NOT_FOUND if device does not exist", async () => {
+            vi.mocked(deviceRepository).findById.mockResolvedValue(null);
+
+            await expect(deviceService.getDeviceById(deviceId))
+                .rejects.toMatchObject({
+                    statusCode: 404,
+                    code: "NOT_FOUND",
+                    message: "Device not found",
+                });
+        });
+
+        it("should return device", async () => {
+            const mockDeviceRecord = {
+                id: deviceId,
+                customerId: "uuid-customer-123",
+                type: "SMARTPHONE",
+                brand: "Samsung",
+                model: "Galaxy S23",
+                serialNumber: "SN-123456",
+                imei: "123456789012345",
+                color: "Black",
+                createdAt: new Date(),
+                updatedAt: null,
+            } as DeviceRecord;
+
+            vi.mocked(deviceRepository).findById.mockResolvedValue(mockDeviceRecord);
+
+            const result = await deviceService.getDeviceById(deviceId);
+
+            expect(deviceRepository.findById).toHaveBeenCalledWith(deviceId);
+            expect(result).toEqual(mockDeviceRecord);
+        });
+    });
 });

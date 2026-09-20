@@ -72,4 +72,46 @@ describe("Device Controller (Unit)", () => {
             expect(next).not.toHaveBeenCalled();
         });
     });
+
+    describe("getDevice", () => {
+        it("should return 200 with device data", async () => {
+            req.params.id = "uuid-123";
+
+            const mockDeviceRecord = {
+                id: "uuid-123",
+                customerId: "uuid-customer-123",
+                type: "SMARTPHONE",
+                brand: "Samsung",
+                model: "Galaxy S23",
+                serialNumber: "SN-123456",
+                imei: "123456789012345",
+                color: "Black",
+                createdAt: new Date(),
+                updatedAt: null,
+            } as DeviceRecord;
+
+            vi.mocked(deviceService).getDeviceById.mockResolvedValue(mockDeviceRecord);
+
+            await deviceController.getDevice(req, res, next);
+
+            expect(deviceService.getDeviceById).toHaveBeenCalledWith("uuid-123");
+            expect(res.status).toHaveBeenCalledWith(200);
+            expect(res.json).toHaveBeenCalledWith({
+                success: true,
+                data: mockDeviceRecord,
+            });
+            expect(next).not.toHaveBeenCalled();
+        });
+
+        it("should call next with badRequest error if id is missing", async () => {
+            await deviceController.getDevice(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(expect.objectContaining({
+                statusCode: 400,
+                code: "BAD_REQUEST",
+                message: "Device ID is required",
+            }));
+            expect(res.status).not.toHaveBeenCalled();
+        });
+    });
 });

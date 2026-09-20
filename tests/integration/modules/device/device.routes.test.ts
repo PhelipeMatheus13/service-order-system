@@ -65,11 +65,52 @@ describe("Device Routes (Integration)", () => {
             expect(res.body.success).toBe(true);
             expect(res.body.message).toBe("Device created successfully");
 
-            const device = await prisma.device.findFirst({ where: { serialNumber: validDevice.serialNumber }});
+            const device = await prisma.device.findFirst({ where: { serialNumber: validDevice.serialNumber } });
 
             expect(device).toBeTruthy();
             expect(device?.id).toBeDefined();
             expect(device?.customerId).toBe(customerId);
+        });
+    });
+
+    describe("GET /devices/:id", () => {
+        let deviceId: string;
+
+        beforeEach(async () => {
+            const device = await prisma.device.create({
+                data: {
+                    customerId: customerId,
+                    type: "SMARTPHONE",
+                    brand: "Samsung",
+                    model: "Galaxy S23",
+                    serialNumber: "SN-123456",
+                    imei: "123456789012345",
+                    color: "Black",
+                },
+                select: { id: true },
+            });
+
+            deviceId = device.id;
+        });
+
+        it("should return the device data", async () => {
+            const res = await request(app)
+                .get(`/devices/${deviceId}`)
+                .set("Authorization", `Bearer ${accessToken}`);
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(res.body.data).toMatchObject({
+                id: deviceId,
+                type: "SMARTPHONE",
+                brand: "Samsung",
+                model: "Galaxy S23",
+                serialNumber: "SN-123456",
+                imei: "123456789012345",
+                color: "Black",
+            });
+            expect(res.body.data.createdAt).toBeTruthy();
+            expect(res.body.data.updatedAt).toBeNull();
         });
     });
 });

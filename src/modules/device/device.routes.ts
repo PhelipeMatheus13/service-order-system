@@ -73,5 +73,47 @@ registry.registerPath({
 });
 router.post("/", checkAccessToken, authorize("ADMIN", "ATTENDANT"), validate(createDeviceSchema), deviceController.createDevice);
 
+// GET 
+registry.registerPath({
+    tags: ["Device"],
+    method: "get",
+    path: "/devices/:id",
+    summary: "Get a Device by ID",
+    security: [{ bearerAuth: [] }],
+    request: {
+        params: z.object({ id: z.string() }),
+    },
+    responses: {
+        200: {
+            description: "Device retrieved successfully",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        success: z.boolean().openapi({ example: true }),
+                        data: deviceSchema,
+                    }),
+                },
+            },
+        },
+        400: { $ref: "#/components/responses/missingDeviceIdError" },
+        401: {
+            description: "Missing, invalid or expired access token",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
+                        invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
+                        accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
+                    },
+                },
+            },
+        },
+        404: { $ref: "#/components/responses/deviceNotFoundError" },
+        500: { $ref: "#/components/responses/internalError" },
+    }
+});
+router.get("/:id", checkAccessToken, deviceController.getDevice);
+
 
 export default router;
