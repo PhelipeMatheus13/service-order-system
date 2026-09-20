@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
     CreateDeviceInput,
     DeviceRecord,
+    ListDevicesInput,
 } from "../../../../src/modules/device/device.types.js";
 // (shared)
 import { isUniqueConstraintOn, isForeignKeyConstraintOn } from "../../../../src/shared/utils/prisma-error.js";
@@ -155,6 +156,45 @@ describe("Device Service (Unit)", () => {
 
             expect(deviceRepository.findById).toHaveBeenCalledWith(deviceId);
             expect(result).toEqual(mockDeviceRecord);
+        });
+    });
+
+    describe("listDevices", () => {
+        const input: ListDevicesInput = {
+            options: {
+                limit: 1,
+            },
+        };
+
+        it("should throw if deviceRepository.list fails", async () => {
+            vi.mocked(deviceRepository).list.mockRejectedValue(new Error("fake error"));
+
+            await expect(deviceService.listDevices(input))
+                .rejects.toThrow("fake error");
+        });
+
+        it("should return devices", async () => {
+            const mockDevices = [
+                {
+                    id: "uuid-123",
+                    customerId: "uuid-customer-123",
+                    type: "SMARTPHONE",
+                    brand: "Samsung",
+                    model: "Galaxy S23",
+                    serialNumber: "SN-123456",
+                    imei: "123456789012345",
+                    color: "Black",
+                    createdAt: new Date(),
+                    updatedAt: null,
+                },
+            ] as DeviceRecord[];
+
+            vi.mocked(deviceRepository).list.mockResolvedValue(mockDevices);
+
+            const result = await deviceService.listDevices(input);
+
+            expect(deviceRepository.list).toHaveBeenCalledWith(input);
+            expect(result).toEqual(mockDevices);
         });
     });
 });

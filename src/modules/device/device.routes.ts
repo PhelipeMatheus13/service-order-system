@@ -115,5 +115,40 @@ registry.registerPath({
 });
 router.get("/:id", checkAccessToken, deviceController.getDevice);
 
+registry.registerPath({
+    tags: ["Device"],
+    method: "get",
+    path: "/devices",
+    summary: "List devices",
+    security: [{ bearerAuth: [] }],
+    responses: {
+        200: {
+            description: "Device retrieved successfully",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        success: z.boolean().openapi({ example: true }),
+                        data: z.array(deviceSchema),
+                    }),
+                },
+            },
+        },
+        401: {
+            description: "Missing, invalid or expired access token",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
+                        invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
+                        accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
+                    },
+                },
+            },
+        },
+        500: { $ref: "#/components/responses/internalError" },
+    }
+});
+router.get("/", checkAccessToken, deviceController.listDevices);
 
 export default router;

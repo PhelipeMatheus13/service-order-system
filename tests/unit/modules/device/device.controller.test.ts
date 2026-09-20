@@ -114,4 +114,63 @@ describe("Device Controller (Unit)", () => {
             expect(res.status).not.toHaveBeenCalled();
         });
     });
+
+    describe("listDevices", () => {
+        it("should return 200 with devices data", async () => {
+            req.query.limit = "1";
+
+            const mockDevices = [
+                {
+                    id: "uuid-123",
+                    customerId: "uuid-customer-123",
+                    type: "SMARTPHONE",
+                    brand: "Samsung",
+                    model: "Galaxy S23",
+                    serialNumber: "SN-123456",
+                    imei: "123456789012345",
+                    color: "Black",
+                    createdAt: new Date(),
+                    updatedAt: null,
+                },
+            ] as DeviceRecord[];
+
+            vi.mocked(deviceService).listDevices.mockResolvedValue(mockDevices);
+
+            await deviceController.listDevices(req, res, next);
+
+            expect(deviceService.listDevices).toHaveBeenCalledWith({
+                options: {
+                    limit: 1,
+                },
+            });
+
+            expect(res.status).toHaveBeenCalledWith(200);
+            expect(res.json).toHaveBeenCalledWith({
+                success: true,
+                data: mockDevices,
+            });
+            expect(next).not.toHaveBeenCalled();
+        });
+
+        it("should default limit to null when query.limit is absent", async () => {
+            const mockDevices = [] as DeviceRecord[];
+
+            vi.mocked(deviceService).listDevices.mockResolvedValue(mockDevices);
+
+            await deviceController.listDevices(req, res, next);
+
+            expect(deviceService.listDevices).toHaveBeenCalledWith({
+                options: {
+                    limit: null,
+                },
+            });
+
+            expect(res.status).toHaveBeenCalledWith(200);
+            expect(res.json).toHaveBeenCalledWith({
+                success: true,
+                data: mockDevices,
+            });
+            expect(next).not.toHaveBeenCalled();
+        });
+    });
 });

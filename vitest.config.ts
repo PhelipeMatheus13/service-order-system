@@ -24,6 +24,8 @@ export default defineConfig({
                 "src/modules/auth/auth.types.ts",
                 "src/modules/customer/customer.types.ts",
                 "src/modules/refresh-token/refresh-token.types.ts",
+                "src/modules/device/device.types.ts",
+                
             ],
         },
     },

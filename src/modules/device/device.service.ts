@@ -1,4 +1,4 @@
-import { DeviceRecord, CreateDeviceInput } from "./device.types.js";
+import { DeviceRecord, CreateDeviceInput, ListDevicesInput } from "./device.types.js";
 import { notFound, alreadyExists } from "../../shared/errors/errors.js";
 import { isForeignKeyConstraintOn,isUniqueConstraintOn } from "../../shared/utils/prisma-error.js";
 import deviceRepository from "./device.repository.js";
@@ -28,7 +28,12 @@ const getDeviceById = async (id: string): Promise<DeviceRecord> => {
     return device;
 };
 
+const listDevices = async (input: ListDevicesInput): Promise<DeviceRecord[]> => {
+    return deviceRepository.list(input);
+};
+
 export default {
     createDevice,
     getDeviceById,
+    listDevices,
 };

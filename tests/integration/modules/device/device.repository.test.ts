@@ -132,5 +132,90 @@ describe("Device Repository (Integration)", () => {
                 expect(device).toBeNull();
             });
         });
+
+        describe("list", () => {
+            let customerCreatedId: string;
+
+            beforeEach(async () => {
+                const customerCreated = await prisma.customer.create({
+                    data: {
+                        firstName: "John",
+                        lastName: "Doe",
+                        email: "john@example.com",
+                        phoneNumber: "5521995437105",
+                    },
+                });
+
+                customerCreatedId = customerCreated.id;
+            });
+
+            it("should return devices ordered by creation date descending and respect the given limit", async () => {
+                const now = new Date();
+
+                const devices = await prisma.device.createManyAndReturn({
+                    data: [
+                        {
+                            customerId: customerCreatedId,
+                            type: "SMARTPHONE",
+                            brand: "Samsung",
+                            model: "Galaxy S23",
+                            serialNumber: "SN-123456",
+                            imei: "123456789012345",
+                            color: "Black",
+                            createdAt: new Date(now.getTime() - 60 * 60 * 1000),
+                        },
+                        {
+                            customerId: customerCreatedId,
+                            type: "LAPTOP",
+                            brand: "Dell",
+                            model: "XPS 15",
+                            serialNumber: "SN-654321",
+                            imei: "543210987654321",
+                            color: "Silver",
+                            createdAt: now,
+                        },
+                    ],
+                });
+
+                const newerDevice = devices.find((d) => d.serialNumber === "SN-654321")!;
+
+                const result = await deviceRepository.list({
+                    options: {
+                        limit: 1,
+                    },
+                });
+
+                expect(result).toHaveLength(1);
+                expect(result[0].id).toBe(newerDevice.id);
+                expect(result[0].type).toBe(newerDevice.type);
+                expect(result[0].brand).toBe(newerDevice.brand);
+                expect(result[0].model).toBe(newerDevice.model);
+                expect(result[0].serialNumber).toBe(newerDevice.serialNumber);
+                expect(result[0].imei).toBe(newerDevice.imei);
+                expect(result[0].color).toBe(newerDevice.color);
+                expect(result[0].createdAt).toBeTruthy();
+                expect(result[0].updatedAt).toBeNull();
+            });
+
+            it("should default to 100 when limit is not provided", async () => {
+                await prisma.device.create({
+                    data: {
+                        customerId: customerCreatedId,
+                        type: "SMARTPHONE",
+                        brand: "Samsung",
+                        model: "Galaxy S23",
+                        serialNumber: "SN-123456",
+                        imei: "123456789012345",
+                        color: "Black",
+                    },
+                });
+
+                const result = await deviceRepository.list({
+                    options: { limit: null },
+                });
+
+                expect(result).toHaveLength(1);
+            });
+        });
     });
 });

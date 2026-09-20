@@ -10,7 +10,17 @@ interface CreateDeviceInput {
     imei: string | null;
 }
 
+interface ListDevicesOption {
+    limit: number | null;
+}
+
+interface ListDevicesInput {
+    options: ListDevicesOption;
+}
+
+
 export {
     Device as DeviceRecord,
     CreateDeviceInput,
+    ListDevicesInput,
 };

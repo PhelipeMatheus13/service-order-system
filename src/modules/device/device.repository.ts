@@ -1,4 +1,4 @@
-import { DeviceRecord, CreateDeviceInput } from "./device.types.js";
+import { DeviceRecord, CreateDeviceInput, ListDevicesInput } from "./device.types.js";
 import { getPrisma } from "../../shared/config/database.js";
 
 // Writer
@@ -25,7 +25,23 @@ const findById = async (id: string): Promise<DeviceRecord | null> => {
     return prisma.device.findUnique({ where: { id } });
 };
 
-export default { 
+const list = async (input: ListDevicesInput): Promise<DeviceRecord[]> => {
+    const prisma = getPrisma();
+
+    const limit = input.options.limit ?? 100;
+
+    return prisma.device.findMany({
+        take: limit,
+        orderBy: {
+            createdAt: "desc",
+        },
+    });
+};
+
+export default {
+    // Writer
     create,
+    // Reader
     findById,
+    list,
 };

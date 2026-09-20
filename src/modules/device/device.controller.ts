@@ -24,7 +24,25 @@ const getDevice = asyncHandler(async (req, res) => {
     });
 });
 
+const listDevices = asyncHandler(async (req, res) => {
+    const limit = req.query.limit
+        ? Number(req.query.limit)
+        : null;
+
+    const devices = await deviceService.listDevices({
+        options: {
+            limit,
+        },
+    });
+
+    res.status(200).json({
+        success: true,
+        data: devices,
+    });
+});
+
 export default {
     createDevice,
     getDevice,
+    listDevices,
 };
