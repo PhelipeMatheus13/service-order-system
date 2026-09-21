@@ -342,19 +342,37 @@ const updateDeviceValidationError = registry.registerComponent("responses", "upd
     content: {
         "application/json": {
             schema: { $ref: "#/components/schemas/ValidationError" },
-            example: {
-                success: false,
-                error: {
-                    code: "VALIDATION_ERROR",
-                    message: "Validation failed",
-                    details: [
-                        { field: "type", message: "Type must contain at most 100 characters" },
-                        { field: "brand", message: "Brand must contain at most 100 characters" },
-                        { field: "model", message: "Model must contain at most 255 characters" },
-                        { field: "color", message: "Color must contain at most 100 characters" },
-                        { field: "serialNumber", message: "Serial number must contain at most 255 characters" },
-                        { field: "imei", message: "IMEI must contain exactly 15 digits" },
-                    ],
+            examples: {
+                invalidFields: {
+                    summary: "Invalid fields values",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "VALIDATION_ERROR",
+                            message: "Validation failed",
+                            details: [
+                                { field: "type", message: "Type must contain at most 100 characters" },
+                                { field: "brand", message: "Brand must contain at most 100 characters" },
+                                { field: "model", message: "Model must contain at most 255 characters" },
+                                { field: "color", message: "Color must contain at most 100 characters" },
+                                { field: "serialNumber", message: "Serial number must contain at most 255 characters" },
+                                { field: "imei", message: "IMEI must contain exactly 15 digits" },
+                            ],
+                        },
+                    },
+                },
+                noFieldsProvided: {
+                    summary: "No fields provided for update",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "VALIDATION_ERROR",
+                            message: "Validation failed",
+                            details: [
+                                { field: "body", message: "At least one field must be provided for update" },
+                            ],
+                        },
+                    },
                 },
             },
         },
