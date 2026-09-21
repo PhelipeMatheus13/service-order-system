@@ -7,7 +7,7 @@ import { errorSchema } from "../../shared/docs/components/schemas.js"
 import validate from "../../shared/middlewares/validate.js";
 import { checkAccessToken, authorize } from "../../shared/middlewares/auth.js";
 // local modules
-import { deviceSchema, createDeviceSchema, updateDeviceSchema } from "./device.schema.js";
+import { deviceSchema, createDeviceSchema, updateDeviceSchema } from "./device.schemas.js";
 import deviceController from "./device.controller.js";
 
 const router = express.Router();

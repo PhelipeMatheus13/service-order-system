@@ -1,4 +1,4 @@
-import { createDeviceRequest, updateDeviceRequest } from "./device.schema.js";
+import { createDeviceRequest, updateDeviceRequest } from "./device.schemas.js";
 import { CreateDeviceInput, UpdateDeviceInput } from "./device.types.js";
 
 const createDeviceDTO = (body: createDeviceRequest): CreateDeviceInput => ({

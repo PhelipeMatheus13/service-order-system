@@ -25,7 +25,7 @@ registry.registerPath({
         },
     },
     responses: {
-        200: {
+        201: {
             description: "Customer created successfully",
             content: {
                 "application/json": {
