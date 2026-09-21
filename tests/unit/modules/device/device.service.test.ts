@@ -1,0 +1,289 @@
+// (Node built‑ins)
+import { beforeEach, describe, expect, it, vi } from "vitest";
+// (Types)
+import {
+    CreateDeviceInput,
+    DeviceRecord,
+    ListDevicesInput,
+    UpdateDeviceInput,
+} from "../../../../src/modules/device/device.types.js";
+// (shared)
+import { isUniqueConstraintOn, isForeignKeyConstraintOn } from "../../../../src/shared/utils/prisma-error.js";
+// (local modules)
+import deviceService from "../../../../src/modules/device/device.service.js";
+import deviceRepository from "../../../../src/modules/device/device.repository.js";
+
+vi.mock("../../../../src/modules/device/device.repository.js");
+vi.mock("../../../../src/shared/utils/prisma-error.js");
+
+describe("Device Service (Unit)", () => {
+    beforeEach(() => {
+        vi.resetAllMocks();
+    });
+
+    describe("createDevice", () => {
+        const validInput: CreateDeviceInput = {
+            customerId: "uuid-123",
+            type: "SMARTPHONE",
+            brand: "Samsung",
+            model: "Galaxy S23",
+            serialNumber: "SN-123456",
+            imei: "123456789012345",
+            color: "Black",
+        };
+
+        it("should throw NOT_FOUND if customer foreign key constraint is violated", async () => {
+            const dbError = new Error("Foreign key constraint failed");
+            vi.mocked(deviceRepository.create).mockRejectedValue(dbError);
+            vi.mocked(isUniqueConstraintOn).mockReturnValue(false);
+            vi.mocked(isForeignKeyConstraintOn).mockImplementation(
+                (_error, field) => field === "customer_id",
+            );
+
+            await expect(deviceService.createDevice(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 404,
+                    code: "NOT_FOUND",
+                    message: "Customer not found",
+                });
+
+            expect(isForeignKeyConstraintOn).toHaveBeenCalledWith(dbError, "customer_id");
+        });
+
+        it("should throw ALREADY_EXISTS if serial number is a unique constraint violation", async () => {
+            const dbError = new Error("Unique constraint failed");
+            vi.mocked(deviceRepository.create).mockRejectedValue(dbError);
+            vi.mocked(isUniqueConstraintOn).mockImplementation(
+                (_error, field) => field === "serial_number",
+            );
+
+            await expect(deviceService.createDevice(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 409,
+                    code: "ALREADY_EXISTS",
+                    message: "Device with this serial number already exists",
+                });
+
+            expect(isUniqueConstraintOn).toHaveBeenCalledWith(dbError, "serial_number");
+        });
+
+        it("should throw ALREADY_EXISTS if IMEI is a unique constraint violation", async () => {
+            const dbError = new Error("Unique constraint failed");
+            vi.mocked(deviceRepository.create).mockRejectedValue(dbError);
+            vi.mocked(isUniqueConstraintOn).mockImplementation(
+                (_error, field) => field === "imei",
+            );
+
+            await expect(deviceService.createDevice(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 409,
+                    code: "ALREADY_EXISTS",
+                    message: "Device with this IMEI already exists",
+                });
+
+            expect(isUniqueConstraintOn).toHaveBeenCalledWith(dbError, "imei");
+        });
+
+        it("should propagate error if it is not a unique constraint violation", async () => {
+            const error = new Error("fake error");
+            vi.mocked(deviceRepository.create).mockRejectedValue(error);
+            vi.mocked(isUniqueConstraintOn).mockReturnValue(false);
+
+            await expect(deviceService.createDevice(validInput))
+                .rejects.toThrow(error);
+        });
+
+        it("should create device successfully", async () => {
+            const mockDeviceRecord = {
+                id: "uuid-123",
+                customerId: validInput.customerId,
+                type: validInput.type,
+                brand: validInput.brand,
+                model: validInput.model,
+                serialNumber: validInput.serialNumber,
+                imei: validInput.imei,
+                color: validInput.color,
+                createdAt: new Date(),
+                updatedAt: null,
+            } as DeviceRecord;
+
+            vi.mocked(deviceRepository.create).mockResolvedValue(mockDeviceRecord);
+
+            const result = await deviceService.createDevice(validInput);
+
+            expect(deviceRepository.create).toHaveBeenCalledWith(validInput);
+            expect(result).toBe(mockDeviceRecord);
+        });
+    });
+
+    describe("getDeviceById", () => {
+        const deviceId = "uuid-123";
+
+        it("should throw if deviceRepository.findById fails", async () => {
+            vi.mocked(deviceRepository).findById.mockRejectedValue(new Error("fake error"));
+
+            await expect(deviceService.getDeviceById(deviceId))
+                .rejects.toThrow("fake error");
+        });
+
+        it("should throw NOT_FOUND if device does not exist", async () => {
+            vi.mocked(deviceRepository).findById.mockResolvedValue(null);
+
+            await expect(deviceService.getDeviceById(deviceId))
+                .rejects.toMatchObject({
+                    statusCode: 404,
+                    code: "NOT_FOUND",
+                    message: "Device not found",
+                });
+        });
+
+        it("should return device", async () => {
+            const mockDeviceRecord = {
+                id: deviceId,
+                customerId: "uuid-customer-123",
+                type: "SMARTPHONE",
+                brand: "Samsung",
+                model: "Galaxy S23",
+                serialNumber: "SN-123456",
+                imei: "123456789012345",
+                color: "Black",
+                createdAt: new Date(),
+                updatedAt: null,
+            } as DeviceRecord;
+
+            vi.mocked(deviceRepository).findById.mockResolvedValue(mockDeviceRecord);
+
+            const result = await deviceService.getDeviceById(deviceId);
+
+            expect(deviceRepository.findById).toHaveBeenCalledWith(deviceId);
+            expect(result).toEqual(mockDeviceRecord);
+        });
+    });
+
+    describe("listDevices", () => {
+        const input: ListDevicesInput = {
+            options: {
+                limit: 1,
+            },
+        };
+
+        it("should throw if deviceRepository.list fails", async () => {
+            vi.mocked(deviceRepository).list.mockRejectedValue(new Error("fake error"));
+
+            await expect(deviceService.listDevices(input))
+                .rejects.toThrow("fake error");
+        });
+
+        it("should return devices", async () => {
+            const mockDevices = [
+                {
+                    id: "uuid-123",
+                    customerId: "uuid-customer-123",
+                    type: "SMARTPHONE",
+                    brand: "Samsung",
+                    model: "Galaxy S23",
+                    serialNumber: "SN-123456",
+                    imei: "123456789012345",
+                    color: "Black",
+                    createdAt: new Date(),
+                    updatedAt: null,
+                },
+            ] as DeviceRecord[];
+
+            vi.mocked(deviceRepository).list.mockResolvedValue(mockDevices);
+
+            const result = await deviceService.listDevices(input);
+
+            expect(deviceRepository.list).toHaveBeenCalledWith(input);
+            expect(result).toEqual(mockDevices);
+        });
+    });
+
+    describe("updateDevice", () => {
+        const validInput: UpdateDeviceInput = {
+            deviceId: "uuid-123",
+            type: "LAPTOP",
+            brand: null,
+            model: null,
+            serialNumber: null,
+            imei: null,
+            color: null,
+        };
+
+        it("should throw ALREADY_EXISTS if serial number is a unique constraint violation", async () => {
+            const dbError = new Error("Unique constraint failed");
+            vi.mocked(deviceRepository.update).mockRejectedValue(dbError);
+            vi.mocked(isUniqueConstraintOn).mockImplementation(
+                (_error, field) => field === "serial_number",
+            );
+
+            await expect(deviceService.updateDevice(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 409,
+                    code: "ALREADY_EXISTS",
+                    message: "Device with this serial number already exists",
+                });
+
+            expect(isUniqueConstraintOn).toHaveBeenCalledWith(dbError, "serial_number");
+        });
+
+        it("should throw ALREADY_EXISTS if IMEI is a unique constraint violation", async () => {
+            const dbError = new Error("Unique constraint failed");
+            vi.mocked(deviceRepository.update).mockRejectedValue(dbError);
+            vi.mocked(isUniqueConstraintOn).mockImplementation(
+                (_error, field) => field === "imei",
+            );
+
+            await expect(deviceService.updateDevice(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 409,
+                    code: "ALREADY_EXISTS",
+                    message: "Device with this IMEI already exists",
+                });
+
+            expect(isUniqueConstraintOn).toHaveBeenCalledWith(dbError, "imei");
+        });
+
+        it("should propagate error if it is not a unique constraint violation", async () => {
+            const error = new Error("fake error");
+            vi.mocked(deviceRepository.update).mockRejectedValue(error);
+            vi.mocked(isUniqueConstraintOn).mockReturnValue(false);
+
+            await expect(deviceService.updateDevice(validInput))
+                .rejects.toThrow(error);
+        });
+
+        it("should throw NOT_FOUND if repository returns null", async () => {
+            vi.mocked(deviceRepository.update).mockResolvedValue(null);
+
+            await expect(deviceService.updateDevice(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 404,
+                    code: "NOT_FOUND",
+                    message: "Device not found",
+                });
+        });
+
+        it("should update device successfully", async () => {
+            const mockDeviceRecord = {
+                id: validInput.deviceId,
+                customerId: "uuid-customer-123",
+                type: validInput.type,
+                brand: "Samsung",
+                model: "Galaxy S23",
+                serialNumber: "SN-123456",
+                imei: "123456789012345",
+                color: "Black",
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            } as DeviceRecord;
+
+            vi.mocked(deviceRepository.update).mockResolvedValue(mockDeviceRecord);
+
+            const result = await deviceService.updateDevice(validInput);
+
+            expect(deviceRepository.update).toHaveBeenCalledWith(validInput);
+            expect(result).toBe(mockDeviceRecord);
+        });
+    });
+});

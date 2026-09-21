@@ -7,32 +7,32 @@ import { errorSchema } from "../../shared/docs/components/schemas.js"
 import validate from "../../shared/middlewares/validate.js";
 import { checkAccessToken, authorize } from "../../shared/middlewares/auth.js";
 // local modules
-import { createCustomerSchema, updateCustomerSchema, customerSchema } from "./customer.schemas.js";
-import customerController from "./customer.controller.js";
+import { deviceSchema, createDeviceSchema, updateDeviceSchema } from "./device.schemas.js";
+import deviceController from "./device.controller.js";
 
 const router = express.Router();
 
 // POST
 registry.registerPath({
-    tags: ["Customer"],
+    tags: ["Device"],
     method: "post",
-    path: "/customers",
-    summary: "Creates a new customer (requires ADMIN or ATTENDANT role)",
+    path: "/devices",
+    summary: "Creates a new customer device (requires ADMIN or ATTENDANT role)",
     security: [{ bearerAuth: [] }],
     request: {
         body: {
-            content: { "application/json": { schema: createCustomerSchema } },
+            content: { "application/json": { schema: createDeviceSchema } },
         },
     },
     responses: {
         201: {
-            description: "Customer created successfully",
+            description: "Device created successfully",
             content: {
                 "application/json": {
                     schema: z.object({
                         success: z.boolean().openapi({ example: true }),
-                        data: customerSchema,
-                        message: z.string().openapi({ example: "Customer created successfully" }),
+                        data: deviceSchema,
+                        message: z.string().openapi({ example: "Device created successfully" }),
                     }),
                 },
             },
@@ -65,37 +65,37 @@ registry.registerPath({
                 },
             },
         },
-        409: { $ref: "#/components/responses/emailAlreadyExistsError" },
-        422: { $ref: "#/components/responses/createCustomerValidationError" },
+        404: { $ref: "#/components/responses/customerNotFoundError"  },
+        409: { $ref: "#/components/responses/deviceUniqueConstraintError" },
+        422: { $ref: "#/components/responses/createDeviceValidationError" },
         500: { $ref: "#/components/responses/internalError" },
     }
 });
-router.post("/", checkAccessToken, authorize("ADMIN", "ATTENDANT"), validate(createCustomerSchema), customerController.createCustomer);
-
+router.post("/", checkAccessToken, authorize("ADMIN", "ATTENDANT"), validate(createDeviceSchema), deviceController.createDevice);
 
 // GET 
 registry.registerPath({
-    tags: ["Customer"],
+    tags: ["Device"],
     method: "get",
-    path: "/customers/:id",
-    summary: "Get a customer by ID",
+    path: "/devices/:id",
+    summary: "Get a Device by ID",
     security: [{ bearerAuth: [] }],
     request: {
         params: z.object({ id: z.string() }),
     },
     responses: {
         200: {
-            description: "Customer retrieved successfully",
+            description: "Device retrieved successfully",
             content: {
                 "application/json": {
                     schema: z.object({
                         success: z.boolean().openapi({ example: true }),
-                        data: customerSchema,
+                        data: deviceSchema,
                     }),
                 },
             },
         },
-        400: { $ref: "#/components/responses/missingCustomerIdError" },
+        400: { $ref: "#/components/responses/missingDeviceIdError" },
         401: {
             description: "Missing, invalid or expired access token",
             content: {
@@ -109,26 +109,26 @@ registry.registerPath({
                 },
             },
         },
-        404: { $ref: "#/components/responses/customerNotFoundError" },
+        404: { $ref: "#/components/responses/deviceNotFoundError" },
         500: { $ref: "#/components/responses/internalError" },
     }
 });
-router.get("/:id", checkAccessToken, customerController.getCustomer);
+router.get("/:id", checkAccessToken, deviceController.getDevice);
 
 registry.registerPath({
-    tags: ["Customer"],
+    tags: ["Device"],
     method: "get",
-    path: "/customers",
-    summary: "List customers",
+    path: "/devices",
+    summary: "List devices",
     security: [{ bearerAuth: [] }],
     responses: {
         200: {
-            description: "Customer retrieved successfully",
+            description: "Device retrieved successfully",
             content: {
                 "application/json": {
                     schema: z.object({
                         success: z.boolean().openapi({ example: true }),
-                        data: z.array(customerSchema),
+                        data: z.array(deviceSchema),
                     }),
                 },
             },
@@ -149,35 +149,35 @@ registry.registerPath({
         500: { $ref: "#/components/responses/internalError" },
     }
 });
-router.get("/", checkAccessToken, customerController.listCustomers);
+router.get("/", checkAccessToken, deviceController.listDevices);
 
 // PATCH
 registry.registerPath({
-    tags: ["Customer"],
+    tags: ["Device"],
     method: "patch",
-    path: "/customers/:id",
-    summary: "Updates a customer by ID (requires ADMIN or ATTENDANT role)",
+    path: "/devices/:id",
+    summary: "Updates a devices by ID (requires ADMIN or ATTENDANT role)",
     security: [{ bearerAuth: [] }],
     request: {
         params: z.object({ id: z.string() }),
         body: {
-            content: { "application/json": { schema: updateCustomerSchema } },
+            content: { "application/json": { schema: updateDeviceSchema } },
         },
     },
     responses: {
         200: {
-            description: "Customer updated successfully",
+            description: "Device updated successfully",
             content: {
                 "application/json": {
                     schema: z.object({
                         success: z.boolean().openapi({ example: true }),
-                        data: customerSchema,
-                        message: z.string().openapi({ example: "Customer updated successfully" }),
+                        data: deviceSchema,
+                        message: z.string().openapi({ example: "Device updated successfully" }),
                     }),
                 },
             },
         },
-        400: { $ref: "#/components/responses/missingCustomerIdError" },
+        400: { $ref: "#/components/responses/missingDeviceIdError" },
         401: {
             description: "Missing, invalid or expired access token",
             content: {
@@ -206,13 +206,13 @@ registry.registerPath({
                 },
             },
         },
-        404: { $ref: "#/components/responses/customerNotFoundError" },
-        409: { $ref: "#/components/responses/emailAlreadyExistsError" },
-        422: { $ref: "#/components/responses/updateCustomerValidationError" },
+        404: { $ref: "#/components/responses/deviceNotFoundError" },
+        409: { $ref: "#/components/responses/deviceUniqueConstraintError" },
+        422: { $ref: "#/components/responses/updateDeviceValidationError" },
         500: { $ref: "#/components/responses/internalError" },
     }
 });
-router.patch("/:id", checkAccessToken, authorize("ADMIN", "ATTENDANT"), validate(updateCustomerSchema), customerController.updateCustomer);
+router.patch("/:id", checkAccessToken, authorize("ADMIN", "ATTENDANT"), validate(updateDeviceSchema), deviceController.updateDevice);
 
 
 export default router;

@@ -123,7 +123,7 @@ const refreshTokenNotFound = registry.registerComponent("examples", "refreshToke
 });
 
 const missingAccessToken = registry.registerComponent("examples", "missingAccessToken", {
-    summary: "Missing missingAccessToken token",
+    summary: "Missing access token",
     value: {
         success: false,
         error: {

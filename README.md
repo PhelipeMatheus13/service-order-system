@@ -3,13 +3,14 @@
 REST API for a service order management system. The application's core
 infrastructure is complete and validated end-to-end through a full user
 lifecycle module — registration, asynchronous email confirmation, and
-account activation — backed by an outbox-driven messaging pipeline. The real
-domain (service orders, technicians, customers, order status/history) has
-not been implemented yet.
+account activation — backed by an outbox-driven messaging pipeline, plus
+JWT authentication with refresh token rotation. The business domain has
+started with customers and their devices; the service orders themselves
+(and order status/history) have not been implemented yet.
 
 ## Current Status
 
-The `user` module now covers the full account lifecycle used to validate the
+The `user` module covers the full account lifecycle used to validate the
 architecture before implementing the real business domain:
 
 - User registration
@@ -18,18 +19,34 @@ architecture before implementing the real business domain:
 - Account activation (password creation via a short-lived activation token)
 - User listing, retrieval, and deletion
 
-Authentication (login/refresh/logout) is not implemented yet. The JWT
-service and auth middleware already exist and are exercised by the
-activation flow; the remaining work is migrating login/refresh/logout logic
-from a previous project into this codebase.
+The `auth` module implements the authentication flow:
 
-The automated test suite (Vitest) covers the current skeleton and the full
-`user` module with unit and integration tests (184 tests, ~99% statement
-coverage, 100% function coverage). Integration tests use an ephemeral
-PostgreSQL database through Testcontainers and apply the Prisma migrations
-before running.
+- Login (email + password), returning an access token and a refresh token
+- Refresh token rotation: each refresh revokes the used token and issues a
+  new pair
+- Reuse detection: presenting an already revoked refresh token revokes all
+  of that user's sessions
+- Logout (current session) and logout-all (every session of the user)
 
-The next step is to model and implement the real business domain.
+Refresh tokens are persisted as SHA-256 hashes, never in plain text.
+
+The first business domain modules are in place:
+
+- `customer`: create, update, retrieval, and listing
+- `device`: create, update, retrieval, and listing — each device belongs to
+  a customer and may carry a unique serial number and/or IMEI
+
+Write operations on customers and devices are restricted to the `ADMIN` and
+`ATTENDANT` roles; read operations only require a valid access token.
+
+The automated test suite (Vitest) covers the shared infrastructure and the
+`user`, `auth`, `refresh-token`, `customer`, and `device` modules with unit
+and integration tests. Integration tests use an ephemeral PostgreSQL
+database through Testcontainers and apply the Prisma migrations before
+running.
+
+The next step is to model and implement the remaining business domain
+(service orders and order status/history).
 
 ## Features
 
@@ -37,6 +54,10 @@ The next step is to model and implement the real business domain.
   specifically to the Swagger UI route
 - Configurable rate limiting (global and per-route) to mitigate brute-force
   and abuse
+- JWT authentication with short-lived access tokens and rotating refresh
+  tokens (hashed at rest, reuse detection revokes all sessions)
+- Role-based authorization (`ADMIN`, `ATTENDANT`, `TECHNICIAN`) through a
+  dedicated middleware
 - Structured logging (Pino) with request context propagation via
   `AsyncLocalStorage`
 - Centralized error handling with a custom `AppError` class and
@@ -50,6 +71,8 @@ The next step is to model and implement the real business domain.
 - Pub/sub messaging via RabbitMQ (topic exchange), running fully decoupled
   from the HTTP server in its own process (`src/pubsub.ts`)
 - Email delivery via SMTP (Nodemailer), used for account confirmation codes
+- Database seeding through Prisma (seed files under `prisma/seeds/`), used
+  to create the initial admin user
 - Strict TypeScript (`strict: true` from the start, ESM/`nodenext` module
   resolution)
 - Type-safe database access with Prisma 7 and the PostgreSQL driver adapter
@@ -72,6 +95,7 @@ The next step is to model and implement the real business domain.
 - Swagger UI (`swagger-ui-express`)
 - JSON Web Tokens (jsonwebtoken)
 - bcrypt
+- libphonenumber-js
 - Helmet
 - express-rate-limit
 - Pino / pino-http
@@ -99,6 +123,11 @@ RabbitMQ's management UI is available at http://localhost:15672 (credentials fro
 Run migrations:
 ```bash
 npx prisma migrate dev
+```
+
+Seed the initial admin user:
+```bash
+npm run prisma:seed
 ```
 
 Run the HTTP API (development):

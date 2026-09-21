@@ -113,6 +113,27 @@ model Customer {
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt   DateTime? @map("updated_at") @db.Timestamptz()
 
+  device Device[]
+
   @@index([createdAt(sort: Desc)])
   @@map("customers")
+}
+
+model Device {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  customerId   String    @map("customer_id") @db.Uuid
+  type         String    @db.VarChar(100)
+  brand        String    @db.VarChar(100)
+  model        String    @db.VarChar(255)
+  color        String    @db.VarChar(100)
+  serialNumber String?   @unique @map("serial_number") @db.VarChar(255)
+  imei         String?   @unique @db.VarChar(20)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt    DateTime? @map("updated_at") @db.Timestamptz()
+  
+  customer     Customer  @relation(fields: [customerId], references: [id])
+
+  @@index([customerId])
+  @@index([createdAt(sort: Desc)])
+  @@map("devices")
 }

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // (shared)
 import {
     isUniqueConstraintOn,
+    isForeignKeyConstraintOn,
     isNotFoundError,
 } from "../../../../src/shared/utils/prisma-error.js";
 
@@ -94,6 +95,64 @@ describe("Prisma Error Utils (Unit)", () => {
             });
 
             const result = isUniqueConstraintOn(error, "email");
+            expect(result).toBe(false);
+        });
+    });
+
+    describe("isForeignKeyConstraintOn", () => {
+        it("should return false when error is not a PrismaClientKnownRequestError", () => {
+            const result = isForeignKeyConstraintOn(new Error("generic error"), "customer_id");
+            expect(result).toBe(false);
+        });
+
+        it("should return false when error code is not P2003", () => {
+            const error = makePrismaError("P2002");
+            const result = isForeignKeyConstraintOn(error, "customer_id");
+            expect(result).toBe(false);
+        });
+
+        it("should return true when the field is present in the constraint index", () => {
+            const error = makePrismaError("P2003", {
+                driverAdapterError: {
+                    cause: {
+                        constraint: {
+                            index: "devices_customer_id_fkey",
+                        },
+                    },
+                },
+            });
+
+            const result = isForeignKeyConstraintOn(error, "customer_id");
+            expect(result).toBe(true);
+        });
+
+        it("should return false when the field is not present in the constraint index", () => {
+            const error = makePrismaError("P2003", {
+                driverAdapterError: {
+                    cause: {
+                        constraint: {
+                            index: "devices_customer_id_fkey",
+                        },
+                    },
+                },
+            });
+
+            const result = isForeignKeyConstraintOn(error, "user_id");
+            expect(result).toBe(false);
+        });
+
+        it("should return false when meta is missing", () => {
+            const error = makePrismaError("P2003");
+            const result = isForeignKeyConstraintOn(error, "customer_id");
+            expect(result).toBe(false);
+        });
+
+        it("should return false when driverAdapterError shape is incomplete", () => {
+            const error = makePrismaError("P2003", {
+                driverAdapterError: {},
+            });
+
+            const result = isForeignKeyConstraintOn(error, "customer_id");
             expect(result).toBe(false);
         });
     });

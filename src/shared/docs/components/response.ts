@@ -33,6 +33,22 @@ const missingCustomerIdError = registry.registerComponent("responses", "missingC
     },
 });
 
+const missingDeviceIdError = registry.registerComponent("responses", "missingDeviceIdError", {
+    description: "Invalid request, missing device id",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            example: {
+                success: false,
+                error: {
+                    code: "BAD_REQUEST",
+                    message: "Device ID is required",
+                },
+            },
+        },
+    },
+});
+
 // 404
 const userNotFoundError = registry.registerComponent("responses", "userNotFoundError", {
     description: "User not found or does not exist",
@@ -66,6 +82,22 @@ const customerNotFoundError = registry.registerComponent("responses", "customerN
     },
 });
 
+const deviceNotFoundError = registry.registerComponent("responses", "deviceNotFoundError", {
+    description: "Device not found or does not exist",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            example: {
+                success: false,
+                error: {
+                    code: "NOT_FOUND",
+                    message: "Device not found",
+                },
+            },
+        },
+    },
+});
+
 // 409
 const emailAlreadyExistsError = registry.registerComponent("responses", "emailAlreadyExistsError", {
     description: "Email already in use",
@@ -77,6 +109,38 @@ const emailAlreadyExistsError = registry.registerComponent("responses", "emailAl
                 error: {
                     code: "ALREADY_EXISTS",
                     message: "Email already in use",
+                },
+            },
+        },
+    },
+});
+
+const deviceUniqueConstraintError = registry.registerComponent("responses", "deviceUniqueConstraintError", {
+    description: "Device unique constraint error",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            examples: {
+                serialNumberAlreadyExists: {
+                    summary: "Serial number already exists",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "ALREADY_EXISTS",
+                            message: "Device with this serial number already exists",
+                        },
+                    },
+                },
+
+                imeiAlreadyExists: {
+                    summary: "IMEI already exists",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "ALREADY_EXISTS",
+                            message: "Device with this IMEI already exists",
+                        },
+                    },
                 },
             },
         },
@@ -248,6 +312,73 @@ const updateCustomerValidationError = registry.registerComponent("responses", "u
     },
 });
 
+const createDeviceValidationError = registry.registerComponent("responses", "createDeviceValidationError", {
+    description: "Create device validation error",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/ValidationError" },
+            example: {
+                success: false,
+                error: {
+                    code: "VALIDATION_ERROR",
+                    message: "Validation failed",
+                    details: [
+                        { field: "customerId", message: "Customer ID must be a valid UUID" },
+                        { field: "type", message: "Type is required" },
+                        { field: "brand", message: "Brand is required" },
+                        { field: "model", message: "Model is required" },
+                        { field: "color", message: "Color is required" },
+                        { field: "serialNumber", message: "Serial number must contain at most 255 characters" },
+                        { field: "imei", message: "IMEI must contain exactly 15 digits" },
+                    ],
+                },
+            },
+        },
+    },
+});
+
+const updateDeviceValidationError = registry.registerComponent("responses", "updateDeviceValidationError", {
+    description: "Update device validation error",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/ValidationError" },
+            examples: {
+                invalidFields: {
+                    summary: "Invalid fields values",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "VALIDATION_ERROR",
+                            message: "Validation failed",
+                            details: [
+                                { field: "type", message: "Type must contain at most 100 characters" },
+                                { field: "brand", message: "Brand must contain at most 100 characters" },
+                                { field: "model", message: "Model must contain at most 255 characters" },
+                                { field: "color", message: "Color must contain at most 100 characters" },
+                                { field: "serialNumber", message: "Serial number must contain at most 255 characters" },
+                                { field: "imei", message: "IMEI must contain exactly 15 digits" },
+                            ],
+                        },
+                    },
+                },
+                noFieldsProvided: {
+                    summary: "No fields provided for update",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "VALIDATION_ERROR",
+                            message: "Validation failed",
+                            details: [
+                                { field: "body", message: "At least one field must be provided for update" },
+                            ],
+                        },
+                    },
+                },
+            },
+        },
+    },
+});
+
 // 500
 const internalError = registry.registerComponent("responses", "internalError", {
     description: "Internal error",
@@ -268,9 +399,12 @@ const internalError = registry.registerComponent("responses", "internalError", {
 export {
     missingUserIdError,
     missingCustomerIdError,
+    missingDeviceIdError,
     userNotFoundError,
     customerNotFoundError,
+    deviceNotFoundError,
     emailAlreadyExistsError,
+    deviceUniqueConstraintError,
     registerValidationError,
     confirmEmailValidationError,
     activateUserValidationError,
@@ -278,5 +412,7 @@ export {
     refreshTokenValidationError,
     createCustomerValidationError,
     updateCustomerValidationError,
+    createDeviceValidationError,
+    updateDeviceValidationError,
     internalError,
 };
