@@ -29,6 +29,20 @@ enum UserResourceValidationType {
   @@map("user_resource_validation_type")
 }
 
+enum ServiceOrderStatus {
+  RECEIVED
+  IN_DIAGNOSIS
+  DIAGNOSIS_COMPLETED
+  AWAITING_APPROVAL
+  IN_MAINTENANCE
+  FINALIZED
+  AWAITING_DELIVERY
+  DELIVERED
+  CANCELLED
+
+  @@map("service_order_status_enum")
+}
+
 model User {
   id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   firstName    String    @map("first_name") @db.VarChar(255)
@@ -44,6 +58,7 @@ model User {
   resourceValidations UserResourceValidation[]
   activationTokens    UserActivationToken[]
   refreshTokens       RefreshToken[]
+  serviceOrders       ServiceOrder[]
 
   @@index([createdAt(sort: Desc)])
   @@map("users")
@@ -113,7 +128,7 @@ model Customer {
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt   DateTime? @map("updated_at") @db.Timestamptz()
 
-  device Device[]
+  devices Device[]
 
   @@index([createdAt(sort: Desc)])
   @@map("customers")
@@ -130,10 +145,31 @@ model Device {
   imei         String?   @unique @db.VarChar(20)
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt    DateTime? @map("updated_at") @db.Timestamptz()
-  
-  customer     Customer  @relation(fields: [customerId], references: [id])
 
+  customer      Customer       @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  serviceOrders ServiceOrder[]
+
+  @@unique([id, customerId])
   @@index([customerId])
   @@index([createdAt(sort: Desc)])
   @@map("devices")
+}
+
+model ServiceOrder {
+  id              String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  customerId      String             @map("customer_id") @db.Uuid
+  deviceId        String             @map("device_id") @db.Uuid
+  reportedProblem String             @map("reported_problem") @db.Text
+  status          ServiceOrderStatus @default(RECEIVED)
+  createdById     String             @map("created_by") @db.Uuid
+  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt       DateTime?          @map("updated_at") @db.Timestamptz()
+
+  device    Device @relation(fields: [deviceId, customerId], references: [id, customerId], onDelete: Restrict)
+  createdBy User   @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([customerId])
+  @@index([deviceId])
+  @@index([status, createdAt(sort: Desc)])
+  @@map("service_orders")
 }
