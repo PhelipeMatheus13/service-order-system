@@ -379,6 +379,27 @@ const updateDeviceValidationError = registry.registerComponent("responses", "upd
     },
 });
 
+const createServiceOrderValidationError = registry.registerComponent("responses", "createServiceOrderValidationError", {
+    description: "Create service order validation error",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/ValidationError" },
+            example: {
+                success: false,
+                error: {
+                    code: "VALIDATION_ERROR",
+                    message: "Validation failed",
+                    details: [
+                        { field: "deviceId", message: "Device ID must be a valid UUID" },
+                        { field: "reportedProblem", message: "Reported problem must be at least 10 characters long" },
+                    ],
+                },
+            },
+        },
+    },
+});
+
+
 // 500
 const internalError = registry.registerComponent("responses", "internalError", {
     description: "Internal error",
@@ -414,5 +435,6 @@ export {
     updateCustomerValidationError,
     createDeviceValidationError,
     updateDeviceValidationError,
+    createServiceOrderValidationError,
     internalError,
 };

@@ -155,6 +155,17 @@ const accessTokenExpired = registry.registerComponent("examples", "accessTokenEx
     },
 });
 
+const authenticatedUserNoLongerExists = registry.registerComponent("examples", "authenticatedUserNoLongerExists", {
+    summary: "Authenticated user no longer exists",
+    value: {
+        success: false,
+        error: {
+            code: "USER_NOT_FOUND",
+            message: "Authenticated user no longer exists",
+        },
+    },
+});
+
 export {
     invalidChallengerNumber,
     challengerNumberExpired,
@@ -169,5 +180,6 @@ export {
     refreshTokenNotFound,
     missingAccessToken,
     invalidAccessToken,
-    accessTokenExpired
+    accessTokenExpired,
+    authenticatedUserNoLongerExists,
 };

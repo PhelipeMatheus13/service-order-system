@@ -8,6 +8,7 @@ import "../../modules/user/user.routes.js";
 import "../../modules/auth/auth.routes.js";
 import "../../modules/customer/customer.routes.js";
 import "../../modules/device/device.routes.js";
+import "../../modules/service-order/service-order.routes.js";
  
 const generateOpenApiDocument = () => {
     return new OpenApiGeneratorV3(registry.definitions).generateDocument({
@@ -23,6 +24,7 @@ const generateOpenApiDocument = () => {
             { name: "User", description: "User management"},
             { name: "Customer", description: "Customer management"},
             { name: "Device", description: "Device management"},
+            { name: "Service-order", description: "Service-order management"},
         ]
     });
 };
