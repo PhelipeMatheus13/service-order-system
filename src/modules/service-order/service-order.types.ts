@@ -6,7 +6,16 @@ interface CreateServiceOrderInput {
     createdBy: string;
 }
 
+interface ListServiceOrdersOptions {
+    limit: number | null;
+}
+
+interface ListServiceOrdersInput {
+    options: ListServiceOrdersOptions;
+} 
+
 export type {
     ServiceOrder as ServiceOrderRecord,
     CreateServiceOrderInput,
+    ListServiceOrdersInput,
 };

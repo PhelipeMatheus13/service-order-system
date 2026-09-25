@@ -134,4 +134,49 @@ describe("Service Order Routes (Integration)", () => {
             expect(res.body.data.updatedAt).toBeNull();
         });
     });
+
+    describe("GET /service-orders", () => {
+        it("should return service orders ordered by creation date descending and respect the given limit", async () => {
+            const now = new Date();
+
+            const serviceOrders = await prisma.serviceOrder.createManyAndReturn({
+                data: [
+                    {
+                        customerId,
+                        deviceId,
+                        reportedProblem: "Screen is cracked and touch is not responding.",
+                        createdById: userId,
+                        createdAt: new Date(now.getTime() - 60 * 60 * 1000),
+                    },
+                    {
+                        customerId,
+                        deviceId,
+                        reportedProblem: "Battery drains too fast.",
+                        createdById: userId,
+                        createdAt: now,
+                    },
+                ],
+            });
+
+            const newerServiceOrder = serviceOrders.find(
+                (so) => so.reportedProblem === "Battery drains too fast.",
+            )!;
+
+            const res = await request(app)
+                .get("/service-orders")
+                .set("Authorization", `Bearer ${accessToken}`)
+                .query({ limit: 1 });
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(res.body.data).toHaveLength(1);
+            expect(res.body.data[0].id).toBe(newerServiceOrder.id);
+            expect(res.body.data[0].customerId).toBe(customerId);
+            expect(res.body.data[0].deviceId).toBe(deviceId);
+            expect(res.body.data[0].reportedProblem).toBe("Battery drains too fast.");
+            expect(res.body.data[0].status).toBe("RECEIVED");
+            expect(res.body.data[0].createdAt).toBeTruthy();
+            expect(res.body.data[0].updatedAt).toBeNull();
+        });
+    });
 });

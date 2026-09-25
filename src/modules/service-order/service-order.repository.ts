@@ -1,4 +1,4 @@
-import type { CreateServiceOrderInput, ServiceOrderRecord } from "./service-order.types.ts";
+import type { CreateServiceOrderInput, ServiceOrderRecord, ListServiceOrdersInput } from "./service-order.types.ts";
 import { getPrisma } from "../../shared/config/database.js";
 
 // Writer
@@ -35,9 +35,24 @@ const findById = async (id: string): Promise<ServiceOrderRecord | null> => {
     return prisma.serviceOrder.findUnique({ where: { id } });
 };    
 
+const list = async (input: ListServiceOrdersInput): Promise<ServiceOrderRecord[]> => {
+    const prisma = getPrisma();
+
+    const limit = input.options.limit ?? 100;
+
+    return prisma.serviceOrder.findMany({
+        take: limit,
+        orderBy: {
+            createdAt: "desc",
+        },
+    });
+};
+
+
 export default {
     // Writer
     create,
     // Reader
     findById,
+    list,
 };

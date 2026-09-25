@@ -115,4 +115,40 @@ registry.registerPath({
 });
 router.get("/:id", checkAccessToken, serviceOrderController.getServiceOrderById);
 
+registry.registerPath({
+    tags: ["Service-order"],
+    method: "get",
+    path: "/service-orders",
+    summary: "List all service orders",
+    security: [{ bearerAuth: [] }],
+    responses: {
+        200: {
+            description: "service orders retrieved successfully",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        success: z.boolean().openapi({ example: true }),
+                        data: z.array(serviceOrderSchema),
+                    }),
+                },
+            },
+        },
+        401: {
+            description: "Missing, invalid or expired access token",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
+                        invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
+                        accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
+                    },
+                },
+            },
+        },
+        500: { $ref: "#/components/responses/internalError" },
+    }
+});
+router.get("/", checkAccessToken, serviceOrderController.listServiceOrders);
+
 export default router;

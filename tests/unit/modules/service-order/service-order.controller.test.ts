@@ -103,4 +103,61 @@ describe("Service Order Controller (Unit)", () => {
             expect(res.status).not.toHaveBeenCalled();
         });
     });
+
+    describe("listServiceOrders", () => {
+        it("should return 200 with service orders data", async () => {
+            req.query.limit = "1";
+
+            const mockServiceOrders = [
+                {
+                    id: "uuid-service-order-123",
+                    customerId: "uuid-customer-123",
+                    deviceId: "uuid-device-123",
+                    reportedProblem: "Screen is cracked and touch is not responding.",
+                    status: "RECEIVED",
+                    createdById: "uuid-user-123",
+                    createdAt: new Date(),
+                    updatedAt: null,
+                },
+            ] as ServiceOrderRecord[];
+
+            vi.mocked(serviceOrderService).listServiceOrders.mockResolvedValue(mockServiceOrders);
+
+            await serviceOrderController.listServiceOrders(req, res, next);
+
+            expect(serviceOrderService.listServiceOrders).toHaveBeenCalledWith({
+                options: {
+                    limit: 1,
+                },
+            });
+
+            expect(res.status).toHaveBeenCalledWith(200);
+            expect(res.json).toHaveBeenCalledWith({
+                success: true,
+                data: mockServiceOrders,
+            });
+            expect(next).not.toHaveBeenCalled();
+        });
+
+        it("should default limit to null when query.limit is absent", async () => {
+            const mockServiceOrders = [] as ServiceOrderRecord[];
+
+            vi.mocked(serviceOrderService).listServiceOrders.mockResolvedValue(mockServiceOrders);
+
+            await serviceOrderController.listServiceOrders(req, res, next);
+
+            expect(serviceOrderService.listServiceOrders).toHaveBeenCalledWith({
+                options: {
+                    limit: null,
+                },
+            });
+
+            expect(res.status).toHaveBeenCalledWith(200);
+            expect(res.json).toHaveBeenCalledWith({
+                success: true,
+                data: mockServiceOrders,
+            });
+            expect(next).not.toHaveBeenCalled();
+        });
+    });
 });

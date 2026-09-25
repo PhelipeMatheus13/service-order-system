@@ -23,7 +23,25 @@ const getServiceOrderById = asyncHandler(async (req, res) => {
     });
 });
 
+const listServiceOrders = asyncHandler(async (req, res) => {
+    const limit = req.query.limit
+        ? Number(req.query.limit)
+        : null;
+
+    const serviceOrders = await serviceOrderService.listServiceOrders({
+        options: {
+            limit,
+        },
+    });
+
+    res.status(200).json({
+        success: true,
+        data: serviceOrders,
+    });
+}); 
+
 export default {
     createServiceOrder,
     getServiceOrderById,
+    listServiceOrders,
 };

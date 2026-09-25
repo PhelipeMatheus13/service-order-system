@@ -1,6 +1,7 @@
 import {
     CreateServiceOrderInput,
     ServiceOrderRecord,
+    ListServiceOrdersInput
 } from "./service-order.types.js";
 import { notFound, unauthorized } from "../../shared/errors/errors.js";
 import { isForeignKeyConstraintOn } from "../../shared/utils/prisma-error.js";
@@ -33,7 +34,12 @@ const getServiceOrderById = async (id: string): Promise<ServiceOrderRecord> => {
     return serviceOrder;
 };
 
+const listServiceOrders = async (input: ListServiceOrdersInput): Promise<ServiceOrderRecord[]> => {
+    return serviceOrderRepository.list(input);
+};
+
 export default {
     createServiceOrder,
     getServiceOrderById,
+    listServiceOrders,
 };

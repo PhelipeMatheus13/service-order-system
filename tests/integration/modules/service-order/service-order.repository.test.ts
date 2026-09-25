@@ -192,5 +192,109 @@ describe("Service Order Repository (Integration)", () => {
                 expect(serviceOrder).toBeNull();
             });
         });
+
+        describe("list", () => {
+            let userCreatedId: string;
+            let customerCreatedId: string;
+            let deviceCreatedId: string;
+
+            beforeEach(async () => {
+                const userCreated = await prisma.user.create({
+                    data: {
+                        firstName: "John",
+                        lastName: "Doe",
+                        email: "john@example.com",
+                        role: "ATTENDANT",
+                        active: true,
+                    },
+                });
+                userCreatedId = userCreated.id;
+
+                const customerCreated = await prisma.customer.create({
+                    data: {
+                        firstName: "Jane",
+                        lastName: "Doe",
+                        email: "jane@example.com",
+                        phoneNumber: "5521995437105",
+                    },
+                });
+                customerCreatedId = customerCreated.id;
+
+                const deviceCreated = await prisma.device.create({
+                    data: {
+                        customerId: customerCreatedId,
+                        type: "SMARTPHONE",
+                        brand: "Samsung",
+                        model: "Galaxy S23",
+                        serialNumber: "SN-123456",
+                        imei: "123456789012345",
+                        color: "Black",
+                    },
+                });
+                deviceCreatedId = deviceCreated.id;
+            });
+
+            it("should return service orders ordered by creation date descending and respect the given limit", async () => {
+                const now = new Date();
+
+                const serviceOrders = await prisma.serviceOrder.createManyAndReturn({
+                    data: [
+                        {
+                            customerId: customerCreatedId,
+                            deviceId: deviceCreatedId,
+                            reportedProblem: "Screen is cracked and touch is not responding.",
+                            createdById: userCreatedId,
+                            createdAt: new Date(now.getTime() - 60 * 60 * 1000),
+                        },
+                        {
+                            customerId: customerCreatedId,
+                            deviceId: deviceCreatedId,
+                            reportedProblem: "Battery drains too fast.",
+                            createdById: userCreatedId,
+                            createdAt: now,
+                        },
+                    ],
+                });
+
+                const newerServiceOrder = serviceOrders.find(
+                    (so) => so.reportedProblem === "Battery drains too fast.",
+                )!;
+
+                const result = await serviceOrderRepository.list({
+                    options: {
+                        limit: 1,
+                    },
+                });
+
+                expect(result).toHaveLength(1);
+                expect(result[0].id).toBe(newerServiceOrder.id);
+                expect(result[0].customerId).toBe(newerServiceOrder.customerId);
+                expect(result[0].deviceId).toBe(newerServiceOrder.deviceId);
+                expect(result[0].reportedProblem).toBe(newerServiceOrder.reportedProblem);
+                expect(result[0].status).toBe(newerServiceOrder.status);
+                expect(result[0].createdById).toBe(newerServiceOrder.createdById);
+                expect(result[0].createdAt).toBeTruthy();
+                expect(result[0].updatedAt).toBeNull();
+            });
+
+            it("should default to 100 when limit is not provided", async () => {
+                await prisma.serviceOrder.create({
+                    data: {
+                        customerId: customerCreatedId,
+                        deviceId: deviceCreatedId,
+                        reportedProblem: "Screen is cracked and touch is not responding.",
+                        createdById: userCreatedId,
+                    },
+                });
+
+                const result = await serviceOrderRepository.list({
+                    options: {
+                        limit: null,
+                    },
+                });
+
+                expect(result).toHaveLength(1);
+            });
+        });
     });
 });

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
     CreateServiceOrderInput,
     ServiceOrderRecord,
+    ListServiceOrdersInput,
 } from "../../../../src/modules/service-order/service-order.types.js";
 // (shared)
 import { isForeignKeyConstraintOn } from "../../../../src/shared/utils/prisma-error.js";
@@ -125,6 +126,43 @@ describe("Service Order Service (Unit)", () => {
 
             expect(serviceOrderRepository.findById).toHaveBeenCalledWith(serviceOrderId);
             expect(result).toEqual(mockServiceOrderRecord);
+        });
+    });
+
+    describe("listServiceOrders", () => {
+        const input: ListServiceOrdersInput = {
+            options: {
+                limit: 1,
+            },
+        };
+
+        it("should throw if serviceOrderRepository.list fails", async () => {
+            vi.mocked(serviceOrderRepository).list.mockRejectedValue(new Error("fake error"));
+
+            await expect(serviceOrderService.listServiceOrders(input))
+                .rejects.toThrow("fake error");
+        });
+
+        it("should return service orders", async () => {
+            const mockServiceOrders = [
+                {
+                    id: "uuid-service-order-123",
+                    customerId: "uuid-customer-123",
+                    deviceId: "uuid-device-123",
+                    reportedProblem: "Screen is cracked and touch is not responding.",
+                    status: "RECEIVED",
+                    createdById: "uuid-user-123",
+                    createdAt: new Date(),
+                    updatedAt: null,
+                },
+            ] as ServiceOrderRecord[];
+
+            vi.mocked(serviceOrderRepository).list.mockResolvedValue(mockServiceOrders);
+
+            const result = await serviceOrderService.listServiceOrders(input);
+
+            expect(serviceOrderRepository.list).toHaveBeenCalledWith(input);
+            expect(result).toEqual(mockServiceOrders);
         });
     });
 });
