@@ -84,7 +84,7 @@ describe("Service Order Routes (Integration)", () => {
 
             expect(res.statusCode).toBe(201);
             expect(res.body.success).toBe(true);
-            expect(res.body.message).toBe("service order created successfully");
+            expect(res.body.message).toBe("Service order created successfully");
 
             const serviceOrder = await prisma.serviceOrder.findUnique({
                 where: { id: res.body.data.id },
@@ -95,6 +95,43 @@ describe("Service Order Routes (Integration)", () => {
             expect(serviceOrder?.customerId).toBe(customerId);
             expect(serviceOrder?.createdById).toBe(userId);
             expect(serviceOrder?.status).toBe("RECEIVED");
+        });
+    });
+
+    describe("GET /service-orders/:id", () => {
+        let serviceOrderId: string;
+
+        beforeEach(async () => {
+            const serviceOrder = await prisma.serviceOrder.create({
+                data: {
+                    customerId,
+                    deviceId,
+                    reportedProblem: "Screen is cracked and touch is not responding.",
+                    createdById: userId,
+                },
+                select: { id: true },
+            });
+
+            serviceOrderId = serviceOrder.id;
+        });
+
+        it("should return the service order data", async () => {
+            const res = await request(app)
+                .get(`/service-orders/${serviceOrderId}`)
+                .set("Authorization", `Bearer ${accessToken}`);
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(res.body.data).toMatchObject({
+                id: serviceOrderId,
+                customerId,
+                deviceId,
+                reportedProblem: "Screen is cracked and touch is not responding.",
+                status: "RECEIVED",
+                createdById: userId,
+            });
+            expect(res.body.data.createdAt).toBeTruthy();
+            expect(res.body.data.updatedAt).toBeNull();
         });
     });
 });

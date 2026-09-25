@@ -32,7 +32,7 @@ registry.registerPath({
                     schema: z.object({
                         success: z.boolean().openapi({ example: true }),
                         data: serviceOrderSchema,
-                        message: z.string().openapi({ example: "service order created successfully" }),
+                        message: z.string().openapi({ example: "Service order created successfully" }),
                     }),
                 },
             },
@@ -71,6 +71,48 @@ registry.registerPath({
         500: { $ref: "#/components/responses/internalError" },
     }
 });
-router.post("/", checkAccessToken, authorize("ADMIN", "ATTENDANT"), validate(createServiceOrderSchema), serviceOrderController.CreateServiceOrder);
+router.post("/", checkAccessToken, authorize("ADMIN", "ATTENDANT"), validate(createServiceOrderSchema), serviceOrderController.createServiceOrder);
+
+// GET 
+registry.registerPath({
+    tags: ["Service-order"],
+    method: "get",
+    path: "/service-orders",
+    summary: "Get a service order by ID",
+    security: [{ bearerAuth: [] }],
+    request: {
+        params: z.object({ id: z.string() }),
+    },
+    responses: {
+        200: {
+            description: "Service order retrieved successfully",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        success: z.boolean().openapi({ example: true }),
+                        data: serviceOrderSchema,
+                    }),
+                },
+            },
+        },
+        400: { $ref: "#/components/responses/missingServiceOrderIdError" },
+        401: {
+            description: "Missing, invalid or expired access token",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
+                        invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
+                        accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
+                    },
+                },
+            },
+        },
+        404: { $ref: "#/components/responses/serviceOrderNotFoundError" },
+        500: { $ref: "#/components/responses/internalError" },
+    }
+});
+router.get("/:id", checkAccessToken, serviceOrderController.getServiceOrderById);
 
 export default router;

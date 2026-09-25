@@ -25,7 +25,7 @@ export default defineConfig({
                 "src/modules/customer/customer.types.ts",
                 "src/modules/refresh-token/refresh-token.types.ts",
                 "src/modules/device/device.types.ts",
-                
+                "src/modules/service-order/service-order.types.ts",
             ],
         },
     },

@@ -29,7 +29,7 @@ describe("Service Order Service (Unit)", () => {
         it("should throw NOT_FOUND if repository returns null", async () => {
             vi.mocked(serviceOrderRepository.create).mockResolvedValue(null);
 
-            await expect(serviceOrderService.CreateServiceOrder(validInput))
+            await expect(serviceOrderService.createServiceOrder(validInput))
                 .rejects.toMatchObject({
                     statusCode: 404,
                     code: "NOT_FOUND",
@@ -46,7 +46,7 @@ describe("Service Order Service (Unit)", () => {
                 (_error, field) => field === "created_by",
             );
 
-            await expect(serviceOrderService.CreateServiceOrder(validInput))
+            await expect(serviceOrderService.createServiceOrder(validInput))
                 .rejects.toMatchObject({
                     statusCode: 401,
                     code: "USER_NOT_FOUND",
@@ -61,7 +61,7 @@ describe("Service Order Service (Unit)", () => {
             vi.mocked(serviceOrderRepository.create).mockRejectedValue(error);
             vi.mocked(isForeignKeyConstraintOn).mockReturnValue(false);
 
-            await expect(serviceOrderService.CreateServiceOrder(validInput))
+            await expect(serviceOrderService.createServiceOrder(validInput))
                 .rejects.toThrow(error);
         });
 
@@ -79,10 +79,52 @@ describe("Service Order Service (Unit)", () => {
 
             vi.mocked(serviceOrderRepository.create).mockResolvedValue(mockServiceOrderRecord);
 
-            const result = await serviceOrderService.CreateServiceOrder(validInput);
+            const result = await serviceOrderService.createServiceOrder(validInput);
 
             expect(serviceOrderRepository.create).toHaveBeenCalledWith(validInput);
             expect(result).toBe(mockServiceOrderRecord);
+        });
+    });
+
+    describe("getServiceOrderById", () => {
+        const serviceOrderId = "uuid-123";
+
+        it("should throw if serviceOrderRepository.findById fails", async () => {
+            vi.mocked(serviceOrderRepository).findById.mockRejectedValue(new Error("fake error"));
+
+            await expect(serviceOrderService.getServiceOrderById(serviceOrderId))
+                .rejects.toThrow("fake error");
+        });
+
+        it("should throw NOT_FOUND if service order does not exist", async () => {
+            vi.mocked(serviceOrderRepository).findById.mockResolvedValue(null);
+
+            await expect(serviceOrderService.getServiceOrderById(serviceOrderId))
+                .rejects.toMatchObject({
+                    statusCode: 404,
+                    code: "NOT_FOUND",
+                    message: "Service order not found",
+                });
+        });
+
+        it("should return service order", async () => {
+            const mockServiceOrderRecord = {
+                id: serviceOrderId,
+                customerId: "uuid-customer-123",
+                deviceId: "uuid-device-123",
+                reportedProblem: "Screen is cracked and touch is not responding.",
+                status: "RECEIVED",
+                createdById: "uuid-user-123",
+                createdAt: new Date(),
+                updatedAt: null,
+            } as ServiceOrderRecord;
+
+            vi.mocked(serviceOrderRepository).findById.mockResolvedValue(mockServiceOrderRecord);
+
+            const result = await serviceOrderService.getServiceOrderById(serviceOrderId);
+
+            expect(serviceOrderRepository.findById).toHaveBeenCalledWith(serviceOrderId);
+            expect(result).toEqual(mockServiceOrderRecord);
         });
     });
 });

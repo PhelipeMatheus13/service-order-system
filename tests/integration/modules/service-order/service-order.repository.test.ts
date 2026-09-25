@@ -133,4 +133,64 @@ describe("Service Order Repository (Integration)", () => {
             });
         });
     });
+
+    describe("Reader repository", () => {
+        describe("findById", () => {
+            it("should return the service order if a service order with the given ID exists", async () => {
+                const userCreated = await prisma.user.create({
+                    data: {
+                        firstName: "John",
+                        lastName: "Doe",
+                        email: "john@example.com",
+                        role: "ATTENDANT",
+                        active: true,
+                    },
+                });
+
+                const customerCreated = await prisma.customer.create({
+                    data: {
+                        firstName: "Jane",
+                        lastName: "Doe",
+                        email: "jane@example.com",
+                        phoneNumber: "5521995437105",
+                    },
+                });
+
+                const deviceCreated = await prisma.device.create({
+                    data: {
+                        customerId: customerCreated.id,
+                        type: "SMARTPHONE",
+                        brand: "Samsung",
+                        model: "Galaxy S23",
+                        serialNumber: "SN-123456",
+                        imei: "123456789012345",
+                        color: "Black",
+                    },
+                });
+
+                const serviceOrderCreated = await prisma.serviceOrder.create({
+                    data: {
+                        customerId: customerCreated.id,
+                        deviceId: deviceCreated.id,
+                        reportedProblem: "Screen is cracked and touch is not responding.",
+                        createdById: userCreated.id,
+                    },
+                });
+
+                const serviceOrder = await serviceOrderRepository.findById(serviceOrderCreated.id);
+
+                expect(serviceOrder).toBeTruthy();
+                expect(serviceOrder?.id).toBe(serviceOrderCreated.id);
+                expect(serviceOrder?.reportedProblem).toBe("Screen is cracked and touch is not responding.");
+                expect(serviceOrder?.status).toBe("RECEIVED");
+                expect(serviceOrder?.createdAt).toBeTruthy();
+                expect(serviceOrder?.updatedAt).toBeNull();
+            });
+
+            it("should return null if a service order with the given ID does not exist", async () => {
+                const serviceOrder = await serviceOrderRepository.findById("0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa");
+                expect(serviceOrder).toBeNull();
+            });
+        });
+    });
 });

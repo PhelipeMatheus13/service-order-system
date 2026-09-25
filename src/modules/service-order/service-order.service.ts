@@ -6,7 +6,7 @@ import { notFound, unauthorized } from "../../shared/errors/errors.js";
 import { isForeignKeyConstraintOn } from "../../shared/utils/prisma-error.js";
 import serviceOrderRepository from "./service-order.repository.js";
 
-const CreateServiceOrder = async (input: CreateServiceOrderInput): Promise<ServiceOrderRecord> => {
+const createServiceOrder = async (input: CreateServiceOrderInput): Promise<ServiceOrderRecord> => {
     try {
         const serviceOrder = await serviceOrderRepository.create(input);
 
@@ -27,6 +27,13 @@ const CreateServiceOrder = async (input: CreateServiceOrderInput): Promise<Servi
     }
 };
 
+const getServiceOrderById = async (id: string): Promise<ServiceOrderRecord> => {
+    const serviceOrder = await serviceOrderRepository.findById(id);
+    if (!serviceOrder) throw notFound({ message: "Service order not found" });
+    return serviceOrder;
+};
+
 export default {
-    CreateServiceOrder,
+    createServiceOrder,
+    getServiceOrderById,
 };

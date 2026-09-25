@@ -49,6 +49,21 @@ const missingDeviceIdError = registry.registerComponent("responses", "missingDev
     },
 });
 
+const missingServiceOrderIdError = registry.registerComponent("responses", "missingServiceOrderIdError", {
+    description: "Invalid request, missing service order id",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            example: {
+                success: false,
+                error: {
+                    code: "BAD_REQUEST",
+                    message: "Service order ID is required",
+                },
+            },
+        },
+    },
+});
 // 404
 const userNotFoundError = registry.registerComponent("responses", "userNotFoundError", {
     description: "User not found or does not exist",
@@ -92,6 +107,22 @@ const deviceNotFoundError = registry.registerComponent("responses", "deviceNotFo
                 error: {
                     code: "NOT_FOUND",
                     message: "Device not found",
+                },
+            },
+        },
+    },
+});
+
+const serviceOrderNotFoundError = registry.registerComponent("responses", "serviceOrderNotFoundError", {
+    description: "service order not found or does not exist",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            example: {
+                success: false,
+                error: {
+                    code: "NOT_FOUND",
+                    message: "Service order not found",
                 },
             },
         },
@@ -418,14 +449,20 @@ const internalError = registry.registerComponent("responses", "internalError", {
 });
 
 export {
+    // 400
     missingUserIdError,
     missingCustomerIdError,
     missingDeviceIdError,
+    missingServiceOrderIdError,
+    // 404
     userNotFoundError,
     customerNotFoundError,
     deviceNotFoundError,
+    serviceOrderNotFoundError,
+    // 409
     emailAlreadyExistsError,
     deviceUniqueConstraintError,
+    // 422
     registerValidationError,
     confirmEmailValidationError,
     activateUserValidationError,
@@ -436,5 +473,6 @@ export {
     createDeviceValidationError,
     updateDeviceValidationError,
     createServiceOrderValidationError,
+    // 500
     internalError,
 };
