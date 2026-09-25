@@ -77,7 +77,7 @@ router.post("/", checkAccessToken, authorize("ADMIN", "ATTENDANT"), validate(cre
 registry.registerPath({
     tags: ["Customer"],
     method: "get",
-    path: "/customers/:id",
+    path: "/customers/{id}",
     summary: "Get a customer by ID",
     security: [{ bearerAuth: [] }],
     request: {
@@ -155,7 +155,7 @@ router.get("/", checkAccessToken, customerController.listCustomers);
 registry.registerPath({
     tags: ["Customer"],
     method: "patch",
-    path: "/customers/:id",
+    path: "/customers/{id}",
     summary: "Updates a customer by ID (requires ADMIN or ATTENDANT role)",
     security: [{ bearerAuth: [] }],
     request: {

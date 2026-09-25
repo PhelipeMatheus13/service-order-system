@@ -77,7 +77,7 @@ router.post("/", checkAccessToken, authorize("ADMIN", "ATTENDANT"), validate(cre
 registry.registerPath({
     tags: ["Service-order"],
     method: "get",
-    path: "/service-orders",
+    path: "/service-orders/{id}",
     summary: "Get a service order by ID",
     security: [{ bearerAuth: [] }],
     request: {
