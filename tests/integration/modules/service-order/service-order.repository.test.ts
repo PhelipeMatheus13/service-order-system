@@ -76,7 +76,7 @@ describe("Service Order Repository (Integration)", () => {
                 const input: CreateServiceOrderInput = {
                     deviceId: deviceCreatedId,
                     reportedProblem: "Screen is cracked and touch is not responding.",
-                    createdBy: userCreatedId,
+                    createdById: userCreatedId,
                 };
 
                 const serviceOrderCreated = await serviceOrderRepository.create(input);
@@ -102,7 +102,7 @@ describe("Service Order Repository (Integration)", () => {
                 const input: CreateServiceOrderInput = {
                     deviceId: deviceCreatedId,
                     reportedProblem: "Battery drains too fast.",
-                    createdBy: userCreatedId,
+                    createdById: userCreatedId,
                 };
 
                 const serviceOrderCreated = await serviceOrderRepository.create(input);
@@ -121,7 +121,7 @@ describe("Service Order Repository (Integration)", () => {
                 const input: CreateServiceOrderInput = {
                     deviceId: "0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa",
                     reportedProblem: "Screen is cracked.",
-                    createdBy: userCreatedId,
+                    createdById: userCreatedId,
                 };
 
                 const serviceOrderCreated = await serviceOrderRepository.create(input);

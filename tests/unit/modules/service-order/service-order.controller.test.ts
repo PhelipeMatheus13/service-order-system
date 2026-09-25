@@ -49,7 +49,7 @@ describe("Service Order Controller (Unit)", () => {
             expect(serviceOrderService.createServiceOrder).toHaveBeenCalledWith({
                 deviceId: "uuid-device-123",
                 reportedProblem: "Screen is cracked and touch is not responding.",
-                createdBy: "uuid-user-123",
+                createdById: "uuid-user-123",
             });
 
             expect(res.status).toHaveBeenCalledWith(201);

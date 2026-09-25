@@ -3,7 +3,7 @@ import { ServiceOrder } from "../../generated/prisma/client.js";
 interface CreateServiceOrderInput {
     deviceId: string;
     reportedProblem: string;
-    createdBy: string;
+    createdById: string;
 }
 
 interface ListServiceOrdersOptions {

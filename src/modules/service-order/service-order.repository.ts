@@ -12,7 +12,7 @@ const create = async (input: CreateServiceOrderInput): Promise<ServiceOrderRecor
     // the pair (device_id, customer_id) at the database level.
     const rows = await prisma.$queryRaw<ServiceOrderRecord[]>`
         INSERT INTO service_orders (device_id, customer_id, reported_problem, created_by)
-        SELECT d.id, d.customer_id, ${input.reportedProblem}, ${input.createdBy}::uuid
+        SELECT d.id, d.customer_id, ${input.reportedProblem}, ${input.createdById}::uuid
         FROM devices d
         WHERE d.id = ${input.deviceId}::uuid
         RETURNING
