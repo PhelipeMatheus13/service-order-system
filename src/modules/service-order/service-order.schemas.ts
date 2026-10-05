@@ -10,6 +10,9 @@ const serviceOrderSchema = registry.register(
         reportedProblem: z.string(),
         status: z.string(),
         createdBy: z.string(),
+        cancelledAt: z.string().nullable(), 
+        cancelReason: z.string().nullable(), 
+        finishedAt: z.string().nullable(), 
         createdAt: z.string(),
         updatedAt: z.string().nullable(),
     })

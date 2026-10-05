@@ -1,10 +1,19 @@
-import type { CreateServiceOrderInput, ServiceOrderRecord, ListServiceOrdersInput } from "./service-order.types.ts";
+import type {
+    CreateServiceOrderInput,
+    ServiceOrderRecord,
+    ListServiceOrdersInput,
+    ServiceOrderStatusHistoryRecord,
+    CreateServiceOrderStatusHistoryInput
+} from "./service-order.types.ts";
 import { getPrisma } from "../../shared/config/database.js";
+import { Prisma, PrismaClient } from "../../generated/prisma/client.js";
+
+type PrismaClientOrTx = PrismaClient | Prisma.TransactionClient;
 
 // Writer
-const create = async (input: CreateServiceOrderInput): Promise<ServiceOrderRecord | null> => {
-    const prisma = getPrisma();
-    
+const create = async (input: CreateServiceOrderInput, tx?: Prisma.TransactionClient): Promise<ServiceOrderRecord | null> => {
+    const prisma: PrismaClientOrTx = tx || getPrisma();
+
     // Raw SQL because we need the customer_id to be derived from the device
     // atomically. Prisma's `create` cannot do INSERT...SELECT, and doing a
     // findUnique + create would open a race window. This single statement
@@ -22,6 +31,9 @@ const create = async (input: CreateServiceOrderInput): Promise<ServiceOrderRecor
             reported_problem AS "reportedProblem",
             status,
             created_by       AS "createdBy",
+            cancelled_at     AS "cancelledAt",
+            cancel_reason    AS "cancelReason",
+            finished_at      AS "finishedAt",
             created_at       AS "createdAt",
             updated_at       AS "updatedAt"
     `;
@@ -29,11 +41,24 @@ const create = async (input: CreateServiceOrderInput): Promise<ServiceOrderRecor
     return rows[0] ?? null;
 };
 
+const createServiceOrderStatusHistory = async (input: CreateServiceOrderStatusHistoryInput, tx?: Prisma.TransactionClient): Promise<ServiceOrderStatusHistoryRecord> => {
+    const prisma: PrismaClientOrTx = tx || getPrisma();
+    return prisma.serviceOrderStatusHistory.create({
+        data: {
+            serviceOrderId: input.serviceOrderId,
+            fromStatus: input.fromStatus,
+            toStatus: input.toStatus,
+            changeSource: input.changeSource,
+            changedById: input.changedById
+        },
+    });
+};
+
 // Reader
 const findById = async (id: string): Promise<ServiceOrderRecord | null> => {
     const prisma = getPrisma();
     return prisma.serviceOrder.findUnique({ where: { id } });
-};    
+};
 
 const list = async (input: ListServiceOrdersInput): Promise<ServiceOrderRecord[]> => {
     const prisma = getPrisma();
@@ -52,6 +77,7 @@ const list = async (input: ListServiceOrdersInput): Promise<ServiceOrderRecord[]
 export default {
     // Writer
     create,
+    createServiceOrderStatusHistory,
     // Reader
     findById,
     list,

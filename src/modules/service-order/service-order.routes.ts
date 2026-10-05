@@ -67,6 +67,7 @@ registry.registerPath({
             },
         },
         404: { $ref: "#/components/responses/deviceNotFoundError" },
+        409: { $ref: "#/components/responses/deviceAlreadyInServicerror" },
         422: { $ref: "#/components/responses/createServiceOrderValidationError" },
         500: { $ref: "#/components/responses/internalError" },
     }

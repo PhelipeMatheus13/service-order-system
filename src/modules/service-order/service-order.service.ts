@@ -3,19 +3,34 @@ import {
     ServiceOrderRecord,
     ListServiceOrdersInput
 } from "./service-order.types.js";
-import { notFound, unauthorized } from "../../shared/errors/errors.js";
-import { isForeignKeyConstraintOn } from "../../shared/utils/prisma-error.js";
+import { getPrisma } from "../../shared/config/database.js";
+import { notFound, unauthorized, conflict } from "../../shared/errors/errors.js";
+import { isForeignKeyConstraintOn, isUniqueConstraintOn } from "../../shared/utils/prisma-error.js";
 import serviceOrderRepository from "./service-order.repository.js";
+
 
 const createServiceOrder = async (input: CreateServiceOrderInput): Promise<ServiceOrderRecord> => {
     try {
-        const serviceOrder = await serviceOrderRepository.create(input);
+        return await getPrisma().$transaction(async (tx) => {
+            const serviceOrder = await serviceOrderRepository.create(input, tx);
 
-        if (!serviceOrder) {
-            throw notFound({ message: "Device not found" });
-        }
+            if (!serviceOrder) {
+                throw notFound({ message: "Device not found" });
+            }
 
-        return serviceOrder;
+            await serviceOrderRepository.createServiceOrderStatusHistory(
+                {
+                    serviceOrderId: serviceOrder.id,
+                    fromStatus: null,
+                    toStatus: "WAITING_DIAGNOSIS",
+                    changeSource: "USER",
+                    changedById: input.createdById,
+                },
+                tx,
+            );
+
+            return serviceOrder;
+        });
     } catch (error) {
         if (isForeignKeyConstraintOn(error, "created_by")) {
             throw unauthorized({
@@ -24,9 +39,17 @@ const createServiceOrder = async (input: CreateServiceOrderInput): Promise<Servi
             });
         }
 
+        if (isUniqueConstraintOn(error, "device_id")) {
+            throw conflict({
+                message: "This device already has an active service order",
+                code: "DEVICE_ALREADY_IN_SERVICE",
+            });
+        }
+
         throw error;
     }
 };
+
 
 const getServiceOrderById = async (id: string): Promise<ServiceOrderRecord> => {
     const serviceOrder = await serviceOrderRepository.findById(id);

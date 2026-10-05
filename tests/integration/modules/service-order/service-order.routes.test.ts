@@ -94,7 +94,7 @@ describe("Service Order Routes (Integration)", () => {
             expect(serviceOrder?.deviceId).toBe(deviceId);
             expect(serviceOrder?.customerId).toBe(customerId);
             expect(serviceOrder?.createdById).toBe(userId);
-            expect(serviceOrder?.status).toBe("RECEIVED");
+            expect(serviceOrder?.status).toBe("WAITING_DIAGNOSIS");
         });
     });
 
@@ -127,7 +127,7 @@ describe("Service Order Routes (Integration)", () => {
                 customerId,
                 deviceId,
                 reportedProblem: "Screen is cracked and touch is not responding.",
-                status: "RECEIVED",
+                status: "WAITING_DIAGNOSIS",
                 createdById: userId,
             });
             expect(res.body.data.createdAt).toBeTruthy();
@@ -147,6 +147,7 @@ describe("Service Order Routes (Integration)", () => {
                         reportedProblem: "Screen is cracked and touch is not responding.",
                         createdById: userId,
                         createdAt: new Date(now.getTime() - 60 * 60 * 1000),
+                        finishedAt: new Date(now.getTime() - 30 * 60 * 1000), // (only 1 Service Order active for the device)
                     },
                     {
                         customerId,
@@ -174,7 +175,7 @@ describe("Service Order Routes (Integration)", () => {
             expect(res.body.data[0].customerId).toBe(customerId);
             expect(res.body.data[0].deviceId).toBe(deviceId);
             expect(res.body.data[0].reportedProblem).toBe("Battery drains too fast.");
-            expect(res.body.data[0].status).toBe("RECEIVED");
+            expect(res.body.data[0].status).toBe("WAITING_DIAGNOSIS");
             expect(res.body.data[0].createdAt).toBeTruthy();
             expect(res.body.data[0].updatedAt).toBeNull();
         });

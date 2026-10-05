@@ -64,6 +64,7 @@ const missingServiceOrderIdError = registry.registerComponent("responses", "miss
         },
     },
 });
+
 // 404
 const userNotFoundError = registry.registerComponent("responses", "userNotFoundError", {
     description: "User not found or does not exist",
@@ -172,6 +173,22 @@ const deviceUniqueConstraintError = registry.registerComponent("responses", "dev
                             message: "Device with this IMEI already exists",
                         },
                     },
+                },
+            },
+        },
+    },
+});
+
+const deviceAlreadyInServicerror = registry.registerComponent("responses", "deviceAlreadyInServicerror", {
+    description: "This device already has an active service order",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            example: {
+                success: false,
+                error: {
+                    code: "DEVICE_ALREADY_IN_SERVICE",
+                    message: "This device already has an active service order",
                 },
             },
         },
@@ -462,6 +479,7 @@ export {
     // 409
     emailAlreadyExistsError,
     deviceUniqueConstraintError,
+    deviceAlreadyInServicerror,
     // 422
     registerValidationError,
     confirmEmailValidationError,
