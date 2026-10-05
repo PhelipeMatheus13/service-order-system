@@ -30,17 +30,24 @@ enum UserResourceValidationType {
 }
 
 enum ServiceOrderStatus {
-  RECEIVED
+  WAITING_DIAGNOSIS
   IN_DIAGNOSIS
-  DIAGNOSIS_COMPLETED
+  AWAITING_QUOTE
   AWAITING_APPROVAL
+  AWAITING_MAINTENANCE
   IN_MAINTENANCE
-  FINALIZED
   AWAITING_DELIVERY
   DELIVERED
   CANCELLED
 
   @@map("service_order_status_enum")
+}
+
+enum ServiceOrderStatusChangeSource {
+  USER
+  SYSTEM
+
+  @@map("service_order_status_change_source_enum")
 }
 
 model User {
@@ -55,10 +62,11 @@ model User {
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt    DateTime? @map("updated_at") @db.Timestamptz()
 
-  resourceValidations UserResourceValidation[]
-  activationTokens    UserActivationToken[]
-  refreshTokens       RefreshToken[]
-  serviceOrders       ServiceOrder[]
+  resourceValidations         UserResourceValidation[]
+  activationTokens            UserActivationToken[]
+  refreshTokens               RefreshToken[]
+  serviceOrders               ServiceOrder[]
+  serviceOrderStatusHistories ServiceOrderStatusHistory[]
 
   @@index([createdAt(sort: Desc)])
   @@map("users")
@@ -160,16 +168,36 @@ model ServiceOrder {
   customerId      String             @map("customer_id") @db.Uuid
   deviceId        String             @map("device_id") @db.Uuid
   reportedProblem String             @map("reported_problem") @db.Text
-  status          ServiceOrderStatus @default(RECEIVED)
+  status          ServiceOrderStatus @default(WAITING_DIAGNOSIS)
   createdById     String             @map("created_by") @db.Uuid
+  cancelledAt     DateTime?          @map("cancelled_at") @db.Timestamptz()
+  cancelReason    String?            @map("cancel_reason") @db.Text
+  finishedAt      DateTime?          @map("finished_at") @db.Timestamptz()
   createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt       DateTime?          @map("updated_at") @db.Timestamptz()
 
-  device    Device @relation(fields: [deviceId, customerId], references: [id, customerId], onDelete: Restrict)
-  createdBy User   @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  device                      Device                      @relation(fields: [deviceId, customerId], references: [id, customerId], onDelete: Restrict)
+  createdBy                   User                        @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  serviceOrderStatusHistories ServiceOrderStatusHistory[]
 
   @@index([customerId])
   @@index([deviceId])
   @@index([status, createdAt(sort: Desc)])
   @@map("service_orders")
+}
+
+model ServiceOrderStatusHistory {
+  id             String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  serviceOrderId String                         @map("service_order_id") @db.Uuid
+  fromStatus     ServiceOrderStatus?            @map("from_status")
+  toStatus       ServiceOrderStatus             @map("to_status")
+  changeSource   ServiceOrderStatusChangeSource @map("change_source")
+  changedById    String?                        @map("changed_by") @db.Uuid
+  createdAt      DateTime                       @default(now()) @map("created_at") @db.Timestamptz()
+
+  serviceOrder ServiceOrder @relation(fields: [serviceOrderId], references: [id], onDelete: Cascade)
+  changedBy    User?        @relation(fields: [changedById], references: [id], onDelete: Restrict)
+
+  @@index([serviceOrderId, createdAt(sort: Desc)])
+  @@map("service_order_status_history")
 }
