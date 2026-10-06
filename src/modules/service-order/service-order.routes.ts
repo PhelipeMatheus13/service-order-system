@@ -7,7 +7,7 @@ import { errorSchema } from "../../shared/docs/components/schemas.js"
 import validate from "../../shared/middlewares/validate.js";
 import { checkAccessToken, authorize } from "../../shared/middlewares/auth.js";
 // local modules
-import { serviceOrderSchema, createServiceOrderSchema } from "./service-order.schemas.js";
+import { serviceOrderSchema, createServiceOrderSchema, cancelServiceOrderSchema } from "./service-order.schemas.js";
 import serviceOrderController from "./service-order.controller.js";
 
 const router = express.Router();
@@ -151,5 +151,49 @@ registry.registerPath({
     }
 });
 router.get("/", checkAccessToken, serviceOrderController.listServiceOrders);
+
+// PATCH
+registry.registerPath({
+    tags: ["Service-order"],
+    method: "patch",
+    path: "/service-orders/{id}/cancel",
+    summary: "Cancel service orders by ID",
+    security: [{ bearerAuth: [] }],
+    request: {
+        params: z.object({ id: z.string() }),
+    },
+    responses: {
+        200: {
+            description: "Service order successfully cancelled",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        success: z.boolean().openapi({ example: true }),
+                        message: z.string().openapi({ example: "Service order successfully cancelled" }),
+                    }),
+                },
+            },
+        },
+        400: { $ref: "#/components/responses/missingServiceOrderIdError" },
+        401: {
+            description: "Missing, invalid or expired access token",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
+                        invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
+                        accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
+                    },
+                },
+            },
+        },
+        404: { $ref: "#/components/responses/serviceOrderNotFoundError" },
+        409: { $ref: "#/components/responses/serviceOrderCancellationError" },
+        422: { $ref: "#/components/responses/cancelServiceOrderValidationError" },
+        500: { $ref: "#/components/responses/internalError" },
+    }
+});
+router.patch("/:id/cancel", checkAccessToken, authorize("ADMIN", "ATTENDANT"), validate(cancelServiceOrderSchema), serviceOrderController.cancelServiceOrder);
 
 export default router;

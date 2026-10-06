@@ -2,7 +2,7 @@ import {
     ServiceOrder, 
     ServiceOrderStatus,
     ServiceOrderStatusHistory, 
-    ServiceOrderStatusChangeSource 
+    ServiceOrderStatusChangeSource,
 } from "../../generated/prisma/client.js";
 
 interface CreateServiceOrderInput {
@@ -19,7 +19,7 @@ interface ListServiceOrdersInput {
     options: ListServiceOrdersOptions;
 } 
 
-interface CreateServiceOrderStatusHistoryInput {
+interface CreateServiceOrderStatusHistoryData {
     serviceOrderId: string;
     fromStatus: ServiceOrderStatus | null;
     toStatus: ServiceOrderStatus;
@@ -27,10 +27,29 @@ interface CreateServiceOrderStatusHistoryInput {
     changedById: string | null;
 }
 
+interface CancelServiceOrderInput {
+    serviceOrderId: string;
+    reason: string;
+    cancelById: string;
+}
+
+interface CancelServiceOrderData {
+    serviceOrderId: string;
+    reason: string;
+}
+
+export {
+    ServiceOrderStatus,
+    ServiceOrderStatusChangeSource,
+};
+
 export type {
     ServiceOrder as ServiceOrderRecord,
+    ServiceOrderStatus as ServiceOrderStatusRecord,
     CreateServiceOrderInput,
     ListServiceOrdersInput,
     ServiceOrderStatusHistory as ServiceOrderStatusHistoryRecord,
-    CreateServiceOrderStatusHistoryInput
+    CreateServiceOrderStatusHistoryData,
+    CancelServiceOrderInput, 
+    CancelServiceOrderData
 };

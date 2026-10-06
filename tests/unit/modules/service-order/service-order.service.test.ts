@@ -5,6 +5,7 @@ import {
     CreateServiceOrderInput,
     ServiceOrderRecord,
     ListServiceOrdersInput,
+    CancelServiceOrderInput
 } from "../../../../src/modules/service-order/service-order.types.js";
 // (shared)
 import { getPrisma } from "../../../../src/shared/config/database.js";
@@ -252,6 +253,147 @@ describe("Service Order Service (Unit)", () => {
 
             expect(serviceOrderRepository.list).toHaveBeenCalledWith(input);
             expect(result).toEqual(mockServiceOrders);
+        });
+    });
+
+    describe("cancelServiceOrder", () => {
+        const validInput: CancelServiceOrderInput = {
+            serviceOrderId: "uuid-service-order-123",
+            reason: "Customer requested cancellation.",
+            cancelById: "uuid-user-123",
+        };
+
+        const mockServiceOrderRecord = {
+            id: validInput.serviceOrderId,
+            customerId: "uuid-customer-123",
+            deviceId: "uuid-device-123",
+            reportedProblem: "Screen is cracked and touch is not responding.",
+            status: "WAITING_DIAGNOSIS",
+            createdById: "uuid-user-123",
+            cancelledAt: null,
+            cancelReason: null,
+            finishedAt: null,
+            createdAt: new Date(),
+            updatedAt: null,
+        } as ServiceOrderRecord;
+
+        const setupCancelServiceOrderMocks = () => {
+            const tx = {} as any;
+
+            vi.mocked(getPrisma).mockReturnValue({
+                $transaction: vi.fn(async (callback) => callback(tx)),
+            } as any);
+            vi.mocked(serviceOrderRepository.findById).mockResolvedValue(mockServiceOrderRecord);
+            vi.mocked(serviceOrderRepository.cancelServiceOrder).mockResolvedValue(true);
+            vi.mocked(serviceOrderRepository.createServiceOrderStatusHistory).mockResolvedValue({
+                id: "uuid-history-123",
+                serviceOrderId: mockServiceOrderRecord.id,
+                fromStatus: "WAITING_DIAGNOSIS",
+                toStatus: "CANCELLED",
+                changeSource: "USER",
+                changedById: validInput.cancelById,
+                createdAt: new Date(),
+            });
+
+            return { tx };
+        };
+
+        it("should propagate error when findById fails", async () => {
+            const error = new Error("fake error");
+            vi.mocked(serviceOrderRepository.findById).mockRejectedValue(error);
+
+            await expect(serviceOrderService.cancelServiceOrder(validInput))
+                .rejects.toThrow(error);
+        });
+
+        it("should throw NOT_FOUND if service order does not exist", async () => {
+            vi.mocked(serviceOrderRepository.findById).mockResolvedValue(null);
+
+            await expect(serviceOrderService.cancelServiceOrder(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 404,
+                    code: "NOT_FOUND",
+                    message: "Service order not found",
+                });
+
+            expect(getPrisma).not.toHaveBeenCalled();
+        });
+
+        it("should throw CONFLICT if service order is already cancelled", async () => {
+            vi.mocked(serviceOrderRepository.findById).mockResolvedValue({
+                ...mockServiceOrderRecord,
+                status: "CANCELLED",
+            });
+
+            await expect(serviceOrderService.cancelServiceOrder(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 409,
+                    code: "CONFLICT",
+                    message: "Service order is already cancelled",
+                });
+
+            expect(getPrisma).not.toHaveBeenCalled();
+        });
+
+        it("should throw CONFLICT if the current status does not allow cancellation", async () => {
+            vi.mocked(serviceOrderRepository.findById).mockResolvedValue({
+                ...mockServiceOrderRecord,
+                status: "DELIVERED",
+            });
+
+            await expect(serviceOrderService.cancelServiceOrder(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 409,
+                    code: "CONFLICT",
+                    message: "Service order cannot be cancelled in its current status",
+                });
+
+            expect(getPrisma).not.toHaveBeenCalled();
+        });
+
+        it("should throw CONFLICT if repository returns false (race condition)", async () => {
+            const { tx } = setupCancelServiceOrderMocks();
+            vi.mocked(serviceOrderRepository.cancelServiceOrder).mockResolvedValue(false);
+
+            await expect(serviceOrderService.cancelServiceOrder(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 409,
+                    code: "CONFLICT",
+                    message: "Service order could not be cancelled because its status changed",
+                });
+
+            expect(serviceOrderRepository.cancelServiceOrder).toHaveBeenCalledWith(validInput, tx);
+            expect(serviceOrderRepository.createServiceOrderStatusHistory).not.toHaveBeenCalled();
+        });
+
+        it("should propagate error when createServiceOrderStatusHistory fails", async () => {
+            const { tx } = setupCancelServiceOrderMocks();
+            const error = new Error("History creation failed");
+            vi.mocked(serviceOrderRepository.createServiceOrderStatusHistory).mockRejectedValue(error);
+
+            await expect(serviceOrderService.cancelServiceOrder(validInput))
+                .rejects.toThrow(error);
+
+            expect(serviceOrderRepository.cancelServiceOrder).toHaveBeenCalledWith(validInput, tx);
+        });
+
+        it("should cancel service order and create status history in a transaction", async () => {
+            const { tx } = setupCancelServiceOrderMocks();
+
+            await serviceOrderService.cancelServiceOrder(validInput);
+
+            expect(serviceOrderRepository.findById).toHaveBeenCalledWith(validInput.serviceOrderId);
+            expect(serviceOrderRepository.cancelServiceOrder).toHaveBeenCalledWith(validInput, tx);
+            expect(serviceOrderRepository.createServiceOrderStatusHistory).toHaveBeenCalledWith(
+                {
+                    serviceOrderId: validInput.serviceOrderId,
+                    fromStatus: "WAITING_DIAGNOSIS",
+                    toStatus: "CANCELLED",
+                    changeSource: "USER",
+                    changedById: validInput.cancelById,
+                },
+                tx,
+            );
         });
     });
 });

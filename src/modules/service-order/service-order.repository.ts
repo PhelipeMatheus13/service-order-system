@@ -3,8 +3,10 @@ import type {
     ServiceOrderRecord,
     ListServiceOrdersInput,
     ServiceOrderStatusHistoryRecord,
-    CreateServiceOrderStatusHistoryInput
+    CreateServiceOrderStatusHistoryData,
+    CancelServiceOrderData,
 } from "./service-order.types.ts";
+import { ServiceOrderStatus } from "./service-order.types.js";
 import { getPrisma } from "../../shared/config/database.js";
 import { Prisma, PrismaClient } from "../../generated/prisma/client.js";
 
@@ -41,7 +43,7 @@ const create = async (input: CreateServiceOrderInput, tx?: Prisma.TransactionCli
     return rows[0] ?? null;
 };
 
-const createServiceOrderStatusHistory = async (input: CreateServiceOrderStatusHistoryInput, tx?: Prisma.TransactionClient): Promise<ServiceOrderStatusHistoryRecord> => {
+const createServiceOrderStatusHistory = async (input: CreateServiceOrderStatusHistoryData, tx?: Prisma.TransactionClient): Promise<ServiceOrderStatusHistoryRecord> => {
     const prisma: PrismaClientOrTx = tx || getPrisma();
     return prisma.serviceOrderStatusHistory.create({
         data: {
@@ -52,6 +54,32 @@ const createServiceOrderStatusHistory = async (input: CreateServiceOrderStatusHi
             changedById: input.changedById
         },
     });
+};
+
+const cancelServiceOrder = async (input: CancelServiceOrderData, tx?: Prisma.TransactionClient): Promise<boolean> => {
+    const prisma: PrismaClientOrTx = tx || getPrisma();
+
+    const result = await prisma.serviceOrder.updateMany({
+        where: {
+            id: input.serviceOrderId,
+            status: {
+                in: [
+                    ServiceOrderStatus.WAITING_DIAGNOSIS,
+                    ServiceOrderStatus.IN_DIAGNOSIS,
+                    ServiceOrderStatus.AWAITING_QUOTE,
+                    ServiceOrderStatus.AWAITING_APPROVAL,
+                    ServiceOrderStatus.AWAITING_MAINTENANCE,
+                ],
+            },
+        },
+        data: {
+            status: ServiceOrderStatus.CANCELLED,
+            cancelledAt: new Date(),
+            cancelReason: input.reason,
+        },
+    });
+
+    return result.count > 0;
 };
 
 // Reader
@@ -78,6 +106,7 @@ export default {
     // Writer
     create,
     createServiceOrderStatusHistory,
+    cancelServiceOrder,
     // Reader
     findById,
     list,

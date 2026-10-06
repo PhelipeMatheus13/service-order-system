@@ -1,13 +1,14 @@
 import {
     CreateServiceOrderInput,
     ServiceOrderRecord,
-    ListServiceOrdersInput
+    ListServiceOrdersInput,
+    CancelServiceOrderInput
 } from "./service-order.types.js";
+import { ServiceOrderStatus } from "./service-order.types.js";
 import { getPrisma } from "../../shared/config/database.js";
 import { notFound, unauthorized, conflict } from "../../shared/errors/errors.js";
-import { isForeignKeyConstraintOn, isUniqueConstraintOn } from "../../shared/utils/prisma-error.js";
+import { isForeignKeyConstraintOn, isUniqueConstraintOn, isNotFoundError } from "../../shared/utils/prisma-error.js";
 import serviceOrderRepository from "./service-order.repository.js";
-
 
 const createServiceOrder = async (input: CreateServiceOrderInput): Promise<ServiceOrderRecord> => {
     try {
@@ -61,8 +62,56 @@ const listServiceOrders = async (input: ListServiceOrdersInput): Promise<Service
     return serviceOrderRepository.list(input);
 };
 
+const cancelableStatuses: ServiceOrderStatus[] = [
+    ServiceOrderStatus.WAITING_DIAGNOSIS,
+    ServiceOrderStatus.IN_DIAGNOSIS,
+    ServiceOrderStatus.AWAITING_QUOTE,
+    ServiceOrderStatus.AWAITING_APPROVAL,
+    ServiceOrderStatus.AWAITING_MAINTENANCE,
+];
+
+const cancelServiceOrder = async (input: CancelServiceOrderInput): Promise<void> => {
+    const serviceOrder = await serviceOrderRepository.findById(input.serviceOrderId);
+
+    if (!serviceOrder) {
+        throw notFound({ message: "Service order not found" });
+    }
+
+    if (serviceOrder.status === ServiceOrderStatus.CANCELLED) {
+        throw conflict({ message: "Service order is already cancelled" });
+    }
+
+    if (!cancelableStatuses.includes(serviceOrder.status)) {
+        throw conflict({ message: "Service order cannot be cancelled in its current status" });
+    }
+
+    await getPrisma().$transaction(async (tx) => {
+        const cancelled = await serviceOrderRepository.cancelServiceOrder(
+            input,
+            tx,
+        );
+
+        if (!cancelled) {
+            throw conflict({ message: "Service order could not be cancelled because its status changed" });
+        }
+
+        await serviceOrderRepository.createServiceOrderStatusHistory(
+            {
+                serviceOrderId: input.serviceOrderId,
+                fromStatus: serviceOrder.status,
+                toStatus: ServiceOrderStatus.CANCELLED,
+                changeSource: "USER",
+                changedById: input.cancelById,
+            },
+            tx,
+        );
+    });
+};
+
+
 export default {
     createServiceOrder,
     getServiceOrderById,
     listServiceOrders,
+    cancelServiceOrder,
 };

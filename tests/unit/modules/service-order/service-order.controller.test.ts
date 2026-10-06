@@ -169,4 +169,61 @@ describe("Service Order Controller (Unit)", () => {
             expect(next).not.toHaveBeenCalled();
         });
     });
+
+    describe("cancelServiceOrder", () => {
+        it("should return 200 on successful cancellation", async () => {
+            req.params.id = "uuid-service-order-123";
+            req.user = { id: "uuid-user-123" };
+            req.body = {
+                reason: "Customer requested cancellation.",
+            };
+
+            vi.mocked(serviceOrderService).cancelServiceOrder.mockResolvedValue();
+
+            await serviceOrderController.cancelServiceOrder(req, res, next);
+
+            expect(serviceOrderService.cancelServiceOrder).toHaveBeenCalledWith({
+                serviceOrderId: "uuid-service-order-123",
+                reason: "Customer requested cancellation.",
+                cancelById: "uuid-user-123",
+            });
+
+            expect(res.status).toHaveBeenCalledWith(200);
+            expect(res.json).toHaveBeenCalledWith({
+                success: true,
+                message: "Service order successfully cancelled",
+            });
+            expect(next).not.toHaveBeenCalled();
+        });
+
+        it("should call next with badRequest error if id is missing", async () => {
+            req.params = {};
+            req.user = { id: "uuid-user-123" };
+            req.body = { reason: "Customer requested cancellation." };
+
+            await serviceOrderController.cancelServiceOrder(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(expect.objectContaining({
+                statusCode: 400,
+                code: "BAD_REQUEST",
+                message: "service order ID is required",
+            }));
+            expect(serviceOrderService.cancelServiceOrder).not.toHaveBeenCalled();
+            expect(res.status).not.toHaveBeenCalled();
+        });
+
+        it("should propagate error when service fails", async () => {
+            req.params.id = "uuid-service-order-123";
+            req.user = { id: "uuid-user-123" };
+            req.body = { reason: "Customer requested cancellation." };
+
+            const error = new Error("Service error");
+            vi.mocked(serviceOrderService).cancelServiceOrder.mockRejectedValue(error);
+
+            await serviceOrderController.cancelServiceOrder(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(error);
+            expect(res.status).not.toHaveBeenCalled();
+        });
+    });
 });

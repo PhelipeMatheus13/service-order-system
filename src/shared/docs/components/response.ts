@@ -195,6 +195,47 @@ const deviceAlreadyInServicerror = registry.registerComponent("responses", "devi
     },
 });
 
+const serviceOrderCancellationError = registry.registerComponent("responses", "serviceOrderCancellationError", {
+    description: "Service order cannot be cancelled",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            examples: {
+                alreadyCancelled: {
+                    summary: "Service order is already cancelled",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Service order is already cancelled",
+                        },
+                    },
+                },
+                notCancellable: {
+                    summary: "Current status does not allow cancellation",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Service order cannot be cancelled in its current status",
+                        },
+                    },
+                },
+                statusChanged: {
+                    summary: "Status changed during cancellation (race condition)",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Service order could not be cancelled because its status changed",
+                        },
+                    },
+                },
+            },
+        },
+    },
+});
+
 // VALIDATION ERRORS (422)
 const registerValidationError = registry.registerComponent("responses", "registerValidationError", {
     description: "Register validation error",
@@ -447,6 +488,25 @@ const createServiceOrderValidationError = registry.registerComponent("responses"
     },
 });
 
+const cancelServiceOrderValidationError = registry.registerComponent("responses", "cancelServiceOrderValidationError", {
+    description: "Cancel service order validation error",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/ValidationError" },
+            example: {
+                success: false,
+                error: {
+                    code: "VALIDATION_ERROR",
+                    message: "Validation failed",
+                    details: [
+                        { field: "reason", message: "Reason must be at least 5 characters long" },
+                    ],
+                },
+            },
+        },
+    },
+});
+
 
 // 500
 const internalError = registry.registerComponent("responses", "internalError", {
@@ -480,6 +540,7 @@ export {
     emailAlreadyExistsError,
     deviceUniqueConstraintError,
     deviceAlreadyInServicerror,
+    serviceOrderCancellationError,
     // 422
     registerValidationError,
     confirmEmailValidationError,
@@ -491,6 +552,7 @@ export {
     createDeviceValidationError,
     updateDeviceValidationError,
     createServiceOrderValidationError,
+    cancelServiceOrderValidationError,
     // 500
     internalError,
 };

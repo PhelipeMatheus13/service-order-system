@@ -180,4 +180,54 @@ describe("Service Order Routes (Integration)", () => {
             expect(res.body.data[0].updatedAt).toBeNull();
         });
     });
+
+    describe("PATCH /service-orders/:id/cancel", () => {
+        let serviceOrderId: string;
+
+        beforeEach(async () => {
+            const serviceOrder = await prisma.serviceOrder.create({
+                data: {
+                    customerId,
+                    deviceId,
+                    reportedProblem: "Screen is cracked and touch is not responding.",
+                    createdById: userId,
+                },
+                select: { id: true },
+            });
+
+            serviceOrderId = serviceOrder.id;
+        });
+
+        it("should cancel the service order successfully", async () => {
+            const res = await request(app)
+                .patch(`/service-orders/${serviceOrderId}/cancel`)
+                .set("Authorization", `Bearer ${accessToken}`)
+                .send({
+                    reason: "Customer requested cancellation.",
+                });
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(res.body.message).toBe("Service order successfully cancelled");
+
+            const serviceOrder = await prisma.serviceOrder.findUnique({
+                where: { id: serviceOrderId },
+            });
+
+            expect(serviceOrder?.status).toBe("CANCELLED");
+            expect(serviceOrder?.cancelReason).toBe("Customer requested cancellation.");
+            expect(serviceOrder?.cancelledAt).toBeTruthy();
+
+            const statusHistory = await prisma.serviceOrderStatusHistory.findFirst({
+                where: { serviceOrderId },
+                orderBy: { createdAt: "desc" },
+            });
+
+            expect(statusHistory).toBeTruthy();
+            expect(statusHistory?.fromStatus).toBe("WAITING_DIAGNOSIS");
+            expect(statusHistory?.toStatus).toBe("CANCELLED");
+            expect(statusHistory?.changeSource).toBe("USER");
+            expect(statusHistory?.changedById).toBe(userId);
+        });
+    });
 });

@@ -38,10 +38,26 @@ const listServiceOrders = asyncHandler(async (req, res) => {
         success: true,
         data: serviceOrders,
     });
-}); 
+});
+
+const cancelServiceOrder = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (!id) throw badRequest({ message: "service order ID is required" });
+
+    const input = serviceOrderDTO.cancelServiceOrderDTO(req.body, String(id), String(req.user?.id));
+    
+    await serviceOrderService.cancelServiceOrder(input);
+
+    res.status(200).json({
+        success: true,
+        message: "Service order successfully cancelled",
+    });
+});
+
 
 export default {
     createServiceOrder,
     getServiceOrderById,
     listServiceOrders,
+    cancelServiceOrder,
 };

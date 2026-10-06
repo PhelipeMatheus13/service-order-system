@@ -37,13 +37,31 @@ const createServiceOrderSchema = registry.register(
     })
 );
 
-type createServiceOrderRequest = z.infer<typeof createServiceOrderSchema>;
+type CreateServiceOrderRequest = z.infer<typeof createServiceOrderSchema>;
+
+const cancelServiceOrderSchema = registry.register(
+    "CancelServiceOrderSchema",
+    z.object({
+        reason: z
+            .string()
+            .trim()
+            .min(5, "Cancellation reason must be at least 5 characters long")
+            .max(500, "Cancellation reason must contain at most 500 characters")
+            .openapi({
+                example: "I no longer need the service.",
+            }),
+    })
+);
+
+type CancelServiceOrderRequest = z.infer<typeof cancelServiceOrderSchema>;
 
 export {
     serviceOrderSchema,
     createServiceOrderSchema,
+    cancelServiceOrderSchema,
 };
 
 export type {
-    createServiceOrderRequest,
+    CreateServiceOrderRequest,
+    CancelServiceOrderRequest,
 };

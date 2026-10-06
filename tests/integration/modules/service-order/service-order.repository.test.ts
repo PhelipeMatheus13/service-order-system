@@ -1,7 +1,11 @@
 // (Node built‑ins)
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
 // (Types)
-import type { CreateServiceOrderInput, CreateServiceOrderStatusHistoryInput } from "../../../../src/modules/service-order/service-order.types.js";
+import type { 
+    CreateServiceOrderInput, 
+    CreateServiceOrderStatusHistoryData, 
+    CancelServiceOrderData 
+} from "../../../../src/modules/service-order/service-order.types.js";
 // (shared / infra)
 import { PrismaClient } from "../../../../src/generated/prisma/client.js";
 import { setPrismaInstance } from "../../../../src/shared/config/database";
@@ -216,7 +220,7 @@ describe("Service Order Repository (Integration)", () => {
             });
 
             it("should insert a status history entry with all fields populated", async () => {
-                const input: CreateServiceOrderStatusHistoryInput = {
+                const input: CreateServiceOrderStatusHistoryData = {
                     serviceOrderId: serviceOrderCreatedId,
                     fromStatus: "AWAITING_APPROVAL",
                     toStatus: "AWAITING_MAINTENANCE",
@@ -243,7 +247,7 @@ describe("Service Order Repository (Integration)", () => {
             });
 
             it("should insert a status history entry with null fromStatus (initial status)", async () => {
-                const input: CreateServiceOrderStatusHistoryInput = {
+                const input: CreateServiceOrderStatusHistoryData = {
                     serviceOrderId: serviceOrderCreatedId,
                     fromStatus: null,
                     toStatus: "WAITING_DIAGNOSIS",
@@ -265,7 +269,7 @@ describe("Service Order Repository (Integration)", () => {
             });
 
             it("should use the transaction client when provided", async () => {
-                const input: CreateServiceOrderStatusHistoryInput = {
+                const input: CreateServiceOrderStatusHistoryData = {
                     serviceOrderId: serviceOrderCreatedId,
                     fromStatus: null,
                     toStatus: "WAITING_DIAGNOSIS",
@@ -294,6 +298,152 @@ describe("Service Order Repository (Integration)", () => {
                 });
 
                 expect(historyFound).toBeNull();
+            });
+        });
+
+        describe("cancelServiceOrder", () => {
+            let serviceOrderCreatedId: string;
+
+            beforeEach(async () => {
+                const userCreated = await prisma.user.create({
+                    data: {
+                        firstName: "John",
+                        lastName: "Doe",
+                        email: "john@example.com",
+                        role: "ATTENDANT",
+                        active: true,
+                    },
+                });
+
+                const customerCreated = await prisma.customer.create({
+                    data: {
+                        firstName: "Jane",
+                        lastName: "Doe",
+                        email: "jane@example.com",
+                        phoneNumber: "5521995437105",
+                    },
+                });
+
+                const deviceCreated = await prisma.device.create({
+                    data: {
+                        customerId: customerCreated.id,
+                        type: "SMARTPHONE",
+                        brand: "Samsung",
+                        model: "Galaxy S23",
+                        serialNumber: "SN-123456",
+                        imei: "123456789012345",
+                        color: "Black",
+                    },
+                });
+
+                const serviceOrderCreated = await prisma.serviceOrder.create({
+                    data: {
+                        customerId: customerCreated.id,
+                        deviceId: deviceCreated.id,
+                        reportedProblem: "Screen is cracked and touch is not responding.",
+                        createdById: userCreated.id,
+                    },
+                });
+
+                serviceOrderCreatedId = serviceOrderCreated.id;
+            });
+
+            it("should cancel a service order when its status allows cancellation and return true", async () => {
+                const input: CancelServiceOrderData = {
+                    serviceOrderId: serviceOrderCreatedId,
+                    reason: "Customer requested cancellation.",
+                };
+
+                const cancelled = await serviceOrderRepository.cancelServiceOrder(input);
+
+                expect(cancelled).toBe(true);
+
+                const serviceOrderFound = await prisma.serviceOrder.findUnique({
+                    where: { id: serviceOrderCreatedId },
+                });
+
+                expect(serviceOrderFound).not.toBeNull();
+                expect(serviceOrderFound?.status).toBe("CANCELLED");
+                expect(serviceOrderFound?.cancelReason).toBe(input.reason);
+                expect(serviceOrderFound?.cancelledAt).toBeTruthy();
+            });
+
+            it("should return false when the current status does not allow cancellation", async () => {
+                await prisma.serviceOrder.update({
+                    where: { id: serviceOrderCreatedId },
+                    data: { status: "DELIVERED" },
+                });
+
+                const input: CancelServiceOrderData = {
+                    serviceOrderId: serviceOrderCreatedId,
+                    reason: "Customer requested cancellation.",
+                };
+
+                const cancelled = await serviceOrderRepository.cancelServiceOrder(input);
+
+                expect(cancelled).toBe(false);
+
+                const serviceOrderFound = await prisma.serviceOrder.findUnique({
+                    where: { id: serviceOrderCreatedId },
+                });
+
+                expect(serviceOrderFound?.status).toBe("DELIVERED");
+                expect(serviceOrderFound?.cancelledAt).toBeNull();
+                expect(serviceOrderFound?.cancelReason).toBeNull();
+            });
+
+            it("should return false when the service order is already cancelled", async () => {
+                await serviceOrderRepository.cancelServiceOrder({
+                    serviceOrderId: serviceOrderCreatedId,
+                    reason: "First cancellation.",
+                });
+
+                const cancelled = await serviceOrderRepository.cancelServiceOrder({
+                    serviceOrderId: serviceOrderCreatedId,
+                    reason: "Second cancellation attempt.",
+                });
+
+                expect(cancelled).toBe(false);
+
+                const serviceOrderFound = await prisma.serviceOrder.findUnique({
+                    where: { id: serviceOrderCreatedId },
+                });
+
+                expect(serviceOrderFound?.status).toBe("CANCELLED");
+                expect(serviceOrderFound?.cancelReason).toBe("First cancellation.");
+            });
+
+            it("should return false when the service order does not exist", async () => {
+                const cancelled = await serviceOrderRepository.cancelServiceOrder({
+                    serviceOrderId: "0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa",
+                    reason: "Customer requested cancellation.",
+                });
+
+                expect(cancelled).toBe(false);
+            });
+
+            it("should use the transaction client when provided", async () => {
+                const input: CancelServiceOrderData = {
+                    serviceOrderId: serviceOrderCreatedId,
+                    reason: "Customer requested cancellation.",
+                };
+
+                await expect(
+                    prisma.$transaction(async (tx) => {
+                        const cancelled = await serviceOrderRepository.cancelServiceOrder(input, tx);
+                        expect(cancelled).toBe(true);
+
+                        throw new Error("rollback");
+                    }),
+                ).rejects.toThrow("rollback");
+
+                const serviceOrderFound = await prisma.serviceOrder.findUnique({
+                    where: { id: serviceOrderCreatedId },
+                });
+
+                expect(serviceOrderFound?.status).toBe("WAITING_DIAGNOSIS");
+                expect(serviceOrderFound?.cancelledAt).toBeNull();
+                expect(serviceOrderFound?.cancelReason).toBeNull();
             });
         });
     });
