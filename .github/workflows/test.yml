@@ -56,15 +56,7 @@ jobs:
 
       - name: Run unit tests
         run: npm run test:unit
-
-      - name: Upload coverage
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-unit
-          path: coverage/
-          if-no-files-found: error
-
+        
   test-integration:
     name: Integration tests
     runs-on: ubuntu-latest
@@ -87,11 +79,3 @@ jobs:
 
       - name: Run integration tests
         run: npm run test:integration
-
-      - name: Upload coverage
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-integration
-          path: coverage/
-          if-no-files-found: error
