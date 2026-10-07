@@ -77,7 +77,7 @@ router.post("/", checkAccessToken, authorize("ADMIN", "ATTENDANT"), validate(cre
 registry.registerPath({
     tags: ["Device"],
     method: "get",
-    path: "/devices/:id",
+    path: "/devices/{id}",
     summary: "Get a Device by ID",
     security: [{ bearerAuth: [] }],
     request: {
@@ -155,7 +155,7 @@ router.get("/", checkAccessToken, deviceController.listDevices);
 registry.registerPath({
     tags: ["Device"],
     method: "patch",
-    path: "/devices/:id",
+    path: "/devices/{id}",
     summary: "Updates a devices by ID (requires ADMIN or ATTENDANT role)",
     security: [{ bearerAuth: [] }],
     request: {

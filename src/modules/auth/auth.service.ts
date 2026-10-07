@@ -25,6 +25,9 @@ const login = async (input: LoginInput): Promise<TokensOutput> => {
         });
     }
 
+    // TODO(auth): user deactivation only blocks new logins — an already-issued
+    // access token remains valid until it expires (up to 15 minutes). Revoking
+    // refresh tokens is not enough. We need a strategy to invalidate live access
     const accessToken = generateAccessToken(user.id, user.role);
     const { refreshToken, refreshTokenPayload } = generateRefreshToken(user.id, user.role, randomUUID());
 
@@ -142,7 +145,7 @@ const logoutAll = async (refreshToken: string): Promise<void> => {
             tokenId: refreshTokenData.id,
         }, "Refresh token reuse detected: logout called on already revoked token");
 
-        throw unauthorized({message: "Refresh token reuse detected", code: "REFRESH_TOKEN_REUSE_DETECTED"});
+        throw unauthorized({ message: "Refresh token reuse detected", code: "REFRESH_TOKEN_REUSE_DETECTED" });
     }
 
     await refreshTokenService.revokeAllRefreshTokensByUserId(refreshTokenData.userId);

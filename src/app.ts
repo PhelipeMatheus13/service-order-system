@@ -11,6 +11,7 @@ import userRoutes from "./modules/user/user.routes.js";
 import authRoutes from "./modules/auth/auth.routes.js";
 import customerRoutes from "./modules/customer/customer.routes.js";
 import deviceRoutes from "./modules/device/device.routes.js";
+import serviceOrderRoutes from "./modules/service-order/service-order.routes.js";
 
 const app = express();
 
@@ -42,6 +43,7 @@ app.use("/users", userRoutes);
 app.use("/auth", authRoutes);
 app.use("/customers", customerRoutes);
 app.use("/devices", deviceRoutes);
+app.use("/service-orders", serviceOrderRoutes);
 app.use("/api-docs", swaggerRoutes);
 
 

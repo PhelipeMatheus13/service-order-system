@@ -7,32 +7,32 @@ import { errorSchema } from "../../shared/docs/components/schemas.js"
 import validate from "../../shared/middlewares/validate.js";
 import { checkAccessToken, authorize } from "../../shared/middlewares/auth.js";
 // local modules
-import { createCustomerSchema, updateCustomerSchema, customerSchema } from "./customer.schemas.js";
-import customerController from "./customer.controller.js";
+import { serviceOrderSchema, createServiceOrderSchema, cancelServiceOrderSchema } from "./service-order.schemas.js";
+import serviceOrderController from "./service-order.controller.js";
 
 const router = express.Router();
 
 // POST
 registry.registerPath({
-    tags: ["Customer"],
+    tags: ["Service-order"],
     method: "post",
-    path: "/customers",
-    summary: "Creates a new customer (requires ADMIN or ATTENDANT role)",
+    path: "/service-orders",
+    summary: "Creates a new service order (requires ADMIN or ATTENDANT role)",
     security: [{ bearerAuth: [] }],
     request: {
         body: {
-            content: { "application/json": { schema: createCustomerSchema } },
+            content: { "application/json": { schema: createServiceOrderSchema } },
         },
     },
     responses: {
         201: {
-            description: "Customer created successfully",
+            description: "service order created successfully",
             content: {
                 "application/json": {
                     schema: z.object({
                         success: z.boolean().openapi({ example: true }),
-                        data: customerSchema,
-                        message: z.string().openapi({ example: "Customer created successfully" }),
+                        data: serviceOrderSchema,
+                        message: z.string().openapi({ example: "Service order created successfully" }),
                     }),
                 },
             },
@@ -46,6 +46,7 @@ registry.registerPath({
                         missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
                         invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
                         accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
+                        authenticatedUserNoLongerExists: { $ref: "#/components/examples/authenticatedUserNoLongerExists" },
                     },
                 },
             },
@@ -65,37 +66,37 @@ registry.registerPath({
                 },
             },
         },
-        409: { $ref: "#/components/responses/emailAlreadyExistsError" },
-        422: { $ref: "#/components/responses/createCustomerValidationError" },
+        404: { $ref: "#/components/responses/deviceNotFoundError" },
+        409: { $ref: "#/components/responses/deviceAlreadyInServicerror" },
+        422: { $ref: "#/components/responses/createServiceOrderValidationError" },
         500: { $ref: "#/components/responses/internalError" },
     }
 });
-router.post("/", checkAccessToken, authorize("ADMIN", "ATTENDANT"), validate(createCustomerSchema), customerController.createCustomer);
-
+router.post("/", checkAccessToken, authorize("ADMIN", "ATTENDANT"), validate(createServiceOrderSchema), serviceOrderController.createServiceOrder);
 
 // GET 
 registry.registerPath({
-    tags: ["Customer"],
+    tags: ["Service-order"],
     method: "get",
-    path: "/customers/{id}",
-    summary: "Get a customer by ID",
+    path: "/service-orders/{id}",
+    summary: "Get a service order by ID",
     security: [{ bearerAuth: [] }],
     request: {
         params: z.object({ id: z.string() }),
     },
     responses: {
         200: {
-            description: "Customer retrieved successfully",
+            description: "Service order retrieved successfully",
             content: {
                 "application/json": {
                     schema: z.object({
                         success: z.boolean().openapi({ example: true }),
-                        data: customerSchema,
+                        data: serviceOrderSchema,
                     }),
                 },
             },
         },
-        400: { $ref: "#/components/responses/missingCustomerIdError" },
+        400: { $ref: "#/components/responses/missingServiceOrderIdError" },
         401: {
             description: "Missing, invalid or expired access token",
             content: {
@@ -109,26 +110,26 @@ registry.registerPath({
                 },
             },
         },
-        404: { $ref: "#/components/responses/customerNotFoundError" },
+        404: { $ref: "#/components/responses/serviceOrderNotFoundError" },
         500: { $ref: "#/components/responses/internalError" },
     }
 });
-router.get("/:id", checkAccessToken, customerController.getCustomer);
+router.get("/:id", checkAccessToken, serviceOrderController.getServiceOrderById);
 
 registry.registerPath({
-    tags: ["Customer"],
+    tags: ["Service-order"],
     method: "get",
-    path: "/customers",
-    summary: "List customers",
+    path: "/service-orders",
+    summary: "List all service orders",
     security: [{ bearerAuth: [] }],
     responses: {
         200: {
-            description: "Customer retrieved successfully",
+            description: "service orders retrieved successfully",
             content: {
                 "application/json": {
                     schema: z.object({
                         success: z.boolean().openapi({ example: true }),
-                        data: z.array(customerSchema),
+                        data: z.array(serviceOrderSchema),
                     }),
                 },
             },
@@ -149,35 +150,31 @@ registry.registerPath({
         500: { $ref: "#/components/responses/internalError" },
     }
 });
-router.get("/", checkAccessToken, customerController.listCustomers);
+router.get("/", checkAccessToken, serviceOrderController.listServiceOrders);
 
 // PATCH
 registry.registerPath({
-    tags: ["Customer"],
+    tags: ["Service-order"],
     method: "patch",
-    path: "/customers/{id}",
-    summary: "Updates a customer by ID (requires ADMIN or ATTENDANT role)",
+    path: "/service-orders/{id}/cancel",
+    summary: "Cancel service orders by ID",
     security: [{ bearerAuth: [] }],
     request: {
         params: z.object({ id: z.string() }),
-        body: {
-            content: { "application/json": { schema: updateCustomerSchema } },
-        },
     },
     responses: {
         200: {
-            description: "Customer updated successfully",
+            description: "Service order successfully cancelled",
             content: {
                 "application/json": {
                     schema: z.object({
                         success: z.boolean().openapi({ example: true }),
-                        data: customerSchema,
-                        message: z.string().openapi({ example: "Customer updated successfully" }),
+                        message: z.string().openapi({ example: "Service order successfully cancelled" }),
                     }),
                 },
             },
         },
-        400: { $ref: "#/components/responses/missingCustomerIdError" },
+        400: { $ref: "#/components/responses/missingServiceOrderIdError" },
         401: {
             description: "Missing, invalid or expired access token",
             content: {
@@ -191,28 +188,12 @@ registry.registerPath({
                 },
             },
         },
-        403: {
-            description: "Forbidden, user does not have the required role",
-            content: {
-                "application/json": {
-                    schema: errorSchema,
-                    example: {
-                        success: false,
-                        error: {
-                            code: "FORBIDDEN",
-                            message: "Access denied",
-                        },
-                    },
-                },
-            },
-        },
-        404: { $ref: "#/components/responses/customerNotFoundError" },
-        409: { $ref: "#/components/responses/emailAlreadyExistsError" },
-        422: { $ref: "#/components/responses/updateCustomerValidationError" },
+        404: { $ref: "#/components/responses/serviceOrderNotFoundError" },
+        409: { $ref: "#/components/responses/serviceOrderCancellationError" },
+        422: { $ref: "#/components/responses/cancelServiceOrderValidationError" },
         500: { $ref: "#/components/responses/internalError" },
     }
 });
-router.patch("/:id", checkAccessToken, authorize("ADMIN", "ATTENDANT"), validate(updateCustomerSchema), customerController.updateCustomer);
-
+router.patch("/:id/cancel", checkAccessToken, authorize("ADMIN", "ATTENDANT"), validate(cancelServiceOrderSchema), serviceOrderController.cancelServiceOrder);
 
 export default router;

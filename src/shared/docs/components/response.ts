@@ -49,6 +49,22 @@ const missingDeviceIdError = registry.registerComponent("responses", "missingDev
     },
 });
 
+const missingServiceOrderIdError = registry.registerComponent("responses", "missingServiceOrderIdError", {
+    description: "Invalid request, missing service order id",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            example: {
+                success: false,
+                error: {
+                    code: "BAD_REQUEST",
+                    message: "Service order ID is required",
+                },
+            },
+        },
+    },
+});
+
 // 404
 const userNotFoundError = registry.registerComponent("responses", "userNotFoundError", {
     description: "User not found or does not exist",
@@ -98,6 +114,22 @@ const deviceNotFoundError = registry.registerComponent("responses", "deviceNotFo
     },
 });
 
+const serviceOrderNotFoundError = registry.registerComponent("responses", "serviceOrderNotFoundError", {
+    description: "service order not found or does not exist",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            example: {
+                success: false,
+                error: {
+                    code: "NOT_FOUND",
+                    message: "Service order not found",
+                },
+            },
+        },
+    },
+});
+
 // 409
 const emailAlreadyExistsError = registry.registerComponent("responses", "emailAlreadyExistsError", {
     description: "Email already in use",
@@ -139,6 +171,63 @@ const deviceUniqueConstraintError = registry.registerComponent("responses", "dev
                         error: {
                             code: "ALREADY_EXISTS",
                             message: "Device with this IMEI already exists",
+                        },
+                    },
+                },
+            },
+        },
+    },
+});
+
+const deviceAlreadyInServicerror = registry.registerComponent("responses", "deviceAlreadyInServicerror", {
+    description: "This device already has an active service order",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            example: {
+                success: false,
+                error: {
+                    code: "DEVICE_ALREADY_IN_SERVICE",
+                    message: "This device already has an active service order",
+                },
+            },
+        },
+    },
+});
+
+const serviceOrderCancellationError = registry.registerComponent("responses", "serviceOrderCancellationError", {
+    description: "Service order cannot be cancelled",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            examples: {
+                alreadyCancelled: {
+                    summary: "Service order is already cancelled",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Service order is already cancelled",
+                        },
+                    },
+                },
+                notCancellable: {
+                    summary: "Current status does not allow cancellation",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Service order cannot be cancelled in its current status",
+                        },
+                    },
+                },
+                statusChanged: {
+                    summary: "Status changed during cancellation (race condition)",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Service order could not be cancelled because its status changed",
                         },
                     },
                 },
@@ -379,6 +468,46 @@ const updateDeviceValidationError = registry.registerComponent("responses", "upd
     },
 });
 
+const createServiceOrderValidationError = registry.registerComponent("responses", "createServiceOrderValidationError", {
+    description: "Create service order validation error",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/ValidationError" },
+            example: {
+                success: false,
+                error: {
+                    code: "VALIDATION_ERROR",
+                    message: "Validation failed",
+                    details: [
+                        { field: "deviceId", message: "Device ID must be a valid UUID" },
+                        { field: "reportedProblem", message: "Reported problem must be at least 10 characters long" },
+                    ],
+                },
+            },
+        },
+    },
+});
+
+const cancelServiceOrderValidationError = registry.registerComponent("responses", "cancelServiceOrderValidationError", {
+    description: "Cancel service order validation error",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/ValidationError" },
+            example: {
+                success: false,
+                error: {
+                    code: "VALIDATION_ERROR",
+                    message: "Validation failed",
+                    details: [
+                        { field: "reason", message: "Reason must be at least 5 characters long" },
+                    ],
+                },
+            },
+        },
+    },
+});
+
+
 // 500
 const internalError = registry.registerComponent("responses", "internalError", {
     description: "Internal error",
@@ -397,14 +526,22 @@ const internalError = registry.registerComponent("responses", "internalError", {
 });
 
 export {
+    // 400
     missingUserIdError,
     missingCustomerIdError,
     missingDeviceIdError,
+    missingServiceOrderIdError,
+    // 404
     userNotFoundError,
     customerNotFoundError,
     deviceNotFoundError,
+    serviceOrderNotFoundError,
+    // 409
     emailAlreadyExistsError,
     deviceUniqueConstraintError,
+    deviceAlreadyInServicerror,
+    serviceOrderCancellationError,
+    // 422
     registerValidationError,
     confirmEmailValidationError,
     activateUserValidationError,
@@ -414,5 +551,8 @@ export {
     updateCustomerValidationError,
     createDeviceValidationError,
     updateDeviceValidationError,
+    createServiceOrderValidationError,
+    cancelServiceOrderValidationError,
+    // 500
     internalError,
 };
