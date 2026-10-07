@@ -20,9 +20,8 @@
     "start": "cross-env NODE_ENV=production node dist/server.js",
     "start:pubsub": "cross-env NODE_ENV=production node dist/pubsub.js",
     "test": "cross-env NODE_ENV=test vitest --coverage --watch",
-    "test:ci": "cross-env NODE_ENV=test vitest run --coverage",
-    "test:unit": "cross-env NODE_ENV=test vitest run tests/unit",
-    "test:integration": "cross-env NODE_ENV=test vitest run tests/integration",
+    "test:unit": "cross-env NODE_ENV=test vitest run tests/unit --coverage",
+    "test:integration": "cross-env NODE_ENV=test vitest run tests/integration --coverage",
     "prisma:seed": "cross-env NODE_ENV=development npx prisma db seed"
   },
   "devDependencies": {

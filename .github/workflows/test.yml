@@ -11,18 +11,32 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  NODE_ENV: test
+  SECRET: ci-test-secret
+  REFRESH_SECRET: ci-test-refresh-secret
+  ACTIVATION_SECRET: ci-test-activation-secret
+  RETENTION_HOURS_TOKEN_REVOKED: 24
+  TOKEN_CLEANUP_INTERVAL_MS: 3600000
+  DB_HOST: localhost
+  DB_PORT: 5432
+  DB_USER: postgres
+  DB_PASSWORD: postgres
+  DB_NAME: service_order_system_test
+  RABBITMQ_HOST: localhost
+  RABBITMQ_PORT: 5672
+  RABBITMQ_USER: admin
+  RABBITMQ_PASSWORD: admin
+  SMTP_HOST: localhost
+  SMTP_PORT: 587
+  SMTP_USER: test
+  SMTP_PASSWORD: test
+  SMTP_FROM: no-reply@test.local
+
 jobs:
   test-unit:
     name: Unit tests
     runs-on: ubuntu-latest
-
-    env:
-      NODE_ENV: test
-      SECRET: ci-test-secret
-      REFRESH_SECRET: ci-test-refresh-secret
-      ACTIVATION_SECRET: ci-test-activation-secret
-      RETENTION_HOURS_TOKEN_REVOKED: 24
-      TOKEN_CLEANUP_INTERVAL_MS: 3600000
 
     steps:
       - name: Checkout code
@@ -41,7 +55,7 @@ jobs:
         run: npx prisma generate
 
       - name: Run unit tests
-        run: npm run test:unit:ci
+        run: npm run test:unit
 
       - name: Upload coverage
         if: always()
@@ -54,14 +68,6 @@ jobs:
   test-integration:
     name: Integration tests
     runs-on: ubuntu-latest
-
-    env:
-      NODE_ENV: test
-      SECRET: ci-test-secret
-      REFRESH_SECRET: ci-test-refresh-secret
-      ACTIVATION_SECRET: ci-test-activation-secret
-      RETENTION_HOURS_TOKEN_REVOKED: 24
-      TOKEN_CLEANUP_INTERVAL_MS: 3600000
 
     steps:
       - name: Checkout code
@@ -80,7 +86,7 @@ jobs:
         run: npx prisma generate
 
       - name: Run integration tests
-        run: npm run test:integration:ci
+        run: npm run test:integration
 
       - name: Upload coverage
         if: always()
