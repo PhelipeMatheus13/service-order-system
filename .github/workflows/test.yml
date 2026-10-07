@@ -1,0 +1,91 @@
+name: Test
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-unit:
+    name: Unit tests
+    runs-on: ubuntu-latest
+
+    env:
+      NODE_ENV: test
+      SECRET: ci-test-secret
+      REFRESH_SECRET: ci-test-refresh-secret
+      ACTIVATION_SECRET: ci-test-activation-secret
+      RETENTION_HOURS_TOKEN_REVOKED: 24
+      TOKEN_CLEANUP_INTERVAL_MS: 3600000
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Run unit tests
+        run: npm run test:unit:ci
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-unit
+          path: coverage/
+          if-no-files-found: error
+
+  test-integration:
+    name: Integration tests
+    runs-on: ubuntu-latest
+
+    env:
+      NODE_ENV: test
+      SECRET: ci-test-secret
+      REFRESH_SECRET: ci-test-refresh-secret
+      ACTIVATION_SECRET: ci-test-activation-secret
+      RETENTION_HOURS_TOKEN_REVOKED: 24
+      TOKEN_CLEANUP_INTERVAL_MS: 3600000
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Run integration tests
+        run: npm run test:integration:ci
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-integration
+          path: coverage/
+          if-no-files-found: error
