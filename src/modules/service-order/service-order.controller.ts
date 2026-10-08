@@ -54,10 +54,25 @@ const cancelServiceOrder = asyncHandler(async (req, res) => {
     });
 });
 
+const startDiagnosis = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (!id) throw badRequest({ message: "service order ID is required" });
+
+    const input = serviceOrderDTO.createDiagnosisDTO(String(id), String(req.user?.id));
+    
+    const diagnosis = await serviceOrderService.startDiagnosis(input);
+
+    res.status(201).json({
+        success: true,
+        data: diagnosis,
+        message: "Diagnosis successfully created",
+    });
+});
 
 export default {
     createServiceOrder,
     getServiceOrderById,
     listServiceOrders,
     cancelServiceOrder,
+    startDiagnosis,
 };

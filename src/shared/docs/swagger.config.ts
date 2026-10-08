@@ -25,6 +25,7 @@ const generateOpenApiDocument = () => {
             { name: "Customer", description: "Customer management"},
             { name: "Device", description: "Device management"},
             { name: "Service-order", description: "Service-order management"},
+            { name: "Diagnosis", description: "Diagnosis endpoints — part of the Service-order lifecycle" },
         ]
     });
 };

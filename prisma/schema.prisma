@@ -50,6 +50,14 @@ enum ServiceOrderStatusChangeSource {
   @@map("service_order_status_change_source_enum")
 }
 
+enum DiagnosisResult {
+  FAULT_FOUND
+  NO_FAULT_FOUND
+  INCONCLUSIVE
+
+  @@map("diagnosis_result_enum")
+}
+
 model User {
   id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   firstName    String    @map("first_name") @db.VarChar(255)
@@ -67,6 +75,7 @@ model User {
   refreshTokens               RefreshToken[]
   serviceOrders               ServiceOrder[]
   serviceOrderStatusHistories ServiceOrderStatusHistory[]
+  diagnoses                   Diagnosis[]
 
   @@index([createdAt(sort: Desc)])
   @@map("users")
@@ -179,6 +188,7 @@ model ServiceOrder {
   device                      Device                      @relation(fields: [deviceId, customerId], references: [id, customerId], onDelete: Restrict)
   createdBy                   User                        @relation(fields: [createdById], references: [id], onDelete: Restrict)
   serviceOrderStatusHistories ServiceOrderStatusHistory[]
+  diagnosis                   Diagnosis?
 
   @@index([customerId])
   @@index([deviceId])
@@ -200,4 +210,35 @@ model ServiceOrderStatusHistory {
 
   @@index([serviceOrderId, createdAt(sort: Desc)])
   @@map("service_order_status_history")
+}
+
+model Diagnosis {
+  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  serviceOrderId String           @map("service_order_id") @db.Uuid
+  performedById  String           @map("performed_by") @db.Uuid
+  result         DiagnosisResult?
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz()
+  completedAt    DateTime?        @map("completed_at") @db.Timestamptz()
+
+  serviceOrder ServiceOrder @relation(fields: [serviceOrderId], references: [id], onDelete: Cascade)
+  performedBy  User         @relation(fields: [performedById], references: [id], onDelete: Restrict)
+  findings     Finding[]
+
+  @@unique([serviceOrderId])
+  @@index([performedById])
+  @@map("diagnoses")
+}
+
+model Finding {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  diagnosisId String    @map("diagnosis_id") @db.Uuid
+  description String    @db.Text
+  repairable  Boolean
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt   DateTime? @map("updated_at") @db.Timestamptz()
+
+  diagnosis Diagnosis @relation(fields: [diagnosisId], references: [id], onDelete: Cascade)
+
+  @@index([diagnosisId])
+  @@map("findings")
 }

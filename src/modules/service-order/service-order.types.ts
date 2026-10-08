@@ -3,6 +3,7 @@ import {
     ServiceOrderStatus,
     ServiceOrderStatusHistory, 
     ServiceOrderStatusChangeSource,
+    Diagnosis,
 } from "../../generated/prisma/client.js";
 
 interface CreateServiceOrderInput {
@@ -38,6 +39,17 @@ interface CancelServiceOrderData {
     reason: string;
 }
 
+interface StartDiagnosisInput {
+    serviceOrderId: string;
+    performedById: string;
+}
+
+interface UpdateServiceOrderStatusData {
+    serviceOrderId: string;
+    expectedStatuses: ServiceOrderStatus[];
+    toStatus: ServiceOrderStatus;
+}
+
 export {
     ServiceOrderStatus,
     ServiceOrderStatusChangeSource,
@@ -51,5 +63,8 @@ export type {
     ServiceOrderStatusHistory as ServiceOrderStatusHistoryRecord,
     CreateServiceOrderStatusHistoryData,
     CancelServiceOrderInput, 
-    CancelServiceOrderData
+    CancelServiceOrderData,
+    Diagnosis as DiagnosisRecord,
+    StartDiagnosisInput,
+    UpdateServiceOrderStatusData
 };

@@ -5,6 +5,9 @@ import type {
     ServiceOrderStatusHistoryRecord,
     CreateServiceOrderStatusHistoryData,
     CancelServiceOrderData,
+    StartDiagnosisInput,
+    DiagnosisRecord,
+    UpdateServiceOrderStatusData
 } from "./service-order.types.ts";
 import { ServiceOrderStatus } from "./service-order.types.js";
 import { getPrisma } from "../../shared/config/database.js";
@@ -76,10 +79,40 @@ const cancelServiceOrder = async (input: CancelServiceOrderData, tx?: Prisma.Tra
             status: ServiceOrderStatus.CANCELLED,
             cancelledAt: new Date(),
             cancelReason: input.reason,
+            updatedAt: new Date(),
         },
     });
 
     return result.count > 0;
+};
+
+const updateServiceOrderStatus = async (input: UpdateServiceOrderStatusData, tx?: Prisma.TransactionClient):  Promise<boolean> => {
+    const prisma: PrismaClientOrTx = tx || getPrisma();
+
+    const result = await prisma.serviceOrder.updateMany({
+        where: {
+            id: input.serviceOrderId,
+            status: {
+                in: input.expectedStatuses,
+            },
+        },
+        data: {
+            status: input.toStatus,
+            updatedAt: new Date(),
+        },
+    });
+
+    return result.count > 0;
+};
+
+const createDiagnosis = async (input: StartDiagnosisInput, tx?: Prisma.TransactionClient): Promise<DiagnosisRecord> => {
+    const prisma: PrismaClientOrTx = tx || getPrisma();
+    return prisma.diagnosis.create({
+        data: {
+            serviceOrderId: input.serviceOrderId,
+            performedById: input.performedById,
+        },
+    });
 };
 
 // Reader
@@ -107,6 +140,8 @@ export default {
     create,
     createServiceOrderStatusHistory,
     cancelServiceOrder,
+    updateServiceOrderStatus,
+    createDiagnosis,
     // Reader
     findById,
     list,

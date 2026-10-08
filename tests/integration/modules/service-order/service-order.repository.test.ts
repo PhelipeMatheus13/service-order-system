@@ -1,10 +1,12 @@
 // (Node built‑ins)
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
 // (Types)
-import type { 
-    CreateServiceOrderInput, 
-    CreateServiceOrderStatusHistoryData, 
-    CancelServiceOrderData 
+import type {
+    CreateServiceOrderInput,
+    CreateServiceOrderStatusHistoryData,
+    CancelServiceOrderData,
+    StartDiagnosisInput,
+    UpdateServiceOrderStatusData
 } from "../../../../src/modules/service-order/service-order.types.js";
 // (shared / infra)
 import { PrismaClient } from "../../../../src/generated/prisma/client.js";
@@ -366,6 +368,7 @@ describe("Service Order Repository (Integration)", () => {
                 expect(serviceOrderFound?.status).toBe("CANCELLED");
                 expect(serviceOrderFound?.cancelReason).toBe(input.reason);
                 expect(serviceOrderFound?.cancelledAt).toBeTruthy();
+                expect(serviceOrderFound?.updatedAt).toBeTruthy();
             });
 
             it("should return false when the current status does not allow cancellation", async () => {
@@ -444,6 +447,268 @@ describe("Service Order Repository (Integration)", () => {
                 expect(serviceOrderFound?.status).toBe("WAITING_DIAGNOSIS");
                 expect(serviceOrderFound?.cancelledAt).toBeNull();
                 expect(serviceOrderFound?.cancelReason).toBeNull();
+            });
+        });
+
+        describe("updateServiceOrderStatus", () => {
+            let serviceOrderCreatedId: string;
+
+            beforeEach(async () => {
+                const userCreated = await prisma.user.create({
+                    data: {
+                        firstName: "John",
+                        lastName: "Doe",
+                        email: "john@example.com",
+                        role: "TECHNICIAN",
+                        active: true,
+                    },
+                });
+
+                const customerCreated = await prisma.customer.create({
+                    data: {
+                        firstName: "Jane",
+                        lastName: "Doe",
+                        email: "jane@example.com",
+                        phoneNumber: "5521995437105",
+                    },
+                });
+
+                const deviceCreated = await prisma.device.create({
+                    data: {
+                        customerId: customerCreated.id,
+                        type: "SMARTPHONE",
+                        brand: "Samsung",
+                        model: "Galaxy S23",
+                        serialNumber: "SN-123456",
+                        imei: "123456789012345",
+                        color: "Black",
+                    },
+                });
+
+                const serviceOrderCreated = await prisma.serviceOrder.create({
+                    data: {
+                        customerId: customerCreated.id,
+                        deviceId: deviceCreated.id,
+                        reportedProblem: "Screen is cracked and touch is not responding.",
+                        createdById: userCreated.id,
+                    },
+                });
+                serviceOrderCreatedId = serviceOrderCreated.id;
+            });
+
+            it("should update the status when the current status is in expectedStatuses and return true", async () => {
+                const input: UpdateServiceOrderStatusData = {
+                    serviceOrderId: serviceOrderCreatedId,
+                    expectedStatuses: ["WAITING_DIAGNOSIS"],
+                    toStatus: "IN_DIAGNOSIS",
+                };
+
+                const updated = await serviceOrderRepository.updateServiceOrderStatus(input);
+
+                expect(updated).toBe(true);
+
+                const serviceOrderFound = await prisma.serviceOrder.findUnique({
+                    where: { id: serviceOrderCreatedId },
+                });
+
+                expect(serviceOrderFound?.status).toBe("IN_DIAGNOSIS");
+                expect(serviceOrderFound?.updatedAt).toBeTruthy();
+            });
+
+            it("should return false when the current status is not in expectedStatuses", async () => {
+                await prisma.serviceOrder.update({
+                    where: { id: serviceOrderCreatedId },
+                    data: { status: "DELIVERED" },
+                });
+
+                const input: UpdateServiceOrderStatusData = {
+                    serviceOrderId: serviceOrderCreatedId,
+                    expectedStatuses: ["WAITING_DIAGNOSIS", "IN_DIAGNOSIS"],
+                    toStatus: "IN_DIAGNOSIS",
+                };
+
+                const updated = await serviceOrderRepository.updateServiceOrderStatus(input);
+
+                expect(updated).toBe(false);
+
+                const serviceOrderFound = await prisma.serviceOrder.findUnique({
+                    where: { id: serviceOrderCreatedId },
+                });
+
+                expect(serviceOrderFound?.status).toBe("DELIVERED");
+            });
+
+            it("should return false when the service order does not exist", async () => {
+                const input: UpdateServiceOrderStatusData = {
+                    serviceOrderId: "0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa",
+                    expectedStatuses: ["WAITING_DIAGNOSIS"],
+                    toStatus: "IN_DIAGNOSIS",
+                };
+
+                const updated = await serviceOrderRepository.updateServiceOrderStatus(input);
+
+                expect(updated).toBe(false);
+            });
+
+            it("should accept multiple expected statuses", async () => {
+                await prisma.serviceOrder.update({
+                    where: { id: serviceOrderCreatedId },
+                    data: { status: "AWAITING_QUOTE" },
+                });
+
+                const input: UpdateServiceOrderStatusData = {
+                    serviceOrderId: serviceOrderCreatedId,
+                    expectedStatuses: ["WAITING_DIAGNOSIS", "IN_DIAGNOSIS", "AWAITING_QUOTE"],
+                    toStatus: "AWAITING_APPROVAL",
+                };
+
+                const updated = await serviceOrderRepository.updateServiceOrderStatus(input);
+
+                expect(updated).toBe(true);
+
+                const serviceOrderFound = await prisma.serviceOrder.findUnique({
+                    where: { id: serviceOrderCreatedId },
+                });
+
+                expect(serviceOrderFound?.status).toBe("AWAITING_APPROVAL");
+            });
+
+            it("should use the transaction client when provided", async () => {
+                const input: UpdateServiceOrderStatusData = {
+                    serviceOrderId: serviceOrderCreatedId,
+                    expectedStatuses: ["WAITING_DIAGNOSIS"],
+                    toStatus: "IN_DIAGNOSIS",
+                };
+
+                await expect(
+                    prisma.$transaction(async (tx) => {
+                        const updated = await serviceOrderRepository.updateServiceOrderStatus(input, tx);
+                        expect(updated).toBe(true);
+
+                        throw new Error("rollback");
+                    }),
+                ).rejects.toThrow("rollback");
+
+                const serviceOrderFound = await prisma.serviceOrder.findUnique({
+                    where: { id: serviceOrderCreatedId },
+                });
+
+                expect(serviceOrderFound?.status).toBe("WAITING_DIAGNOSIS");
+                expect(serviceOrderFound?.updatedAt).toBeNull();
+            });
+        });
+
+        describe("createDiagnosis", () => {
+            let userCreatedId: string;
+            let serviceOrderCreatedId: string;
+
+            beforeEach(async () => {
+                const userCreated = await prisma.user.create({
+                    data: {
+                        firstName: "John",
+                        lastName: "Doe",
+                        email: "john@example.com",
+                        role: "TECHNICIAN",
+                        active: true,
+                    },
+                });
+                userCreatedId = userCreated.id;
+
+                const customerCreated = await prisma.customer.create({
+                    data: {
+                        firstName: "Jane",
+                        lastName: "Doe",
+                        email: "jane@example.com",
+                        phoneNumber: "5521995437105",
+                    },
+                });
+
+                const deviceCreated = await prisma.device.create({
+                    data: {
+                        customerId: customerCreated.id,
+                        type: "SMARTPHONE",
+                        brand: "Samsung",
+                        model: "Galaxy S23",
+                        serialNumber: "SN-123456",
+                        imei: "123456789012345",
+                        color: "Black",
+                    },
+                });
+
+                const serviceOrderCreated = await prisma.serviceOrder.create({
+                    data: {
+                        customerId: customerCreated.id,
+                        deviceId: deviceCreated.id,
+                        reportedProblem: "Screen is cracked and touch is not responding.",
+                        createdById: userCreated.id,
+                        status: "IN_DIAGNOSIS",
+                    },
+                });
+                serviceOrderCreatedId = serviceOrderCreated.id;
+            });
+
+            it("should insert a new diagnosis into the database", async () => {
+                const input: StartDiagnosisInput = {
+                    serviceOrderId: serviceOrderCreatedId,
+                    performedById: userCreatedId,
+                };
+
+                const diagnosisCreated = await serviceOrderRepository.createDiagnosis(input);
+
+                expect(diagnosisCreated).toBeTruthy();
+
+                const diagnosisFound = await prisma.diagnosis.findUnique({
+                    where: { id: diagnosisCreated.id },
+                });
+
+                expect(diagnosisFound).not.toBeNull();
+                expect(diagnosisFound?.id).toBe(diagnosisCreated.id);
+                expect(diagnosisFound?.serviceOrderId).toBe(serviceOrderCreatedId);
+                expect(diagnosisFound?.performedById).toBe(userCreatedId);
+                expect(diagnosisFound?.result).toBeNull();
+                expect(diagnosisFound?.completedAt).toBeNull();
+                expect(diagnosisFound?.createdAt).toBeTruthy();
+            });
+
+            it("should throw when a diagnosis already exists for the service order", async () => {
+                const input: StartDiagnosisInput = {
+                    serviceOrderId: serviceOrderCreatedId,
+                    performedById: userCreatedId,
+                };
+
+                await serviceOrderRepository.createDiagnosis(input);
+
+                await expect(serviceOrderRepository.createDiagnosis(input))
+                    .rejects.toThrow();
+            });
+
+            it("should use the transaction client when provided", async () => {
+                const input: StartDiagnosisInput = {
+                    serviceOrderId: serviceOrderCreatedId,
+                    performedById: userCreatedId,
+                };
+
+                let diagnosisCreatedId: string | undefined;
+
+                await expect(
+                    prisma.$transaction(async (tx) => {
+                        const diagnosisCreated = await serviceOrderRepository.createDiagnosis(input, tx);
+
+                        diagnosisCreatedId = diagnosisCreated.id;
+
+                        throw new Error("rollback");
+                    }),
+                ).rejects.toThrow("rollback");
+
+                if (diagnosisCreatedId === undefined) {
+                    throw new Error("diagnosisCreatedId should have been defined");
+                }
+
+                const diagnosisFound = await prisma.diagnosis.findUnique({
+                    where: { id: diagnosisCreatedId },
+                });
+
+                expect(diagnosisFound).toBeNull();
             });
         });
     });

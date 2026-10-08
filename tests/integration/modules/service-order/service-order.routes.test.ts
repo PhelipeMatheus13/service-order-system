@@ -230,4 +230,69 @@ describe("Service Order Routes (Integration)", () => {
             expect(statusHistory?.changedById).toBe(userId);
         });
     });
+
+    describe("POST /service-orders/:id/diagnoses", () => {
+        let technicianId: string;
+        let technicianAccessToken: string;
+        let serviceOrderId: string;
+
+        beforeEach(async () => {
+            const technician = await prisma.user.create({
+                data: {
+                    firstName: "Jane",
+                    lastName: "Smith",
+                    email: "jane.smith@example.com",
+                    passwordHash: "passwordHash",
+                    role: "TECHNICIAN",
+                    active: true,
+                },
+                select: { id: true },
+            });
+            technicianId = technician.id;
+            technicianAccessToken = generateAccessToken(technicianId, "TECHNICIAN");
+
+            const serviceOrder = await prisma.serviceOrder.create({
+                data: {
+                    customerId,
+                    deviceId,
+                    reportedProblem: "Screen is cracked and touch is not responding.",
+                    createdById: userId,
+                },
+                select: { id: true },
+            });
+
+            serviceOrderId = serviceOrder.id;
+        });
+
+        it("should start a diagnosis successfully", async () => {
+            const res = await request(app)
+                .post(`/service-orders/${serviceOrderId}/diagnoses`)
+                .set("Authorization", `Bearer ${technicianAccessToken}`);
+
+            expect(res.statusCode).toBe(201);
+            expect(res.body.success).toBe(true);
+            expect(res.body.message).toBe("Diagnosis successfully created");
+            expect(res.body.data).toBeTruthy();
+            expect(res.body.data.id).toBeTruthy();
+            expect(res.body.data.serviceOrderId).toBe(serviceOrderId);
+            expect(res.body.data.performedById).toBe(technicianId);
+            expect(res.body.data.result).toBeNull();
+            expect(res.body.data.completedAt).toBeNull();
+
+            const serviceOrder = await prisma.serviceOrder.findUnique({
+                where: { id: serviceOrderId },
+            });
+            expect(serviceOrder?.status).toBe("IN_DIAGNOSIS");
+
+            const statusHistory = await prisma.serviceOrderStatusHistory.findFirst({
+                where: { serviceOrderId },
+                orderBy: { createdAt: "desc" },
+            });
+            expect(statusHistory).toBeTruthy();
+            expect(statusHistory?.fromStatus).toBe("WAITING_DIAGNOSIS");
+            expect(statusHistory?.toStatus).toBe("IN_DIAGNOSIS");
+            expect(statusHistory?.changeSource).toBe("USER");
+            expect(statusHistory?.changedById).toBe(technicianId);
+        });
+    });
 });

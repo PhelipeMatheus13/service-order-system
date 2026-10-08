@@ -18,6 +18,18 @@ const serviceOrderSchema = registry.register(
     })
 );
 
+const diagnosisSchema = registry.register(
+    "diagnosisSchema",
+    z.object({
+        id: z.string(),
+        serviceOrderId: z.string(),
+        performedBy: z.string(),
+        result: z.string(),
+        createdAt: z.string(),
+        completedAt: z.string().nullable(),
+    })
+);
+
 const createServiceOrderSchema = registry.register(
     "CreateServiceOrderSchema",
     z.object({
@@ -59,6 +71,7 @@ export {
     serviceOrderSchema,
     createServiceOrderSchema,
     cancelServiceOrderSchema,
+    diagnosisSchema,
 };
 
 export type {

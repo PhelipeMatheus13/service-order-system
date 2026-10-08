@@ -7,7 +7,7 @@ import { errorSchema } from "../../shared/docs/components/schemas.js"
 import validate from "../../shared/middlewares/validate.js";
 import { checkAccessToken, authorize } from "../../shared/middlewares/auth.js";
 // local modules
-import { serviceOrderSchema, createServiceOrderSchema, cancelServiceOrderSchema } from "./service-order.schemas.js";
+import { serviceOrderSchema, createServiceOrderSchema, cancelServiceOrderSchema, diagnosisSchema } from "./service-order.schemas.js";
 import serviceOrderController from "./service-order.controller.js";
 
 const router = express.Router();
@@ -38,7 +38,7 @@ registry.registerPath({
             },
         },
         401: {
-            description: "Missing, invalid or expired access token",
+            description: "Authentication failed or because the authenticated user no longer exists",
             content: {
                 "application/json": {
                     schema: errorSchema,
@@ -67,12 +67,70 @@ registry.registerPath({
             },
         },
         404: { $ref: "#/components/responses/deviceNotFoundError" },
-        409: { $ref: "#/components/responses/deviceAlreadyInServicerror" },
+        409: {
+            description: "This device already has an active service order",
+            content: {
+                "application/json": {
+                    schema: { $ref: "#/components/schemas/Error" },
+                    example: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "This device already has an active service order",
+                        },
+                    },
+                },
+            },
+        },
         422: { $ref: "#/components/responses/createServiceOrderValidationError" },
         500: { $ref: "#/components/responses/internalError" },
     }
 });
 router.post("/", checkAccessToken, authorize("ADMIN", "ATTENDANT"), validate(createServiceOrderSchema), serviceOrderController.createServiceOrder);
+
+registry.registerPath({
+    tags: ["Diagnosis"],
+    method: "post",
+    path: "/service-orders/{id}/diagnoses",
+    summary: "Creates a new diagnosis (requires ADMIN or TECHNICIAN role)",
+    security: [{ bearerAuth: [] }],
+    request: {
+        params: z.object({ id: z.string() }),
+    },
+    responses: {
+        201: {
+            description: "Diagnosis successfully created",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        success: z.boolean().openapi({ example: true }),
+                        data: diagnosisSchema,
+                        message: z.string().openapi({ example: "Diagnosis successfully created" }),
+                    }),
+                },
+            },
+        },
+        400: { $ref: "#/components/responses/missingServiceOrderIdError" },
+        401: {
+            description: "Authentication failed or because the authenticated user no longer exists",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
+                        invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
+                        accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
+                        authenticatedUserNoLongerExists: { $ref: "#/components/examples/authenticatedUserNoLongerExists" },
+                    },
+                },
+            },
+        },
+        409: { $ref: "#/components/responses/createDiagnosisConflictError" },
+        404: { $ref: "#/components/responses/serviceOrderNotFoundError" },
+        500: { $ref: "#/components/responses/internalError" },
+    }
+});
+router.post("/:id/diagnoses", checkAccessToken, authorize("ADMIN", "TECHNICIAN"), serviceOrderController.startDiagnosis);
 
 // GET 
 registry.registerPath({
@@ -157,7 +215,7 @@ registry.registerPath({
     tags: ["Service-order"],
     method: "patch",
     path: "/service-orders/{id}/cancel",
-    summary: "Cancel service orders by ID",
+    summary: "Cancel service orders by ID (requires ADMIN or ATTENDANT role)",
     security: [{ bearerAuth: [] }],
     request: {
         params: z.object({ id: z.string() }),
@@ -189,7 +247,7 @@ registry.registerPath({
             },
         },
         404: { $ref: "#/components/responses/serviceOrderNotFoundError" },
-        409: { $ref: "#/components/responses/serviceOrderCancellationError" },
+        409: { $ref: "#/components/responses/cancelServiceOrderConflictError" },
         422: { $ref: "#/components/responses/cancelServiceOrderValidationError" },
         500: { $ref: "#/components/responses/internalError" },
     }

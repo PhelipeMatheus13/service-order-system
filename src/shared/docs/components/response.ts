@@ -179,23 +179,7 @@ const deviceUniqueConstraintError = registry.registerComponent("responses", "dev
     },
 });
 
-const deviceAlreadyInServicerror = registry.registerComponent("responses", "deviceAlreadyInServicerror", {
-    description: "This device already has an active service order",
-    content: {
-        "application/json": {
-            schema: { $ref: "#/components/schemas/Error" },
-            example: {
-                success: false,
-                error: {
-                    code: "DEVICE_ALREADY_IN_SERVICE",
-                    message: "This device already has an active service order",
-                },
-            },
-        },
-    },
-});
-
-const serviceOrderCancellationError = registry.registerComponent("responses", "serviceOrderCancellationError", {
+const cancelServiceOrderConflictError = registry.registerComponent("responses", "serviceOrderCancellationError", {
     description: "Service order cannot be cancelled",
     content: {
         "application/json": {
@@ -235,6 +219,48 @@ const serviceOrderCancellationError = registry.registerComponent("responses", "s
         },
     },
 });
+
+const createDiagnosisConflictError = registry.registerComponent("responses", "createDiagnosisConflictError", {
+    description: "Diagnosis cannot be created",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            examples: {
+                notWaitingForDiagnosis: {
+                    summary: "Service order is not in WAITING_DIAGNOSIS status",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Service order is not waiting for diagnosis",
+                        },
+                    },
+                },
+                statusChanged: {
+                    summary: "Status changed during diagnosis creation (race condition)",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Service order is no longer available to start diagnosis",
+                        },
+                    },
+                },
+                diagnosisAlreadyExists: {
+                    summary: "A diagnosis already exists for this service order",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "A diagnosis already exists for this service order",
+                        },
+                    },
+                },
+            },
+        },
+    },
+});
+
 
 // VALIDATION ERRORS (422)
 const registerValidationError = registry.registerComponent("responses", "registerValidationError", {
@@ -539,8 +565,8 @@ export {
     // 409
     emailAlreadyExistsError,
     deviceUniqueConstraintError,
-    deviceAlreadyInServicerror,
-    serviceOrderCancellationError,
+    cancelServiceOrderConflictError,
+    createDiagnosisConflictError,
     // 422
     registerValidationError,
     confirmEmailValidationError,
