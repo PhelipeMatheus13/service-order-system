@@ -1,7 +1,7 @@
 // (Node built‑ins)
 import { beforeEach, describe, expect, it, vi } from "vitest";
 // (Types)
-import { ServiceOrderRecord, DiagnosisRecord } from "../../../../src/modules/service-order/service-order.types.js";
+import { ServiceOrderRecord, DiagnosisRecord, FindingRecord } from "../../../../src/modules/service-order/service-order.types.js";
 // (local modules)
 import serviceOrderController from "../../../../src/modules/service-order/service-order.controller.js";
 import serviceOrderService from "../../../../src/modules/service-order/service-order.service.js";
@@ -323,6 +323,79 @@ describe("Service Order Controller (Unit)", () => {
                 message: "Diagnosis ID is required",
             }));
             expect(serviceOrderService.getDiagnosisById).not.toHaveBeenCalled();
+            expect(res.status).not.toHaveBeenCalled();
+        });
+    });
+
+    describe("createFinding", () => {
+        it("should return 201 on successful finding creation", async () => {
+            req.params.id = "uuid-diagnosis-123";
+            req.user = { id: "uuid-user-123" };
+            req.body = {
+                description: "Battery capacity below expected level.",
+                repairable: true,
+            };
+
+            const mockFindingRecord = {
+                id: "uuid-finding-123",
+                diagnosisId: "uuid-diagnosis-123",
+                createdById: "uuid-user-123",
+                description: "Battery capacity below expected level.",
+                repairable: true,
+                createdAt: new Date(),
+                updatedAt: null,
+            } as FindingRecord;
+
+            vi.mocked(serviceOrderService).createFinding.mockResolvedValue(mockFindingRecord);
+
+            await serviceOrderController.createFinding(req, res, next);
+
+            expect(serviceOrderService.createFinding).toHaveBeenCalledWith({
+                diagnosisId: "uuid-diagnosis-123",
+                description: "Battery capacity below expected level.",
+                repairable: true,
+                createdById: "uuid-user-123",
+            });
+
+            expect(res.status).toHaveBeenCalledWith(201);
+            expect(res.json).toHaveBeenCalledWith({
+                success: true,
+                data: mockFindingRecord,
+                message: "Finding successfully created",
+            });
+            expect(next).not.toHaveBeenCalled();
+        });
+
+        it("should call next with badRequest error if id is missing", async () => {
+            req.params = {};
+            req.body = {
+                description: "Battery capacity below expected level.",
+                repairable: true,
+            };
+
+            await serviceOrderController.createFinding(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(expect.objectContaining({
+                statusCode: 400,
+                message: "Diagnosis ID is required",
+            }));
+            expect(serviceOrderService.createFinding).not.toHaveBeenCalled();
+            expect(res.status).not.toHaveBeenCalled();
+        });
+
+        it("should propagate error when service fails", async () => {
+            req.params.id = "uuid-diagnosis-123";
+            req.body = {
+                description: "Battery capacity below expected level.",
+                repairable: true,
+            };
+
+            const error = new Error("Service error");
+            vi.mocked(serviceOrderService).createFinding.mockRejectedValue(error);
+
+            await serviceOrderController.createFinding(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(error);
             expect(res.status).not.toHaveBeenCalled();
         });
     });

@@ -7,7 +7,9 @@ import type {
     CancelServiceOrderData,
     StartDiagnosisInput,
     DiagnosisRecord,
-    UpdateServiceOrderStatusData
+    UpdateServiceOrderStatusData,
+    FindingRecord,
+    CreateFindingInput,
 } from "./service-order.types.ts";
 import { ServiceOrderStatus } from "./service-order.types.js";
 import { getPrisma } from "../../shared/config/database.js";
@@ -86,7 +88,7 @@ const cancelServiceOrder = async (input: CancelServiceOrderData, tx?: Prisma.Tra
     return result.count > 0;
 };
 
-const updateServiceOrderStatus = async (input: UpdateServiceOrderStatusData, tx?: Prisma.TransactionClient):  Promise<boolean> => {
+const updateServiceOrderStatus = async (input: UpdateServiceOrderStatusData, tx?: Prisma.TransactionClient): Promise<boolean> => {
     const prisma: PrismaClientOrTx = tx || getPrisma();
 
     const result = await prisma.serviceOrder.updateMany({
@@ -113,6 +115,35 @@ const createDiagnosis = async (input: StartDiagnosisInput, tx?: Prisma.Transacti
             performedById: input.performedById,
         },
     });
+};
+
+const createFinding = async (input: CreateFindingInput): Promise<FindingRecord | null> => {
+    const prisma = getPrisma();
+
+    // Raw SQL to atomically validate the diagnosis and service order state 
+    // before inserting, avoiding race conditions between validation and creation.
+    const rows = await prisma.$queryRaw<FindingRecord[]>`
+        INSERT INTO findings (diagnosis_id, created_by, description, repairable)
+        SELECT ${input.diagnosisId}::uuid, ${input.createdById}::uuid, ${input.description}, ${input.repairable}
+        WHERE EXISTS (
+            SELECT 1
+            FROM diagnoses d
+            JOIN service_orders so ON so.id = d.service_order_id
+            WHERE d.id = ${input.diagnosisId}::uuid
+              AND d.completed_at IS NULL
+              AND so.status = 'IN_DIAGNOSIS'
+        )
+        RETURNING
+            id,
+            diagnosis_id AS "diagnosisId",
+            created_by   AS "createdById",
+            description,
+            repairable,
+            created_at   AS "createdAt",
+            updated_at   AS "updatedAt"
+    `;
+
+    return rows[0] ?? null;
 };
 
 // Reader
@@ -147,6 +178,7 @@ export default {
     cancelServiceOrder,
     updateServiceOrderStatus,
     createDiagnosis,
+    createFinding,
     // Reader
     findById,
     list,

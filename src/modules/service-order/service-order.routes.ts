@@ -7,7 +7,7 @@ import { errorSchema } from "../../shared/docs/components/schemas.js"
 import validate from "../../shared/middlewares/validate.js";
 import { checkAccessToken, authorize } from "../../shared/middlewares/auth.js";
 // local modules
-import { serviceOrderSchema, createServiceOrderSchema, cancelServiceOrderSchema, diagnosisSchema } from "./service-order.schemas.js";
+import { serviceOrderSchema, createServiceOrderSchema, cancelServiceOrderSchema, diagnosisSchema, findingSchema } from "./service-order.schemas.js";
 import serviceOrderController from "./service-order.controller.js";
 
 const router = express.Router();
@@ -92,7 +92,7 @@ registry.registerPath({
     tags: ["Diagnosis"],
     method: "post",
     path: "/service-orders/{id}/diagnoses",
-    summary: "Creates a new diagnosis (requires ADMIN or TECHNICIAN role)",
+    summary: "Start and create a diagnosis (requires ADMIN or TECHNICIAN role)",
     security: [{ bearerAuth: [] }],
     request: {
         params: z.object({ id: z.string() }),
@@ -125,12 +125,57 @@ registry.registerPath({
                 },
             },
         },
-        409: { $ref: "#/components/responses/createDiagnosisConflictError" },
+        409: { $ref: "#/components/responses/startDiagnosisConflictError" },
         404: { $ref: "#/components/responses/serviceOrderNotFoundError" },
         500: { $ref: "#/components/responses/internalError" },
     }
 });
 router.post("/:id/diagnoses", checkAccessToken, authorize("ADMIN", "TECHNICIAN"), serviceOrderController.startDiagnosis);
+
+registry.registerPath({
+    tags: ["Findings"],
+    method: "post",
+    path: "/service-orders/diagnoses/{id}/findings",
+    summary: "create a new finding (requires ADMIN or TECHNICIAN role)",
+    security: [{ bearerAuth: [] }],
+    request: {
+        params: z.object({ id: z.string() }),
+    },
+    responses: {
+        201: {
+            description: "Finding successfully created",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        success: z.boolean().openapi({ example: true }),
+                        data: findingSchema,
+                        message: z.string().openapi({ example: "Finding successfully created" }),
+                    }),
+                },
+            },
+        },
+        400: { $ref: "#/components/responses/missingDiagnosisIdError" },
+        401: {
+            description: "Authentication failed or because the authenticated user no longer exists",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
+                        invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
+                        accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
+                        authenticatedUserNoLongerExists: { $ref: "#/components/examples/authenticatedUserNoLongerExists" },
+                    },
+                },
+            },
+        },
+        409: { $ref: "#/components/responses/createFindingConflictError" },
+        404: { $ref: "#/components/responses/DiagnosisNotFoundError" },
+        422: { $ref: "#/components/responses/createFindingValidationError" },
+        500: { $ref: "#/components/responses/internalError" },
+    }
+});
+router.post("/diagnoses/:id/findings", checkAccessToken, authorize("ADMIN", "TECHNICIAN"), serviceOrderController.createFinding);
 
 // GET 
 registry.registerPath({
@@ -245,7 +290,7 @@ registry.registerPath({
                 },
             },
         },
-        404: { $ref: "#/components/responses/DiagnosisFoundError" },
+        404: { $ref: "#/components/responses/DiagnosisNotFoundError" },
         500: { $ref: "#/components/responses/internalError" },
     }
 });

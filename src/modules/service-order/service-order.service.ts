@@ -4,7 +4,9 @@ import {
     ListServiceOrdersInput,
     CancelServiceOrderInput,
     DiagnosisRecord,
-    StartDiagnosisInput
+    StartDiagnosisInput,
+    FindingRecord,
+    CreateFindingInput
 } from "./service-order.types.js";
 import { ServiceOrderStatus } from "./service-order.types.js";
 import { getPrisma } from "../../shared/config/database.js";
@@ -182,7 +184,50 @@ const getDiagnosisById = async (id: string): Promise<DiagnosisRecord> => {
     const diagnosis = await serviceOrderRepository.findDiagnosisById(id);
     if (!diagnosis) throw notFound({ message: "Diagnosis not found" });
     return diagnosis;
-}; 
+};
+
+const createFinding = async (input: CreateFindingInput): Promise<FindingRecord> => {
+    const diagnosis = await serviceOrderRepository.findDiagnosisById(input.diagnosisId);
+    if (!diagnosis) {
+        throw notFound({ message: "Diagnosis not found" });
+    }
+
+    if (diagnosis.completedAt) {
+        throw conflict({ message: "Diagnosis already completed" });
+    }
+
+    const serviceOrder = await serviceOrderRepository.findById(diagnosis.serviceOrderId);
+    // The FK guarantees a diagnosis always has a service order. This check
+    // exists only to narrow the type from `ServiceOrderRecord | null` to `ServiceOrderRecord` for the compiler.
+    if (!serviceOrder) {
+        throw notFound({ message: "Service order not found" });
+    }
+
+    if (serviceOrder?.status !== ServiceOrderStatus.IN_DIAGNOSIS) {
+        throw conflict({ message: "Service order is not in diagnosis" });
+    }
+
+    try {
+        const finding = await serviceOrderRepository.createFinding(input);
+
+        if (!finding) {
+            throw conflict({ message: "Diagnosis state changed, cannot create finding" });
+        }
+
+        return finding;
+    } catch (error) {
+        if (isForeignKeyConstraintOn(error, "created_by")) {
+            throw unauthorized({ message: "Authenticated user no longer exists" });
+        }
+
+        if (isForeignKeyConstraintOn(error, "diagnosis_id")) {
+            throw notFound({ message: "Diagnosis not found" });
+        }
+
+        throw error;
+    }
+};
+
 
 export default {
     createServiceOrder,
@@ -191,4 +236,5 @@ export default {
     cancelServiceOrder,
     startDiagnosis,
     getDiagnosisById,
+    createFinding,
 };

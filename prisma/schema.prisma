@@ -76,6 +76,7 @@ model User {
   serviceOrders               ServiceOrder[]
   serviceOrderStatusHistories ServiceOrderStatusHistory[]
   diagnoses                   Diagnosis[]
+  findings                    Finding[]
 
   @@index([createdAt(sort: Desc)])
   @@map("users")
@@ -230,15 +231,18 @@ model Diagnosis {
 }
 
 model Finding {
-  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  diagnosisId String    @map("diagnosis_id") @db.Uuid
-  description String    @db.Text
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  diagnosisId String   @map("diagnosis_id") @db.Uuid
+  createdById String   @map("created_by") @db.Uuid
+  description String   @db.Text
   repairable  Boolean
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt   DateTime? @map("updated_at") @db.Timestamptz()
 
   diagnosis Diagnosis @relation(fields: [diagnosisId], references: [id], onDelete: Cascade)
+  createdBy User      @relation(fields: [createdById], references: [id], onDelete: Restrict)
 
   @@index([diagnosisId])
+  @@index([createdById])
   @@map("findings")
 }

@@ -17,6 +17,7 @@ CREATE TABLE "diagnoses" (
 CREATE TABLE "findings" (
     "id" UUID NOT NULL DEFAULT gen_random_uuid(),
     "diagnosis_id" UUID NOT NULL,
+    "created_by" UUID NOT NULL,
     "description" TEXT NOT NULL,
     "repairable" BOOLEAN NOT NULL,
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -33,6 +34,9 @@ CREATE UNIQUE INDEX "diagnoses_service_order_id_key" ON "diagnoses"("service_ord
 
 -- CreateIndex
 CREATE INDEX "findings_diagnosis_id_idx" ON "findings"("diagnosis_id");
+
+-- CreateIndex
+CREATE INDEX "findings_created_by_idx" ON "findings"("created_by");
 
 -- AddForeignKey
 ALTER TABLE "diagnoses" 
@@ -56,4 +60,12 @@ ADD CONSTRAINT "findings_diagnosis_id_fkey"
 FOREIGN KEY ("diagnosis_id") 
 REFERENCES "diagnoses"("id") 
 ON DELETE CASCADE 
+ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "findings"
+ADD CONSTRAINT "findings_created_by_fkey"
+FOREIGN KEY ("created_by")
+REFERENCES "users"("id")
+ON DELETE RESTRICT
 ON UPDATE CASCADE;

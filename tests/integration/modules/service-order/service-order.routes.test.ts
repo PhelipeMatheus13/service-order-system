@@ -339,4 +339,75 @@ describe("Service Order Routes (Integration)", () => {
             expect(res.body.data.createdAt).toBeTruthy();
         });
     });
+
+    describe("POST /service-orders/diagnoses/:id/findings", () => {
+        let diagnosisId: string;
+        let technicianId: string;
+        let technicianAccessToken: string;
+
+        beforeEach(async () => {
+            const technician = await prisma.user.create({
+                data: {
+                    firstName: "Jane",
+                    lastName: "Smith",
+                    email: "jane.smith@example.com",
+                    passwordHash: "passwordHash",
+                    role: "TECHNICIAN",
+                    active: true,
+                },
+                select: { id: true },
+            });
+            technicianId = technician.id;
+            technicianAccessToken = generateAccessToken(technicianId, "TECHNICIAN");
+
+            const serviceOrder = await prisma.serviceOrder.create({
+                data: {
+                    customerId,
+                    deviceId,
+                    reportedProblem: "Screen is cracked and touch is not responding.",
+                    createdById: userId,
+                    status: "IN_DIAGNOSIS",
+                },
+                select: { id: true },
+            });
+
+            const diagnosis = await prisma.diagnosis.create({
+                data: {
+                    serviceOrderId: serviceOrder.id,
+                    performedById: technicianId,
+                },
+                select: { id: true },
+            });
+
+            diagnosisId = diagnosis.id;
+        });
+
+        it("should create a new finding successfully", async () => {
+            const res = await request(app)
+                .post(`/service-orders/diagnoses/${diagnosisId}/findings`)
+                .set("Authorization", `Bearer ${technicianAccessToken}`)
+                .send({
+                    description: "Battery capacity below expected level.",
+                    repairable: true,
+                });
+
+            expect(res.statusCode).toBe(201);
+            expect(res.body.success).toBe(true);
+            expect(res.body.message).toBe("Finding successfully created");
+            expect(res.body.data).toBeTruthy();
+            expect(res.body.data.id).toBeTruthy();
+            expect(res.body.data.diagnosisId).toBe(diagnosisId);
+            expect(res.body.data.createdById).toBe(technicianId);
+            expect(res.body.data.description).toBe("Battery capacity below expected level.");
+            expect(res.body.data.repairable).toBe(true);
+
+            const finding = await prisma.finding.findUnique({
+                where: { id: res.body.data.id },
+            });
+
+            expect(finding).toBeTruthy();
+            expect(finding?.diagnosisId).toBe(diagnosisId);
+            expect(finding?.createdById).toBe(technicianId);
+        });
+    });
 });

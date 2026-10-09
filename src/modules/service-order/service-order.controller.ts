@@ -64,7 +64,7 @@ const startDiagnosis = asyncHandler(async (req, res) => {
 
     res.status(201).json({
         success: true,
-        data: diagnosis,
+        data: diagnosis, // diagnosis does not possess any sensitive data, so we can return directly
         message: "Diagnosis successfully created",
     });
 });
@@ -79,6 +79,20 @@ const getDiagnosisById = asyncHandler(async (req, res) => {
     });
 });
 
+const createFinding = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (!id) throw badRequest({ message: "Diagnosis ID is required" });
+
+    const input = serviceOrderDTO.createFindingDTO(req.body, String(id), String(req.user?.id))
+
+    const finding = await serviceOrderService.createFinding(input);
+    res.status(201).json({
+        success: true,
+        data: finding,  // finding does not possess any sensitive data, so we can return directly
+        message: "Finding successfully created",
+    });
+});
+
 export default {
     createServiceOrder,
     getServiceOrderById,
@@ -86,4 +100,5 @@ export default {
     cancelServiceOrder,
     startDiagnosis,
     getDiagnosisById,
+    createFinding,
 };

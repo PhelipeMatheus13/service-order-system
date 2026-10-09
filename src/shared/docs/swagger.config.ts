@@ -1,5 +1,5 @@
 import { OpenApiGeneratorV3 } from "@asteasolutions/zod-to-openapi";
-import  registry  from "./registry.js";
+import registry from "./registry.js";
 
 import "./components/response.js";
 import "./components/examples.js";
@@ -9,7 +9,7 @@ import "../../modules/auth/auth.routes.js";
 import "../../modules/customer/customer.routes.js";
 import "../../modules/device/device.routes.js";
 import "../../modules/service-order/service-order.routes.js";
- 
+
 const generateOpenApiDocument = () => {
     return new OpenApiGeneratorV3(registry.definitions).generateDocument({
         openapi: "3.0.0",
@@ -20,12 +20,13 @@ const generateOpenApiDocument = () => {
         },
         servers: [{ url: "http://localhost:3000" }],
         tags: [
-            { name: "Auth", description: "Authentication endpoints"},
-            { name: "User", description: "User management"},
-            { name: "Customer", description: "Customer management"},
-            { name: "Device", description: "Device management"},
-            { name: "Service-order", description: "Service-order management"},
+            { name: "Auth", description: "Authentication endpoints" },
+            { name: "User", description: "User management" },
+            { name: "Customer", description: "Customer management" },
+            { name: "Device", description: "Device management" },
+            { name: "Service-order", description: "Service-order management" },
             { name: "Diagnosis", description: "Diagnosis endpoints — part of the Service-order lifecycle" },
+            { name: "Findings", description: "Findings endpoints — part of the Service-order lifecycle" },
         ]
     });
 };

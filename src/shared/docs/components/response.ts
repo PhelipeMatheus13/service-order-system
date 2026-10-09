@@ -147,7 +147,7 @@ const serviceOrderNotFoundError = registry.registerComponent("responses", "servi
     },
 });
 
-const DiagnosisFoundError = registry.registerComponent("responses", "DiagnosisFoundError", {
+const DiagnosisNotFoundError = registry.registerComponent("responses", "DiagnosisNotFoundError", {
     description: "Diagnosis not found or does not exist",
     content: {
         "application/json": {
@@ -253,7 +253,7 @@ const cancelServiceOrderConflictError = registry.registerComponent("responses", 
     },
 });
 
-const createDiagnosisConflictError = registry.registerComponent("responses", "createDiagnosisConflictError", {
+const startDiagnosisConflictError = registry.registerComponent("responses", "startDiagnosisConflictError", {
     description: "Diagnosis cannot be created",
     content: {
         "application/json": {
@@ -294,6 +294,46 @@ const createDiagnosisConflictError = registry.registerComponent("responses", "cr
     },
 });
 
+const createFindingConflictError = registry.registerComponent("responses", "createFindingConflictError", {
+    description: "Finding cannot be created",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            examples: {
+                diagnosisAlreadyCompleted: {
+                    summary: "Diagnosis is already completed",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Diagnosis already completed",
+                        },
+                    },
+                },
+                serviceOrderNotInDiagnosis: {
+                    summary: "Service order is not in diagnosis",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Service order is not in diagnosis",
+                        },
+                    },
+                },
+                diagnosisStateChanged: {
+                    summary: "Diagnosis state changed during the request (race condition)",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Diagnosis state changed, cannot create finding",
+                        },
+                    },
+                },
+            },
+        },
+    },
+});
 
 // VALIDATION ERRORS (422)
 const registerValidationError = registry.registerComponent("responses", "registerValidationError", {
@@ -566,6 +606,26 @@ const cancelServiceOrderValidationError = registry.registerComponent("responses"
     },
 });
 
+const createFindingValidationError = registry.registerComponent("responses", "createFindingValidationError", {
+    description: "Create finding validation error",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/ValidationError" },
+            example: {
+                success: false,
+                error: {
+                    code: "VALIDATION_ERROR",
+                    message: "Validation failed",
+                    details: [
+                        { field: "description", message: "Reason must be at least 5 characters long" },
+                        { field: "repairable", message: "Expected a boolean value" },
+                    ],
+                },
+            },
+        },
+    },
+});
+
 
 // 500
 const internalError = registry.registerComponent("responses", "internalError", {
@@ -596,12 +656,13 @@ export {
     customerNotFoundError,
     deviceNotFoundError,
     serviceOrderNotFoundError,
-    DiagnosisFoundError,
+    DiagnosisNotFoundError,
     // 409
     emailAlreadyExistsError,
     deviceUniqueConstraintError,
     cancelServiceOrderConflictError,
-    createDiagnosisConflictError,
+    startDiagnosisConflictError,
+    createFindingConflictError,
     // 422
     registerValidationError,
     confirmEmailValidationError,
@@ -614,6 +675,7 @@ export {
     updateDeviceValidationError,
     createServiceOrderValidationError,
     cancelServiceOrderValidationError,
+    createFindingValidationError,
     // 500
     internalError,
 };
