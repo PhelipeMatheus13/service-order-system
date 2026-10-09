@@ -602,4 +602,43 @@ describe("Service Order Service (Unit)", () => {
             expect(result).toBe(mockDiagnosisRecord);
         });
     });
+
+    describe("getDiagnosisById", () => {
+        const diagnosisId = "uuid-diagnosis-123";
+
+        it("should throw if serviceOrderRepository.findDiagnosisById fails", async () => {
+            vi.mocked(serviceOrderRepository.findDiagnosisById).mockRejectedValue(new Error("fake error"));
+
+            await expect(serviceOrderService.getDiagnosisById(diagnosisId))
+                .rejects.toThrow("fake error");
+        });
+
+        it("should throw NOT_FOUND if diagnosis does not exist", async () => {
+            vi.mocked(serviceOrderRepository.findDiagnosisById).mockResolvedValue(null);
+
+            await expect(serviceOrderService.getDiagnosisById(diagnosisId))
+                .rejects.toMatchObject({
+                    statusCode: 404,
+                    message: "Diagnosis not found",
+                });
+        });
+
+        it("should return diagnosis", async () => {
+            const mockDiagnosisRecord = {
+                id: diagnosisId,
+                serviceOrderId: "uuid-service-order-123",
+                performedById: "uuid-user-123",
+                result: null,
+                completedAt: null,
+                createdAt: new Date(),
+            } as DiagnosisRecord;
+
+            vi.mocked(serviceOrderRepository.findDiagnosisById).mockResolvedValue(mockDiagnosisRecord);
+
+            const result = await serviceOrderService.getDiagnosisById(diagnosisId);
+
+            expect(serviceOrderRepository.findDiagnosisById).toHaveBeenCalledWith(diagnosisId);
+            expect(result).toEqual(mockDiagnosisRecord);
+        });
+    });
 });

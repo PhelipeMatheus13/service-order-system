@@ -885,5 +885,73 @@ describe("Service Order Repository (Integration)", () => {
                 expect(result).toHaveLength(1);
             });
         });
+
+        describe("findDiagnosisById", () => {
+            it("should return the diagnosis if a diagnosis with the given ID exists", async () => {
+                const userCreated = await prisma.user.create({
+                    data: {
+                        firstName: "John",
+                        lastName: "Doe",
+                        email: "john@example.com",
+                        role: "TECHNICIAN",
+                        active: true,
+                    },
+                });
+
+                const customerCreated = await prisma.customer.create({
+                    data: {
+                        firstName: "Jane",
+                        lastName: "Doe",
+                        email: "jane@example.com",
+                        phoneNumber: "5521995437105",
+                    },
+                });
+
+                const deviceCreated = await prisma.device.create({
+                    data: {
+                        customerId: customerCreated.id,
+                        type: "SMARTPHONE",
+                        brand: "Samsung",
+                        model: "Galaxy S23",
+                        serialNumber: "SN-123456",
+                        imei: "123456789012345",
+                        color: "Black",
+                    },
+                });
+
+                const serviceOrderCreated = await prisma.serviceOrder.create({
+                    data: {
+                        customerId: customerCreated.id,
+                        deviceId: deviceCreated.id,
+                        reportedProblem: "Screen is cracked and touch is not responding.",
+                        createdById: userCreated.id,
+                        status: "IN_DIAGNOSIS",
+                    },
+                });
+
+                const diagnosisCreated = await prisma.diagnosis.create({
+                    data: {
+                        serviceOrderId: serviceOrderCreated.id,
+                        performedById: userCreated.id,
+                    },
+                });
+
+                const diagnosis = await serviceOrderRepository.findDiagnosisById(diagnosisCreated.id);
+
+                expect(diagnosis).toBeTruthy();
+                expect(diagnosis?.id).toBe(diagnosisCreated.id);
+                expect(diagnosis?.serviceOrderId).toBe(serviceOrderCreated.id);
+                expect(diagnosis?.performedById).toBe(userCreated.id);
+                expect(diagnosis?.result).toBeNull();
+                expect(diagnosis?.completedAt).toBeNull();
+                expect(diagnosis?.createdAt).toBeTruthy();
+            });
+
+            it("should return null if a diagnosis with the given ID does not exist", async () => {
+                const diagnosis = await serviceOrderRepository.findDiagnosisById("0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa");
+
+                expect(diagnosis).toBeNull();
+            });
+        });
     });
 });

@@ -286,4 +286,44 @@ describe("Service Order Controller (Unit)", () => {
             expect(res.status).not.toHaveBeenCalled();
         });
     });
+
+    describe("getDiagnosisById", () => {
+        it("should return 200 with diagnosis data", async () => {
+            req.params.id = "uuid-diagnosis-123";
+
+            const mockDiagnosisRecord = {
+                id: "uuid-diagnosis-123",
+                serviceOrderId: "uuid-service-order-123",
+                performedById: "uuid-user-123",
+                result: null,
+                completedAt: null,
+                createdAt: new Date(),
+            } as DiagnosisRecord;
+
+            vi.mocked(serviceOrderService).getDiagnosisById.mockResolvedValue(mockDiagnosisRecord);
+
+            await serviceOrderController.getDiagnosisById(req, res, next);
+
+            expect(serviceOrderService.getDiagnosisById).toHaveBeenCalledWith("uuid-diagnosis-123");
+            expect(res.status).toHaveBeenCalledWith(200);
+            expect(res.json).toHaveBeenCalledWith({
+                success: true,
+                data: mockDiagnosisRecord,
+            });
+            expect(next).not.toHaveBeenCalled();
+        });
+
+        it("should call next with badRequest error if id is missing", async () => {
+            req.params = {};
+
+            await serviceOrderController.getDiagnosisById(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(expect.objectContaining({
+                statusCode: 400,
+                message: "Diagnosis ID is required",
+            }));
+            expect(serviceOrderService.getDiagnosisById).not.toHaveBeenCalled();
+            expect(res.status).not.toHaveBeenCalled();
+        });
+    });
 });

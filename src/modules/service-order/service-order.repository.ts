@@ -134,6 +134,11 @@ const list = async (input: ListServiceOrdersInput): Promise<ServiceOrderRecord[]
     });
 };
 
+const findDiagnosisById = async (id: string): Promise<DiagnosisRecord | null> => {
+    const prisma = getPrisma();
+    return prisma.diagnosis.findUnique({ where: { id } });
+};
+
 
 export default {
     // Writer
@@ -145,4 +150,5 @@ export default {
     // Reader
     findById,
     list,
+    findDiagnosisById,
 };

@@ -178,10 +178,17 @@ const startDiagnosis = async (input: StartDiagnosisInput): Promise<DiagnosisReco
     }
 };
 
+const getDiagnosisById = async (id: string): Promise<DiagnosisRecord> => {
+    const diagnosis = await serviceOrderRepository.findDiagnosisById(id);
+    if (!diagnosis) throw notFound({ message: "Diagnosis not found" });
+    return diagnosis;
+}; 
+
 export default {
     createServiceOrder,
     getServiceOrderById,
     listServiceOrders,
     cancelServiceOrder,
     startDiagnosis,
+    getDiagnosisById,
 };

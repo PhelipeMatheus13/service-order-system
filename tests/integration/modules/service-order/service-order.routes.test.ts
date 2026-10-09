@@ -295,4 +295,48 @@ describe("Service Order Routes (Integration)", () => {
             expect(statusHistory?.changedById).toBe(technicianId);
         });
     });
+
+    describe("GET /service-orders/diagnoses/:id", () => {
+        let diagnosisId: string;
+
+        beforeEach(async () => {
+            const serviceOrder = await prisma.serviceOrder.create({
+                data: {
+                    customerId,
+                    deviceId,
+                    reportedProblem: "Screen is cracked and touch is not responding.",
+                    createdById: userId,
+                    status: "IN_DIAGNOSIS",
+                },
+                select: { id: true },
+            });
+
+            const diagnosis = await prisma.diagnosis.create({
+                data: {
+                    serviceOrderId: serviceOrder.id,
+                    performedById: userId,
+                },
+                select: { id: true },
+            });
+
+            diagnosisId = diagnosis.id;
+        });
+
+        it("should return the diagnosis data", async () => {
+            const res = await request(app)
+                .get(`/service-orders/diagnoses/${diagnosisId}`)
+                .set("Authorization", `Bearer ${accessToken}`);
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(res.body.data).toMatchObject({
+                id: diagnosisId,
+                performedById: userId,
+                result: null,
+                completedAt: null,
+            });
+            expect(res.body.data.serviceOrderId).toBeTruthy();
+            expect(res.body.data.createdAt).toBeTruthy();
+        });
+    });
 });

@@ -65,6 +65,23 @@ const missingServiceOrderIdError = registry.registerComponent("responses", "miss
     },
 });
 
+const missingDiagnosisIdError = registry.registerComponent("responses", "missingDiagnosisIdError", {
+    description: "Invalid request, missing diagnosis id",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            example: {
+                success: false,
+                error: {
+                    code: "BAD_REQUEST",
+                    message: "Diagnosis ID is required",
+                },
+            },
+        },
+    },
+});
+
+
 // 404
 const userNotFoundError = registry.registerComponent("responses", "userNotFoundError", {
     description: "User not found or does not exist",
@@ -124,6 +141,22 @@ const serviceOrderNotFoundError = registry.registerComponent("responses", "servi
                 error: {
                     code: "NOT_FOUND",
                     message: "Service order not found",
+                },
+            },
+        },
+    },
+});
+
+const DiagnosisFoundError = registry.registerComponent("responses", "DiagnosisFoundError", {
+    description: "Diagnosis not found or does not exist",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            example: {
+                success: false,
+                error: {
+                    code: "NOT_FOUND",
+                    message: "Diagnosis not found",
                 },
             },
         },
@@ -557,11 +590,13 @@ export {
     missingCustomerIdError,
     missingDeviceIdError,
     missingServiceOrderIdError,
+    missingDiagnosisIdError,
     // 404
     userNotFoundError,
     customerNotFoundError,
     deviceNotFoundError,
     serviceOrderNotFoundError,
+    DiagnosisFoundError,
     // 409
     emailAlreadyExistsError,
     deviceUniqueConstraintError,

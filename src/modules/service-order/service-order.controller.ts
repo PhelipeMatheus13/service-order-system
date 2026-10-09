@@ -69,10 +69,21 @@ const startDiagnosis = asyncHandler(async (req, res) => {
     });
 });
 
+const getDiagnosisById = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (!id) throw badRequest({ message: "Diagnosis ID is required" });
+    const diagnosis = await serviceOrderService.getDiagnosisById(String(id));
+    res.status(200).json({
+        success: true,
+        data: diagnosis,
+    });
+});
+
 export default {
     createServiceOrder,
     getServiceOrderById,
     listServiceOrders,
     cancelServiceOrder,
     startDiagnosis,
+    getDiagnosisById,
 };
