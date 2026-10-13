@@ -58,6 +58,13 @@ interface CreateFindingInput {
     createdById: string;
 }
 
+interface UpdateFindingInput {
+    findingId: string;
+    description: string;
+    repairable: boolean;
+    updatedById: string;
+}
+
 export {
     ServiceOrderStatus,
     ServiceOrderStatusChangeSource,
@@ -76,5 +83,6 @@ export type {
     StartDiagnosisInput,
     UpdateServiceOrderStatusData,
     Finding as FindingRecord,
-    CreateFindingInput
+    CreateFindingInput,
+    UpdateFindingInput,
 };

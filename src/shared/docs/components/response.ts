@@ -81,6 +81,21 @@ const missingDiagnosisIdError = registry.registerComponent("responses", "missing
     },
 });
 
+const missingFindingIdError = registry.registerComponent("responses", "missingFindingIdError", {
+    description: "Invalid request, missing finding id",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            example: {
+                success: false,
+                error: {
+                    code: "BAD_REQUEST",
+                    message: "Finding ID is required",
+                },
+            },
+        },
+    },
+});
 
 // 404
 const userNotFoundError = registry.registerComponent("responses", "userNotFoundError", {
@@ -163,6 +178,21 @@ const DiagnosisNotFoundError = registry.registerComponent("responses", "Diagnosi
     },
 });
 
+const FindingNotFoundError = registry.registerComponent("responses", "FindingNotFoundError", {
+    description: "Finding not found or does not exist",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            example: {
+                success: false,
+                error: {
+                    code: "NOT_FOUND",
+                    message: "Finding not found",
+                },
+            },
+        },
+    },
+});
 // 409
 const emailAlreadyExistsError = registry.registerComponent("responses", "emailAlreadyExistsError", {
     description: "Email already in use",
@@ -326,7 +356,48 @@ const createFindingConflictError = registry.registerComponent("responses", "crea
                         success: false,
                         error: {
                             code: "CONFLICT",
-                            message: "Diagnosis state changed, cannot create finding",
+                            message: "Finding can no longer be created in its current state",
+                        },
+                    },
+                },
+            },
+        },
+    },
+});
+
+const updateFindingConflictError = registry.registerComponent("responses", "updateFindingConflictError", {
+    description: "Finding cannot be updated",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            examples: {
+                diagnosisAlreadyCompleted: {
+                    summary: "Diagnosis is already completed",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Diagnosis already completed",
+                        },
+                    },
+                },
+                serviceOrderNotInDiagnosis: {
+                    summary: "Service order is not in diagnosis",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Service order is not in diagnosis",
+                        },
+                    },
+                },
+                diagnosisStateChanged: {
+                    summary: "Finding state changed during the request (race condition)",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Finding can no longer be updated in its current state",
                         },
                     },
                 },
@@ -626,6 +697,26 @@ const createFindingValidationError = registry.registerComponent("responses", "cr
     },
 });
 
+const updateFindingValidationError = registry.registerComponent("responses", "updateFindingValidationError", {
+    description: "Update finding validation error",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/ValidationError" },
+            example: {
+                success: false,
+                error: {
+                    code: "VALIDATION_ERROR",
+                    message: "Validation failed",
+                    details: [
+                        { field: "description", message: "Reason must be at least 5 characters long" },
+                        { field: "repairable", message: "Expected a boolean value" },
+                    ],
+                },
+            },
+        },
+    },
+});
+
 
 // 500
 const internalError = registry.registerComponent("responses", "internalError", {
@@ -651,18 +742,22 @@ export {
     missingDeviceIdError,
     missingServiceOrderIdError,
     missingDiagnosisIdError,
+    missingFindingIdError,
     // 404
     userNotFoundError,
     customerNotFoundError,
     deviceNotFoundError,
     serviceOrderNotFoundError,
     DiagnosisNotFoundError,
+    FindingNotFoundError,
     // 409
     emailAlreadyExistsError,
     deviceUniqueConstraintError,
     cancelServiceOrderConflictError,
     startDiagnosisConflictError,
     createFindingConflictError,
+    updateFindingConflictError,
+    updateFindingValidationError,
     // 422
     registerValidationError,
     confirmEmailValidationError,

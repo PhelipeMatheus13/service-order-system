@@ -35,11 +35,12 @@ const findingSchema = registry.register(
     z.object({
         id: z.string(),
         diagnosisId: z.string(),
-        createdById: z.string(),
         description: z.string(),
         repairable: z.boolean(),
+        createdById: z.string(),
         createdAt: z.string(),
-        updated_at: z.string().nullable(),
+        updatedAt: z.string().nullable(),
+        updatedById: z.string().nullable(),
     })
 );
 
@@ -103,16 +104,41 @@ const createFindingSchema = registry.register(
 
 type CreateFindingRequest = z.infer<typeof createFindingSchema>;
 
+const updateFindingSchema = registry.register(
+    "updateFindingSchema",
+    z.object({
+        description: z
+            .string()
+            .trim()
+            .min(5, "Description must be at least 5 characters long")
+            .max(2000, "Description must contain at most 2000 characters")
+            .openapi({
+                example: "Battery capacity below expected level.",
+            }),
+
+        repairable: z
+            .boolean()
+            .openapi({
+                example: true,
+                description: "Whether this finding can be repaired.",
+            }),
+    })
+);
+
+type UpdateFindingRequest = z.infer<typeof updateFindingSchema>;
+
 export {
     serviceOrderSchema,
     createServiceOrderSchema,
     cancelServiceOrderSchema,
     diagnosisSchema,
     findingSchema,
+    updateFindingSchema,
 };
 
 export type {
     CreateServiceOrderRequest,
     CancelServiceOrderRequest,
     CreateFindingRequest,
+    UpdateFindingRequest,
 };

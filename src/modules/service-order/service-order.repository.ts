@@ -10,6 +10,7 @@ import type {
     UpdateServiceOrderStatusData,
     FindingRecord,
     CreateFindingInput,
+    UpdateFindingInput,
 } from "./service-order.types.ts";
 import { ServiceOrderStatus } from "./service-order.types.js";
 import { getPrisma } from "../../shared/config/database.js";
@@ -136,11 +137,43 @@ const createFinding = async (input: CreateFindingInput): Promise<FindingRecord |
         RETURNING
             id,
             diagnosis_id AS "diagnosisId",
-            created_by   AS "createdById",
             description,
             repairable,
             created_at   AS "createdAt",
-            updated_at   AS "updatedAt"
+            created_by   AS "createdById",
+            updated_at   AS "updatedAt",
+            updated_by   AS "updatedById"
+    `;
+
+    return rows[0] ?? null;
+};
+
+const updateFinding = async (input: UpdateFindingInput): Promise<FindingRecord | null> => {
+    const prisma = getPrisma();
+
+    // Raw SQL to atomically validate the diagnosis and service order state
+    // before updating, avoiding race conditions between validation and write.
+    const rows = await prisma.$queryRaw<FindingRecord[]>`
+        UPDATE findings f
+        SET description = ${input.description},
+            repairable  = ${input.repairable},
+            updated_by  = ${input.updatedById}::uuid,
+            updated_at  = NOW()
+        FROM diagnoses d
+        JOIN service_orders so ON so.id = d.service_order_id
+        WHERE f.id = ${input.findingId}::uuid
+          AND f.diagnosis_id = d.id
+          AND d.completed_at IS NULL
+          AND so.status = 'IN_DIAGNOSIS'
+        RETURNING
+            f.id,
+            f.diagnosis_id AS "diagnosisId",
+            f.created_by   AS "createdById",
+            f.description,
+            f.repairable,
+            f.created_at   AS "createdAt",
+            f.updated_at   AS "updatedAt",
+            f.updated_by   AS "updatedById"
     `;
 
     return rows[0] ?? null;
@@ -170,6 +203,10 @@ const findDiagnosisById = async (id: string): Promise<DiagnosisRecord | null> =>
     return prisma.diagnosis.findUnique({ where: { id } });
 };
 
+const findFindingById = async (id: string): Promise<FindingRecord | null> => {
+    const prisma = getPrisma();
+    return prisma.finding.findUnique({ where: { id } });
+};
 
 export default {
     // Writer
@@ -179,8 +216,10 @@ export default {
     updateServiceOrderStatus,
     createDiagnosis,
     createFinding,
+    updateFinding,
     // Reader
     findById,
     list,
     findDiagnosisById,
+    findFindingById,
 };

@@ -76,7 +76,8 @@ model User {
   serviceOrders               ServiceOrder[]
   serviceOrderStatusHistories ServiceOrderStatusHistory[]
   diagnoses                   Diagnosis[]
-  findings                    Finding[]
+  findingsCreated Finding[] @relation("FindingCreatedBy")
+  findingsUpdated Finding[] @relation("FindingUpdatedBy")
 
   @@index([createdAt(sort: Desc)])
   @@map("users")
@@ -231,18 +232,21 @@ model Diagnosis {
 }
 
 model Finding {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  diagnosisId String   @map("diagnosis_id") @db.Uuid
-  createdById String   @map("created_by") @db.Uuid
-  description String   @db.Text
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  diagnosisId String    @map("diagnosis_id") @db.Uuid
+  description String    @db.Text
   repairable  Boolean
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  createdById String    @map("created_by") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedById String?   @map("updated_by") @db.Uuid
   updatedAt   DateTime? @map("updated_at") @db.Timestamptz()
 
   diagnosis Diagnosis @relation(fields: [diagnosisId], references: [id], onDelete: Cascade)
-  createdBy User      @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdBy User  @relation("FindingCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy User? @relation("FindingUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
 
   @@index([diagnosisId])
   @@index([createdById])
+  @@index([updatedById])
   @@map("findings")
 }

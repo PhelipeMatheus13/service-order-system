@@ -7,7 +7,14 @@ import { errorSchema } from "../../shared/docs/components/schemas.js"
 import validate from "../../shared/middlewares/validate.js";
 import { checkAccessToken, authorize } from "../../shared/middlewares/auth.js";
 // local modules
-import { serviceOrderSchema, createServiceOrderSchema, cancelServiceOrderSchema, diagnosisSchema, findingSchema } from "./service-order.schemas.js";
+import {
+    serviceOrderSchema,
+    createServiceOrderSchema,
+    cancelServiceOrderSchema,
+    diagnosisSchema,
+    findingSchema,
+    updateFindingSchema
+} from "./service-order.schemas.js";
 import serviceOrderController from "./service-order.controller.js";
 
 const router = express.Router();
@@ -305,6 +312,9 @@ registry.registerPath({
     security: [{ bearerAuth: [] }],
     request: {
         params: z.object({ id: z.string() }),
+                body: {
+            content: { "application/json": { schema: cancelServiceOrderSchema } },
+        },
     },
     responses: {
         200: {
@@ -339,5 +349,53 @@ registry.registerPath({
     }
 });
 router.patch("/:id/cancel", checkAccessToken, authorize("ADMIN", "ATTENDANT"), validate(cancelServiceOrderSchema), serviceOrderController.cancelServiceOrder);
+
+registry.registerPath({
+    tags: ["Findings"],
+    method: "patch",
+    path: "/service-orders/diagnoses/findings/{id}",
+    summary: "Update findings by ID (requires ADMIN or TECHNICIAN role)",
+    security: [{ bearerAuth: [] }],
+    request: {
+        params: z.object({ id: z.string() }),
+        body: {
+            content: { "application/json": { schema: updateFindingSchema } },
+        },
+    },
+    responses: {
+        200: {
+            description: "Findings successfully updated",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        success: z.boolean().openapi({ example: true }),
+                        data: findingSchema,
+                        message: z.string().openapi({ example: "Findings successfully updated" }),
+                    }),
+                },
+            },
+        },
+        400: { $ref: "#/components/responses/missingFindingIdError" },
+        401: {
+            description: "Authentication failed or because the authenticated user no longer exists",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
+                        invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
+                        accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
+                        authenticatedUserNoLongerExists: { $ref: "#/components/examples/authenticatedUserNoLongerExists" },
+                    },
+                },
+            },
+        },
+        404: { $ref: "#/components/responses/FindingNotFoundError" },
+        409: { $ref: "#/components/responses/updateFindingConflictError" },
+        422: { $ref: "#/components/responses/updateFindingValidationError" },
+        500: { $ref: "#/components/responses/internalError" },
+    }
+});
+router.patch("/diagnoses/findings/:id", checkAccessToken, authorize("ADMIN", "TECHNICIAN"), validate(updateFindingSchema), serviceOrderController.updateFinding);
 
 export default router;

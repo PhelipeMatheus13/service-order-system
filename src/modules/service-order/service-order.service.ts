@@ -6,7 +6,8 @@ import {
     DiagnosisRecord,
     StartDiagnosisInput,
     FindingRecord,
-    CreateFindingInput
+    CreateFindingInput,
+    UpdateFindingInput,
 } from "./service-order.types.js";
 import { ServiceOrderStatus } from "./service-order.types.js";
 import { getPrisma } from "../../shared/config/database.js";
@@ -203,7 +204,7 @@ const createFinding = async (input: CreateFindingInput): Promise<FindingRecord> 
         throw notFound({ message: "Service order not found" });
     }
 
-    if (serviceOrder?.status !== ServiceOrderStatus.IN_DIAGNOSIS) {
+    if (serviceOrder.status !== ServiceOrderStatus.IN_DIAGNOSIS) {
         throw conflict({ message: "Service order is not in diagnosis" });
     }
 
@@ -211,7 +212,7 @@ const createFinding = async (input: CreateFindingInput): Promise<FindingRecord> 
         const finding = await serviceOrderRepository.createFinding(input);
 
         if (!finding) {
-            throw conflict({ message: "Diagnosis state changed, cannot create finding" });
+            throw conflict({ message: "Finding can no longer be created in its current state" });
         }
 
         return finding;
@@ -228,6 +229,50 @@ const createFinding = async (input: CreateFindingInput): Promise<FindingRecord> 
     }
 };
 
+const updateFinding = async (input: UpdateFindingInput): Promise<FindingRecord> => {
+    const finding = await serviceOrderRepository.findFindingById(input.findingId);
+    if (!finding) {
+        throw notFound({ message: "Finding not found" });
+    }
+
+    const diagnosis = await serviceOrderRepository.findDiagnosisById(finding.diagnosisId);
+    // The FK guarantees a finding always has a diagnosis. 
+    // This check exists only to narrow the type from `DiagnosisRecord | null` to `DiagnosisRecord` for the compiler.
+    if (!diagnosis) {
+        throw notFound({ message: "Diagnosis not found" });
+    }
+
+    if (diagnosis.completedAt) {
+        throw conflict({ message: "Diagnosis already completed" });
+    }
+
+    const serviceOrder = await serviceOrderRepository.findById(diagnosis.serviceOrderId);
+    // The FK guarantees a diagnosis always has a service order.
+    // This check exists only to narrow the type from `ServiceOrderRecord | null` to `ServiceOrderRecord` for the compiler.
+    if (!serviceOrder) {
+        throw notFound({ message: "Service order not found" });
+    }
+
+    if (serviceOrder.status !== ServiceOrderStatus.IN_DIAGNOSIS) {
+        throw conflict({ message: "Service order is not in diagnosis" });
+    }
+
+    try {
+        const updated = await serviceOrderRepository.updateFinding(input);
+
+        if (!updated) {
+            throw conflict({ message: "Finding can no longer be updated in its current state" });
+        }
+
+        return updated;
+    } catch (error) {
+        if (isForeignKeyConstraintOn(error, "updated_by")) {
+            throw unauthorized({ message: "Authenticated user no longer exists" });
+        }
+
+        throw error;
+    }
+};
 
 export default {
     createServiceOrder,
@@ -237,4 +282,5 @@ export default {
     startDiagnosis,
     getDiagnosisById,
     createFinding,
+    updateFinding,
 };

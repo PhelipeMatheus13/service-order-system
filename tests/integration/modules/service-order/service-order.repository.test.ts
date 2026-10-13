@@ -7,7 +7,8 @@ import type {
     CancelServiceOrderData,
     StartDiagnosisInput,
     UpdateServiceOrderStatusData,
-    CreateFindingInput
+    CreateFindingInput,
+    UpdateFindingInput,
 } from "../../../../src/modules/service-order/service-order.types.js";
 // (shared / infra)
 import { PrismaClient } from "../../../../src/generated/prisma/client.js";
@@ -783,6 +784,7 @@ describe("Service Order Repository (Integration)", () => {
                 expect(findingCreated?.repairable).toBe(true);
                 expect(findingCreated?.createdAt).toBeTruthy();
                 expect(findingCreated?.updatedAt).toBeNull();
+                expect(findingCreated?.updatedById).toBeNull();
 
                 const findingFound = await prisma.finding.findUnique({
                     where: { id: findingCreated!.id },
@@ -942,6 +944,246 @@ describe("Service Order Repository (Integration)", () => {
 
                 const count = await prisma.finding.count();
                 expect(count).toBe(0);
+            });
+
+            it("should throw when the authenticated user does not exist", async () => {
+                const userCreated = await prisma.user.create({
+                    data: {
+                        firstName: "John",
+                        lastName: "Doe",
+                        email: "john@example.com",
+                        role: "TECHNICIAN",
+                        active: true,
+                    },
+                });
+
+                const customerCreated = await prisma.customer.create({
+                    data: {
+                        firstName: "Jane",
+                        lastName: "Doe",
+                        email: "jane@example.com",
+                        phoneNumber: "5521995437105",
+                    },
+                });
+
+                const deviceCreated = await prisma.device.create({
+                    data: {
+                        customerId: customerCreated.id,
+                        type: "SMARTPHONE",
+                        brand: "Samsung",
+                        model: "Galaxy S23",
+                        serialNumber: "SN-123456",
+                        imei: "123456789012345",
+                        color: "Black",
+                    },
+                });
+
+                const serviceOrderCreated = await prisma.serviceOrder.create({
+                    data: {
+                        customerId: customerCreated.id,
+                        deviceId: deviceCreated.id,
+                        reportedProblem: "Screen is cracked and touch is not responding.",
+                        createdById: userCreated.id,
+                        status: "IN_DIAGNOSIS",
+                    },
+                });
+
+                const diagnosisCreated = await prisma.diagnosis.create({
+                    data: {
+                        serviceOrderId: serviceOrderCreated.id,
+                        performedById: userCreated.id,
+                    },
+                });
+
+                const input: CreateFindingInput = {
+                    diagnosisId: diagnosisCreated.id,
+                    createdById: "0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa",
+                    description: "Battery capacity below expected level",
+                    repairable: true,
+                };
+
+                await expect(serviceOrderRepository.createFinding(input))
+                    .rejects.toThrow();
+
+                const count = await prisma.finding.count();
+                expect(count).toBe(0);
+            });
+        });
+
+        describe("updateFinding", () => {
+            let findingCreatedId: string;
+            let userCreatedId: string;
+
+            beforeEach(async () => {
+                const userCreated = await prisma.user.create({
+                    data: {
+                        firstName: "John",
+                        lastName: "Doe",
+                        email: "john@example.com",
+                        role: "TECHNICIAN",
+                        active: true,
+                    },
+                });
+                userCreatedId = userCreated.id;
+
+                const customerCreated = await prisma.customer.create({
+                    data: {
+                        firstName: "Jane",
+                        lastName: "Doe",
+                        email: "jane@example.com",
+                        phoneNumber: "5521995437105",
+                    },
+                });
+
+                const deviceCreated = await prisma.device.create({
+                    data: {
+                        customerId: customerCreated.id,
+                        type: "SMARTPHONE",
+                        brand: "Samsung",
+                        model: "Galaxy S23",
+                        serialNumber: "SN-123456",
+                        imei: "123456789012345",
+                        color: "Black",
+                    },
+                });
+
+                const serviceOrderCreated = await prisma.serviceOrder.create({
+                    data: {
+                        customerId: customerCreated.id,
+                        deviceId: deviceCreated.id,
+                        reportedProblem: "Screen is cracked and touch is not responding.",
+                        createdById: userCreated.id,
+                        status: "IN_DIAGNOSIS",
+                    },
+                });
+
+                const diagnosisCreated = await prisma.diagnosis.create({
+                    data: {
+                        serviceOrderId: serviceOrderCreated.id,
+                        performedById: userCreated.id,
+                    },
+                });
+
+                const findingCreated = await prisma.finding.create({
+                    data: {
+                        diagnosisId: diagnosisCreated.id,
+                        createdById: userCreated.id,
+                        description: "Battery capacity below expected level",
+                        repairable: true,
+                    },
+                });
+
+                findingCreatedId = findingCreated.id;
+            });
+
+            it("should update the finding and set updatedById and updatedAt", async () => {
+                const input: UpdateFindingInput = {
+                    findingId: findingCreatedId,
+                    description: "Battery capacity critically below expected level",
+                    repairable: false,
+                    updatedById: userCreatedId,
+                };
+
+                const findingUpdated = await serviceOrderRepository.updateFinding(input);
+
+                expect(findingUpdated).toBeTruthy();
+                expect(findingUpdated?.id).toBe(findingCreatedId);
+                expect(findingUpdated?.description).toBe("Battery capacity critically below expected level");
+                expect(findingUpdated?.repairable).toBe(false);
+                expect(findingUpdated?.createdById).toBe(userCreatedId);
+                expect(findingUpdated?.updatedById).toBe(userCreatedId);
+                expect(findingUpdated?.updatedAt).toBeTruthy();
+
+                const findingFound = await prisma.finding.findUnique({
+                    where: { id: findingCreatedId },
+                });
+
+                expect(findingFound?.description).toBe("Battery capacity critically below expected level");
+                expect(findingFound?.repairable).toBe(false);
+                expect(findingFound?.updatedById).toBe(userCreatedId);
+                expect(findingFound?.updatedAt).toBeTruthy();
+            });
+
+            it("should return null when the finding does not exist", async () => {
+                const input: UpdateFindingInput = {
+                    findingId: "0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa",
+                    description: "Battery capacity critically below expected level",
+                    repairable: false,
+                    updatedById: userCreatedId,
+                };
+
+                const findingUpdated = await serviceOrderRepository.updateFinding(input);
+
+                expect(findingUpdated).toBeNull();
+            });
+
+            it("should return null when the diagnosis is already completed", async () => {
+                await prisma.diagnosis.updateMany({
+                    data: { completedAt: new Date(), result: "FAULT_FOUND" },
+                });
+
+                const input: UpdateFindingInput = {
+                    findingId: findingCreatedId,
+                    description: "Battery capacity critically below expected level",
+                    repairable: false,
+                    updatedById: userCreatedId,
+                };
+
+                const findingUpdated = await serviceOrderRepository.updateFinding(input);
+
+                expect(findingUpdated).toBeNull();
+
+                const findingFound = await prisma.finding.findUnique({
+                    where: { id: findingCreatedId },
+                });
+
+                expect(findingFound?.description).toBe("Battery capacity below expected level");
+                expect(findingFound?.repairable).toBe(true);
+                expect(findingFound?.updatedById).toBeNull();
+                expect(findingFound?.updatedAt).toBeNull();
+            });
+
+            it("should return null when the service order is not IN_DIAGNOSIS", async () => {
+                await prisma.serviceOrder.updateMany({
+                    data: { status: "AWAITING_DELIVERY" },
+                });
+
+                const input: UpdateFindingInput = {
+                    findingId: findingCreatedId,
+                    description: "Battery capacity critically below expected level",
+                    repairable: false,
+                    updatedById: userCreatedId,
+                };
+
+                const findingUpdated = await serviceOrderRepository.updateFinding(input);
+
+                expect(findingUpdated).toBeNull();
+
+                const findingFound = await prisma.finding.findUnique({
+                    where: { id: findingCreatedId },
+                });
+
+                expect(findingFound?.description).toBe("Battery capacity below expected level");
+                expect(findingFound?.updatedById).toBeNull();
+            });
+
+            it("should throw when the updated_by user does not exist", async () => {
+                const input: UpdateFindingInput = {
+                    findingId: findingCreatedId,
+                    description: "Battery capacity critically below expected level",
+                    repairable: false,
+                    updatedById: "0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa",
+                };
+
+                await expect(serviceOrderRepository.updateFinding(input))
+                    .rejects.toThrow();
+
+                const findingFound = await prisma.finding.findUnique({
+                    where: { id: findingCreatedId },
+                });
+
+                expect(findingFound?.description).toBe("Battery capacity below expected level");
+                expect(findingFound?.updatedById).toBeNull();
             });
         });
     });
@@ -1184,6 +1426,85 @@ describe("Service Order Repository (Integration)", () => {
                 const diagnosis = await serviceOrderRepository.findDiagnosisById("0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa");
 
                 expect(diagnosis).toBeNull();
+            });
+        });
+
+        describe("findFindingById", () => {
+            it("should return the finding if a finding with the given ID exists", async () => {
+                const userCreated = await prisma.user.create({
+                    data: {
+                        firstName: "John",
+                        lastName: "Doe",
+                        email: "john@example.com",
+                        role: "TECHNICIAN",
+                        active: true,
+                    },
+                });
+
+                const customerCreated = await prisma.customer.create({
+                    data: {
+                        firstName: "Jane",
+                        lastName: "Doe",
+                        email: "jane@example.com",
+                        phoneNumber: "5521995437105",
+                    },
+                });
+
+                const deviceCreated = await prisma.device.create({
+                    data: {
+                        customerId: customerCreated.id,
+                        type: "SMARTPHONE",
+                        brand: "Samsung",
+                        model: "Galaxy S23",
+                        serialNumber: "SN-123456",
+                        imei: "123456789012345",
+                        color: "Black",
+                    },
+                });
+
+                const serviceOrderCreated = await prisma.serviceOrder.create({
+                    data: {
+                        customerId: customerCreated.id,
+                        deviceId: deviceCreated.id,
+                        reportedProblem: "Screen is cracked and touch is not responding.",
+                        createdById: userCreated.id,
+                        status: "IN_DIAGNOSIS",
+                    },
+                });
+
+                const diagnosisCreated = await prisma.diagnosis.create({
+                    data: {
+                        serviceOrderId: serviceOrderCreated.id,
+                        performedById: userCreated.id,
+                    },
+                });
+
+                const findingCreated = await prisma.finding.create({
+                    data: {
+                        diagnosisId: diagnosisCreated.id,
+                        createdById: userCreated.id,
+                        description: "Battery capacity below expected level",
+                        repairable: true,
+                    },
+                });
+
+                const finding = await serviceOrderRepository.findFindingById(findingCreated.id);
+
+                expect(finding).toBeTruthy();
+                expect(finding?.id).toBe(findingCreated.id);
+                expect(finding?.diagnosisId).toBe(diagnosisCreated.id);
+                expect(finding?.createdById).toBe(userCreated.id);
+                expect(finding?.description).toBe("Battery capacity below expected level");
+                expect(finding?.repairable).toBe(true);
+                expect(finding?.createdAt).toBeTruthy();
+                expect(finding?.updatedAt).toBeNull();
+                expect(finding?.updatedById).toBeNull();
+            });
+
+            it("should return null if a finding with the given ID does not exist", async () => {
+                const finding = await serviceOrderRepository.findFindingById("0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa");
+
+                expect(finding).toBeNull();
             });
         });
     });

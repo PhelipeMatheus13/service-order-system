@@ -93,6 +93,20 @@ const createFinding = asyncHandler(async (req, res) => {
     });
 });
 
+const updateFinding = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (!id) throw badRequest({ message: "Finding ID is required" });
+
+    const input = serviceOrderDTO.updateFindingDTO(req.body, String(id), String(req.user?.id))
+
+    const finding = await serviceOrderService.updateFinding(input);
+    res.status(200).json({
+        success: true,
+        data: finding,  
+        message: "Finding successfully updated",
+    });
+});
+
 export default {
     createServiceOrder,
     getServiceOrderById,
@@ -101,4 +115,5 @@ export default {
     startDiagnosis,
     getDiagnosisById,
     createFinding,
+    updateFinding,
 };

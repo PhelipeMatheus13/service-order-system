@@ -399,4 +399,80 @@ describe("Service Order Controller (Unit)", () => {
             expect(res.status).not.toHaveBeenCalled();
         });
     });
+
+    describe("updateFinding", () => {
+        it("should return 200 on successful finding update", async () => {
+            req.params.id = "uuid-finding-123";
+            req.user = { id: "uuid-user-123" };
+            req.body = {
+                description: "Battery capacity critically below expected level",
+                repairable: false,
+            };
+
+            const mockFindingRecord = {
+                id: "uuid-finding-123",
+                diagnosisId: "uuid-diagnosis-123",
+                createdById: "uuid-user-456",
+                description: "Battery capacity critically below expected level",
+                repairable: false,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                updatedById: "uuid-user-123",
+            } as FindingRecord;
+
+            vi.mocked(serviceOrderService).updateFinding.mockResolvedValue(mockFindingRecord);
+
+            await serviceOrderController.updateFinding(req, res, next);
+
+            expect(serviceOrderService.updateFinding).toHaveBeenCalledWith({
+                findingId: "uuid-finding-123",
+                description: "Battery capacity critically below expected level",
+                repairable: false,
+                updatedById: "uuid-user-123",
+            });
+
+            expect(res.status).toHaveBeenCalledWith(200);
+            expect(res.json).toHaveBeenCalledWith({
+                success: true,
+                data: mockFindingRecord,
+                message: "Finding successfully updated",
+            });
+            expect(next).not.toHaveBeenCalled();
+        });
+
+        it("should call next with badRequest error if id is missing", async () => {
+            req.params = {};
+            req.user = { id: "uuid-user-123" };
+            req.body = {
+                description: "Battery capacity critically below expected level",
+                repairable: false,
+            };
+
+            await serviceOrderController.updateFinding(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(expect.objectContaining({
+                statusCode: 400,
+                message: "Finding ID is required",
+            }));
+            expect(serviceOrderService.updateFinding).not.toHaveBeenCalled();
+            expect(res.status).not.toHaveBeenCalled();
+        });
+
+        it("should propagate error when service fails", async () => {
+            req.params.id = "uuid-finding-123";
+            req.user = { id: "uuid-user-123" };
+            req.body = {
+                description: "Battery capacity critically below expected level",
+                repairable: false,
+            };
+
+            const error = new Error("Service error");
+            vi.mocked(serviceOrderService).updateFinding.mockRejectedValue(error);
+
+            await serviceOrderController.updateFinding(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(error);
+            expect(res.status).not.toHaveBeenCalled();
+        });
+    });
 });
