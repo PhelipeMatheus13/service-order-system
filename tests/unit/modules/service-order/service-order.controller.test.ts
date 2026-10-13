@@ -475,4 +475,48 @@ describe("Service Order Controller (Unit)", () => {
             expect(res.status).not.toHaveBeenCalled();
         });
     });
+
+    describe("deleteFinding", () => {
+        it("should return 200 on successful finding deletion", async () => {
+            req.params.id = "uuid-finding-123";
+
+            vi.mocked(serviceOrderService).deleteFinding.mockResolvedValue(undefined);
+
+            await serviceOrderController.deleteFinding(req, res, next);
+
+            expect(serviceOrderService.deleteFinding).toHaveBeenCalledWith("uuid-finding-123");
+
+            expect(res.status).toHaveBeenCalledWith(200);
+            expect(res.json).toHaveBeenCalledWith({
+                success: true,
+                message: "Finding successfully deleted",
+            });
+            expect(next).not.toHaveBeenCalled();
+        });
+
+        it("should call next with badRequest error if id is missing", async () => {
+            req.params = {};
+
+            await serviceOrderController.deleteFinding(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(expect.objectContaining({
+                statusCode: 400,
+                message: "Finding ID is required",
+            }));
+            expect(serviceOrderService.deleteFinding).not.toHaveBeenCalled();
+            expect(res.status).not.toHaveBeenCalled();
+        });
+
+        it("should propagate error when service fails", async () => {
+            req.params.id = "uuid-finding-123";
+
+            const error = new Error("Service error");
+            vi.mocked(serviceOrderService).deleteFinding.mockRejectedValue(error);
+
+            await serviceOrderController.deleteFinding(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(error);
+            expect(res.status).not.toHaveBeenCalled();
+        });
+    });
 });

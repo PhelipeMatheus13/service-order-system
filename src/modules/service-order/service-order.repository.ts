@@ -92,6 +92,9 @@ const cancelServiceOrder = async (input: CancelServiceOrderData, tx?: Prisma.Tra
 const updateServiceOrderStatus = async (input: UpdateServiceOrderStatusData, tx?: Prisma.TransactionClient): Promise<boolean> => {
     const prisma: PrismaClientOrTx = tx || getPrisma();
 
+    // Atomic guard: the UPDATE only succeeds if the current status is one
+    // of the expected ones. This prevents concurrent operations from
+    // overwriting each other's state transitions.
     const result = await prisma.serviceOrder.updateMany({
         where: {
             id: input.serviceOrderId,
@@ -121,8 +124,8 @@ const createDiagnosis = async (input: StartDiagnosisInput, tx?: Prisma.Transacti
 const createFinding = async (input: CreateFindingInput): Promise<FindingRecord | null> => {
     const prisma = getPrisma();
 
-    // Raw SQL to atomically validate the diagnosis and service order state 
-    // before inserting, avoiding race conditions between validation and creation.
+    // Atomic guard: validates the diagnosis and service order state as part
+    // of the INSERT, so no race window exists between check and write.
     const rows = await prisma.$queryRaw<FindingRecord[]>`
         INSERT INTO findings (diagnosis_id, created_by, description, repairable)
         SELECT ${input.diagnosisId}::uuid, ${input.createdById}::uuid, ${input.description}, ${input.repairable}
@@ -150,9 +153,8 @@ const createFinding = async (input: CreateFindingInput): Promise<FindingRecord |
 
 const updateFinding = async (input: UpdateFindingInput): Promise<FindingRecord | null> => {
     const prisma = getPrisma();
-
-    // Raw SQL to atomically validate the diagnosis and service order state
-    // before updating, avoiding race conditions between validation and write.
+    // Atomic guard: validates the diagnosis and service order state as part
+    // of the UPDATE, so no race window exists between check and write.
     const rows = await prisma.$queryRaw<FindingRecord[]>`
         UPDATE findings f
         SET description = ${input.description},
@@ -177,6 +179,25 @@ const updateFinding = async (input: UpdateFindingInput): Promise<FindingRecord |
     `;
 
     return rows[0] ?? null;
+};
+
+const deleteFindingById = async (id: string): Promise<boolean> => {
+    const prisma = getPrisma();
+
+    // Atomic guard: validates the diagnosis and service order state as part
+    // of the DELETE, so no race window exists between check and write.
+    const rows = await prisma.$queryRaw<{ id: string }[]>`
+        DELETE FROM findings f
+        USING diagnoses d, service_orders so
+        WHERE f.id = ${id}::uuid
+          AND f.diagnosis_id = d.id
+          AND d.service_order_id = so.id
+          AND d.completed_at IS NULL
+          AND so.status = 'IN_DIAGNOSIS'
+        RETURNING f.id
+    `;
+
+    return rows.length > 0;
 };
 
 // Reader
@@ -217,6 +238,7 @@ export default {
     createDiagnosis,
     createFinding,
     updateFinding,
+    deleteFindingById,
     // Reader
     findById,
     list,

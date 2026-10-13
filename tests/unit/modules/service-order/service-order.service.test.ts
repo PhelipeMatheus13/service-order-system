@@ -1011,4 +1011,153 @@ describe("Service Order Service (Unit)", () => {
             expect(result).toBe(mockUpdatedFindingRecord);
         });
     });
+
+    describe("deleteFinding", () => {
+        const findingId = "uuid-finding-123";
+
+        const mockFindingRecord = {
+            id: findingId,
+            diagnosisId: "uuid-diagnosis-123",
+            createdById: "uuid-user-456",
+            description: "Battery capacity below expected level",
+            repairable: true,
+            createdAt: new Date(),
+            updatedAt: null,
+            updatedById: null,
+        } as FindingRecord;
+
+        const mockDiagnosisRecord = {
+            id: mockFindingRecord.diagnosisId,
+            serviceOrderId: "uuid-service-order-123",
+            performedById: "uuid-user-456",
+            result: null,
+            completedAt: null,
+            createdAt: new Date(),
+        } as DiagnosisRecord;
+
+        const mockServiceOrderRecord = {
+            id: mockDiagnosisRecord.serviceOrderId,
+            customerId: "uuid-customer-123",
+            deviceId: "uuid-device-123",
+            reportedProblem: "Screen is cracked and touch is not responding.",
+            status: "IN_DIAGNOSIS",
+            createdById: "uuid-user-456",
+            cancelledAt: null,
+            cancelReason: null,
+            finishedAt: null,
+            createdAt: new Date(),
+            updatedAt: null,
+        } as ServiceOrderRecord;
+
+        const setupDeleteFindingMocks = () => {
+            vi.mocked(serviceOrderRepository.findFindingById).mockResolvedValue(mockFindingRecord);
+            vi.mocked(serviceOrderRepository.findDiagnosisById).mockResolvedValue(mockDiagnosisRecord);
+            vi.mocked(serviceOrderRepository.findById).mockResolvedValue(mockServiceOrderRecord);
+            vi.mocked(serviceOrderRepository.deleteFindingById).mockResolvedValue(true);
+        };
+
+        it("should throw if serviceOrderRepository.findFindingById fails", async () => {
+            const error = new Error("fake error");
+            vi.mocked(serviceOrderRepository.findFindingById).mockRejectedValue(error);
+
+            await expect(serviceOrderService.deleteFinding(findingId))
+                .rejects.toThrow(error);
+        });
+
+        it("should throw NOT_FOUND if finding does not exist", async () => {
+            vi.mocked(serviceOrderRepository.findFindingById).mockResolvedValue(null);
+
+            await expect(serviceOrderService.deleteFinding(findingId))
+                .rejects.toMatchObject({
+                    statusCode: 404,
+                    message: "Finding not found",
+                });
+
+            expect(serviceOrderRepository.findDiagnosisById).not.toHaveBeenCalled();
+        });
+
+        it("should throw if serviceOrderRepository.findDiagnosisById fails", async () => {
+            const error = new Error("fake error");
+            vi.mocked(serviceOrderRepository.findFindingById).mockResolvedValue(mockFindingRecord);
+            vi.mocked(serviceOrderRepository.findDiagnosisById).mockRejectedValue(error);
+
+            await expect(serviceOrderService.deleteFinding(findingId))
+                .rejects.toThrow(error);
+        });
+
+        it("should throw CONFLICT if diagnosis is already completed", async () => {
+            vi.mocked(serviceOrderRepository.findFindingById).mockResolvedValue(mockFindingRecord);
+            vi.mocked(serviceOrderRepository.findDiagnosisById).mockResolvedValue({
+                ...mockDiagnosisRecord,
+                completedAt: new Date(),
+            });
+
+            await expect(serviceOrderService.deleteFinding(findingId))
+                .rejects.toMatchObject({
+                    statusCode: 409,
+                    message: "Diagnosis already completed",
+                });
+
+            expect(serviceOrderRepository.findById).not.toHaveBeenCalled();
+        });
+
+        it("should throw if serviceOrderRepository.findById fails", async () => {
+            const error = new Error("fake error");
+            vi.mocked(serviceOrderRepository.findFindingById).mockResolvedValue(mockFindingRecord);
+            vi.mocked(serviceOrderRepository.findDiagnosisById).mockResolvedValue(mockDiagnosisRecord);
+            vi.mocked(serviceOrderRepository.findById).mockRejectedValue(error);
+
+            await expect(serviceOrderService.deleteFinding(findingId))
+                .rejects.toThrow(error);
+        });
+
+        it("should throw CONFLICT if service order is not IN_DIAGNOSIS", async () => {
+            vi.mocked(serviceOrderRepository.findFindingById).mockResolvedValue(mockFindingRecord);
+            vi.mocked(serviceOrderRepository.findDiagnosisById).mockResolvedValue(mockDiagnosisRecord);
+            vi.mocked(serviceOrderRepository.findById).mockResolvedValue({
+                ...mockServiceOrderRecord,
+                status: "AWAITING_DELIVERY",
+            });
+
+            await expect(serviceOrderService.deleteFinding(findingId))
+                .rejects.toMatchObject({
+                    statusCode: 409,
+                    message: "Service order is not in diagnosis",
+                });
+
+            expect(serviceOrderRepository.deleteFindingById).not.toHaveBeenCalled();
+        });
+
+        it("should throw CONFLICT if repository returns false (race condition)", async () => {
+            setupDeleteFindingMocks();
+            vi.mocked(serviceOrderRepository.deleteFindingById).mockResolvedValue(false);
+
+            await expect(serviceOrderService.deleteFinding(findingId))
+                .rejects.toMatchObject({
+                    statusCode: 409,
+                    message: "Finding can no longer be deleted in its current state",
+                });
+        });
+
+        it("should propagate error if repository throws an unknown error", async () => {
+            const error = new Error("fake error");
+            setupDeleteFindingMocks();
+            vi.mocked(serviceOrderRepository.deleteFindingById).mockRejectedValue(error);
+
+            await expect(serviceOrderService.deleteFinding(findingId))
+                .rejects.toThrow(error);
+        });
+
+        it("should delete finding successfully", async () => {
+            setupDeleteFindingMocks();
+
+            await expect(serviceOrderService.deleteFinding(findingId))
+                .resolves.toBeUndefined();
+
+            expect(serviceOrderRepository.findFindingById).toHaveBeenCalledWith(findingId);
+            expect(serviceOrderRepository.findDiagnosisById).toHaveBeenCalledWith(mockFindingRecord.diagnosisId);
+            expect(serviceOrderRepository.findById).toHaveBeenCalledWith(mockDiagnosisRecord.serviceOrderId);
+            expect(serviceOrderRepository.deleteFindingById).toHaveBeenCalledWith(findingId);
+        });
+    });
 });

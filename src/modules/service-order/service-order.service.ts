@@ -274,6 +274,40 @@ const updateFinding = async (input: UpdateFindingInput): Promise<FindingRecord> 
     }
 };
 
+const deleteFinding = async (findingId: string): Promise<void> => {
+    const finding = await serviceOrderRepository.findFindingById(findingId);
+    if (!finding) {
+        throw notFound({ message: "Finding not found" });
+    }
+
+    const diagnosis = await serviceOrderRepository.findDiagnosisById(finding.diagnosisId);
+    // The FK guarantees a finding always has a diagnosis.
+    // This check exists only to narrow the type from `DiagnosisRecord | null` to `DiagnosisRecord` for the compiler.
+    if (!diagnosis) {
+        throw notFound({ message: "Diagnosis not found" });
+    }
+
+    if (diagnosis.completedAt) {
+        throw conflict({ message: "Diagnosis already completed" });
+    }
+
+    const serviceOrder = await serviceOrderRepository.findById(diagnosis.serviceOrderId);
+    // The FK guarantees a diagnosis always has a service order.
+    // This check exists only to narrow the type from `ServiceOrderRecord | null` to `ServiceOrderRecord` for the compiler.
+    if (!serviceOrder) {
+        throw notFound({ message: "Service order not found" });
+    }
+
+    if (serviceOrder.status !== ServiceOrderStatus.IN_DIAGNOSIS) {
+        throw conflict({ message: "Service order is not in diagnosis" });
+    }
+
+    const deleted = await serviceOrderRepository.deleteFindingById(findingId);
+    if (!deleted) {
+        throw conflict({ message: "Finding can no longer be deleted in its current state" });
+    }
+};
+
 export default {
     createServiceOrder,
     getServiceOrderById,
@@ -283,4 +317,5 @@ export default {
     getDiagnosisById,
     createFinding,
     updateFinding,
+    deleteFinding,
 };

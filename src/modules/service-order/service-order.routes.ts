@@ -297,7 +297,7 @@ registry.registerPath({
                 },
             },
         },
-        404: { $ref: "#/components/responses/DiagnosisNotFoundError" },
+        404: { $ref: "#/components/responses/diagnosisNotFoundError" },
         500: { $ref: "#/components/responses/internalError" },
     }
 });
@@ -390,12 +390,56 @@ registry.registerPath({
                 },
             },
         },
-        404: { $ref: "#/components/responses/FindingNotFoundError" },
+        404: { $ref: "#/components/responses/findingNotFoundError" },
         409: { $ref: "#/components/responses/updateFindingConflictError" },
         422: { $ref: "#/components/responses/updateFindingValidationError" },
         500: { $ref: "#/components/responses/internalError" },
     }
 });
 router.patch("/findings/:id", checkAccessToken, authorize("ADMIN", "TECHNICIAN"), validate(updateFindingSchema), serviceOrderController.updateFinding);
+
+
+// DELETE
+registry.registerPath({
+    tags: ["Findings"],
+    method: "delete",
+    path: "/service-orders/findings/{id}",
+    summary: "Delete findings by ID (requires ADMIN or TECHNICIAN role)",
+    security: [{ bearerAuth: [] }],
+    request: {
+        params: z.object({ id: z.string() }),
+    },
+    responses: {
+        200: {
+            description: "Findings successfully deleted",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        success: z.boolean().openapi({ example: true }),
+                        message: z.string().openapi({ example: "Findings successfully deleted" }),
+                    }),
+                },
+            },
+        },
+        400: { $ref: "#/components/responses/missingFindingIdError" },
+        401: {
+            description: "Authentication failed",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
+                        invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
+                        accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
+                    },
+                },
+            },
+        },
+        404: { $ref: "#/components/responses/findingNotFoundError" },
+        409: { $ref: "#/components/responses/deleteFindingConflictError" },
+        500: { $ref: "#/components/responses/internalError" },
+    }
+});
+router.delete("/findings/:id", checkAccessToken, authorize("ADMIN", "TECHNICIAN"), serviceOrderController.deleteFinding);
 
 export default router;

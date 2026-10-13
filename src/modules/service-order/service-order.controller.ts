@@ -107,6 +107,16 @@ const updateFinding = asyncHandler(async (req, res) => {
     });
 });
 
+const deleteFinding = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (!id) throw badRequest({ message: "Finding ID is required" });
+    await serviceOrderService.deleteFinding(String(id));
+    res.status(200).json({
+        success: true,
+        message: "Finding successfully deleted",
+    });
+});
+
 export default {
     createServiceOrder,
     getServiceOrderById,
@@ -116,4 +126,5 @@ export default {
     getDiagnosisById,
     createFinding,
     updateFinding,
+    deleteFinding,
 };

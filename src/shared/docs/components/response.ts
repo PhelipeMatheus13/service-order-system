@@ -162,7 +162,7 @@ const serviceOrderNotFoundError = registry.registerComponent("responses", "servi
     },
 });
 
-const DiagnosisNotFoundError = registry.registerComponent("responses", "DiagnosisNotFoundError", {
+const diagnosisNotFoundError = registry.registerComponent("responses", "diagnosisNotFoundError", {
     description: "Diagnosis not found or does not exist",
     content: {
         "application/json": {
@@ -178,7 +178,7 @@ const DiagnosisNotFoundError = registry.registerComponent("responses", "Diagnosi
     },
 });
 
-const FindingNotFoundError = registry.registerComponent("responses", "FindingNotFoundError", {
+const findingNotFoundError = registry.registerComponent("responses", "findingNotFoundError", {
     description: "Finding not found or does not exist",
     content: {
         "application/json": {
@@ -405,6 +405,49 @@ const updateFindingConflictError = registry.registerComponent("responses", "upda
         },
     },
 });
+
+
+const deleteFindingConflictError = registry.registerComponent("responses", "deleteFindingConflictError", {
+    description: "Finding cannot be deleted",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            examples: {
+                diagnosisAlreadyCompleted: {
+                    summary: "Diagnosis is already completed",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Diagnosis already completed",
+                        },
+                    },
+                },
+                serviceOrderNotInDiagnosis: {
+                    summary: "Service order is not in diagnosis",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Service order is not in diagnosis",
+                        },
+                    },
+                },
+                diagnosisStateChanged: {
+                    summary: "Finding state changed during the request (race condition)",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Finding can no longer be deleted in its current state",
+                        },
+                    },
+                },
+            },
+        },
+    },
+});
+
 
 // VALIDATION ERRORS (422)
 const registerValidationError = registry.registerComponent("responses", "registerValidationError", {
@@ -748,8 +791,8 @@ export {
     customerNotFoundError,
     deviceNotFoundError,
     serviceOrderNotFoundError,
-    DiagnosisNotFoundError,
-    FindingNotFoundError,
+    diagnosisNotFoundError,
+    findingNotFoundError,
     // 409
     emailAlreadyExistsError,
     deviceUniqueConstraintError,
@@ -758,6 +801,7 @@ export {
     createFindingConflictError,
     updateFindingConflictError,
     updateFindingValidationError,
+    deleteFindingConflictError,
     // 422
     registerValidationError,
     confirmEmailValidationError,
