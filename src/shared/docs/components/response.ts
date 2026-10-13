@@ -448,6 +448,47 @@ const deleteFindingConflictError = registry.registerComponent("responses", "dele
     },
 });
 
+const completeDiagnosisConflictError = registry.registerComponent("responses", "completeDiagnosisConflictError", {
+    description: "Diagnosis cannot be completed",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            examples: {
+                diagnosisAlreadyCompleted: {
+                    summary: "Diagnosis is already completed",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Diagnosis already completed",
+                        },
+                    },
+                },
+                serviceOrderNotInDiagnosis: {
+                    summary: "Service order is not in diagnosis",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Service order is not in diagnosis",
+                        },
+                    },
+                },
+                diagnosisStateChanged: {
+                    summary: "Diagnosis state changed during the request (race condition)",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Diagnosis can no longer be completed in its current state",
+                        },
+                    },
+                },
+            },
+        },
+    },
+});
+
 
 // VALIDATION ERRORS (422)
 const registerValidationError = registry.registerComponent("responses", "registerValidationError", {
@@ -760,6 +801,28 @@ const updateFindingValidationError = registry.registerComponent("responses", "up
     },
 });
 
+const completeDiagnosisValidationError = registry.registerComponent("responses", "completeDiagnosisValidationError", {
+    description: "Complete diagnosis validation error",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/ValidationError" },
+            example: {
+                success: false,
+                error: {
+                    code: "VALIDATION_ERROR",
+                    message: "Validation failed",
+                    details: [
+                        { 
+                            field: "result", 
+                            message: "Invalid enum value. Expected 'FAULT_FOUND' | 'NO_FAULT_FOUND' | 'INCONCLUSIVE', received 'DONE'",
+                        },
+                    ],
+                },
+            },
+        },
+    },
+});
+
 
 // 500
 const internalError = registry.registerComponent("responses", "internalError", {
@@ -802,6 +865,7 @@ export {
     updateFindingConflictError,
     updateFindingValidationError,
     deleteFindingConflictError,
+    completeDiagnosisConflictError,
     // 422
     registerValidationError,
     confirmEmailValidationError,
@@ -815,6 +879,7 @@ export {
     createServiceOrderValidationError,
     cancelServiceOrderValidationError,
     createFindingValidationError,
+    completeDiagnosisValidationError,
     // 500
     internalError,
 };

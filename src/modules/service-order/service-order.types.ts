@@ -4,6 +4,7 @@ import {
     ServiceOrderStatusHistory, 
     ServiceOrderStatusChangeSource,
     Diagnosis,
+    DiagnosisResult,
     Finding
 } from "../../generated/prisma/client.js";
 
@@ -42,7 +43,7 @@ interface CancelServiceOrderData {
 
 interface StartDiagnosisInput {
     serviceOrderId: string;
-    performedById: string;
+    createdById: string;
 }
 
 interface UpdateServiceOrderStatusData {
@@ -65,6 +66,12 @@ interface UpdateFindingInput {
     updatedById: string;
 }
 
+interface CompleteDiagnosisInput {
+    diagnosisId: string;
+    result: DiagnosisResult;
+    completedById: string;
+}
+
 export {
     ServiceOrderStatus,
     ServiceOrderStatusChangeSource,
@@ -85,4 +92,5 @@ export type {
     Finding as FindingRecord,
     CreateFindingInput,
     UpdateFindingInput,
+    CompleteDiagnosisInput,
 };

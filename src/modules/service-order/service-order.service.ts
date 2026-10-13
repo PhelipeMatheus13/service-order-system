@@ -8,6 +8,7 @@ import {
     FindingRecord,
     CreateFindingInput,
     UpdateFindingInput,
+    CompleteDiagnosisInput,
 } from "./service-order.types.js";
 import { ServiceOrderStatus } from "./service-order.types.js";
 import { getPrisma } from "../../shared/config/database.js";
@@ -150,7 +151,7 @@ const startDiagnosis = async (input: StartDiagnosisInput): Promise<DiagnosisReco
                     fromStatus: ServiceOrderStatus.WAITING_DIAGNOSIS,
                     toStatus: ServiceOrderStatus.IN_DIAGNOSIS,
                     changeSource: "USER",
-                    changedById: input.performedById,
+                    changedById: input.createdById,
                 },
                 tx,
             );
@@ -308,6 +309,44 @@ const deleteFinding = async (findingId: string): Promise<void> => {
     }
 };
 
+const completeDiagnosis = async (input: CompleteDiagnosisInput): Promise<DiagnosisRecord> => {
+    const diagnosis = await serviceOrderRepository.findDiagnosisById(input.diagnosisId);
+    if (!diagnosis) {
+        throw notFound({ message: "Diagnosis not found" });
+    }
+
+    if (diagnosis.completedAt) {
+        throw conflict({ message: "Diagnosis already completed" });
+    }
+
+    const serviceOrder = await serviceOrderRepository.findById(diagnosis.serviceOrderId);
+    // The FK guarantees a diagnosis always has a service order.
+    // This check exists only to narrow the type from `ServiceOrderRecord | null` to `ServiceOrderRecord` for the compiler.
+    if (!serviceOrder) {
+        throw notFound({ message: "Service order not found" });
+    }
+
+    if (serviceOrder.status !== ServiceOrderStatus.IN_DIAGNOSIS) {
+        throw conflict({ message: "Service order is not in diagnosis" });
+    }
+
+    try {
+        const completed = await serviceOrderRepository.completeDiagnosis(input);
+
+        if (!completed) {
+            throw conflict({ message: "Diagnosis can no longer be completed in its current state" });
+        }
+
+        return completed;
+    } catch (error) {
+        if (isForeignKeyConstraintOn(error, "completed_by")) {
+            throw unauthorized({ message: "Authenticated user no longer exists" });
+        }
+
+        throw error;
+    }
+};
+
 export default {
     createServiceOrder,
     getServiceOrderById,
@@ -318,4 +357,5 @@ export default {
     createFinding,
     updateFinding,
     deleteFinding,
+    completeDiagnosis,
 };

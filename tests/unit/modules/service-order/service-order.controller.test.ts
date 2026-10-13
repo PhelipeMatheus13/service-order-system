@@ -235,8 +235,9 @@ describe("Service Order Controller (Unit)", () => {
             const mockDiagnosisRecord = {
                 id: "uuid-diagnosis-123",
                 serviceOrderId: "uuid-service-order-123",
-                performedById: "uuid-user-123",
+                createdById: "uuid-user-123",
                 result: null,
+                completedById: null,
                 completedAt: null,
                 createdAt: new Date(),
             } as DiagnosisRecord;
@@ -247,7 +248,7 @@ describe("Service Order Controller (Unit)", () => {
 
             expect(serviceOrderService.startDiagnosis).toHaveBeenCalledWith({
                 serviceOrderId: "uuid-service-order-123",
-                performedById: "uuid-user-123",
+                createdById: "uuid-user-123",
             });
 
             expect(res.status).toHaveBeenCalledWith(201);
@@ -294,8 +295,9 @@ describe("Service Order Controller (Unit)", () => {
             const mockDiagnosisRecord = {
                 id: "uuid-diagnosis-123",
                 serviceOrderId: "uuid-service-order-123",
-                performedById: "uuid-user-123",
+                createdById: "uuid-user-123",
                 result: null,
+                completedById: null,
                 completedAt: null,
                 createdAt: new Date(),
             } as DiagnosisRecord;
@@ -514,6 +516,77 @@ describe("Service Order Controller (Unit)", () => {
             vi.mocked(serviceOrderService).deleteFinding.mockRejectedValue(error);
 
             await serviceOrderController.deleteFinding(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(error);
+            expect(res.status).not.toHaveBeenCalled();
+        });
+    });
+
+    describe("completeDiagnosis", () => {
+        it("should return 200 on successful diagnosis completion", async () => {
+            req.params.id = "uuid-diagnosis-123";
+            req.user = { id: "uuid-user-123" };
+            req.body = {
+                result: "FAULT_FOUND",
+            };
+
+            const mockDiagnosisRecord = {
+                id: "uuid-diagnosis-123",
+                serviceOrderId: "uuid-service-order-123",
+                createdById: "uuid-user-456",
+                completedById: "uuid-user-123",
+                result: "FAULT_FOUND",
+                createdAt: new Date(),
+                completedAt: new Date(),
+            } as DiagnosisRecord;
+
+            vi.mocked(serviceOrderService).completeDiagnosis.mockResolvedValue(mockDiagnosisRecord);
+
+            await serviceOrderController.completeDiagnosis(req, res, next);
+
+            expect(serviceOrderService.completeDiagnosis).toHaveBeenCalledWith({
+                diagnosisId: "uuid-diagnosis-123",
+                result: "FAULT_FOUND",
+                completedById: "uuid-user-123",
+            });
+
+            expect(res.status).toHaveBeenCalledWith(200);
+            expect(res.json).toHaveBeenCalledWith({
+                success: true,
+                data: mockDiagnosisRecord,
+                message: "Diagnosis successfully completed",
+            });
+            expect(next).not.toHaveBeenCalled();
+        });
+
+        it("should call next with badRequest error if id is missing", async () => {
+            req.params = {};
+            req.user = { id: "uuid-user-123" };
+            req.body = {
+                result: "FAULT_FOUND",
+            };
+
+            await serviceOrderController.completeDiagnosis(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(expect.objectContaining({
+                statusCode: 400,
+                message: "Diagnosis ID is required",
+            }));
+            expect(serviceOrderService.completeDiagnosis).not.toHaveBeenCalled();
+            expect(res.status).not.toHaveBeenCalled();
+        });
+
+        it("should propagate error when service fails", async () => {
+            req.params.id = "uuid-diagnosis-123";
+            req.user = { id: "uuid-user-123" };
+            req.body = {
+                result: "FAULT_FOUND",
+            };
+
+            const error = new Error("Service error");
+            vi.mocked(serviceOrderService).completeDiagnosis.mockRejectedValue(error);
+
+            await serviceOrderController.completeDiagnosis(req, res, next);
 
             expect(next).toHaveBeenCalledWith(error);
             expect(res.status).not.toHaveBeenCalled();

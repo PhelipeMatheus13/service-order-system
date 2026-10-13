@@ -5,9 +5,10 @@ CREATE TYPE "diagnosis_result_enum" AS ENUM ('FAULT_FOUND', 'NO_FAULT_FOUND', 'I
 CREATE TABLE "diagnoses" (
     "id" UUID NOT NULL DEFAULT gen_random_uuid(),
     "service_order_id" UUID NOT NULL,
-    "performed_by" UUID NOT NULL,
     "result" "diagnosis_result_enum",
+    "created_by" UUID NOT NULL,
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "completed_by"  UUID,
     "completed_at" TIMESTAMPTZ,
 
     CONSTRAINT "diagnoses_pkey" PRIMARY KEY ("id")
@@ -28,10 +29,13 @@ CREATE TABLE "findings" (
 );
 
 -- CreateIndex
-CREATE INDEX "diagnoses_performed_by_idx" ON "diagnoses"("performed_by");
+CREATE UNIQUE INDEX "diagnoses_service_order_id_key" ON "diagnoses"("service_order_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "diagnoses_service_order_id_key" ON "diagnoses"("service_order_id");
+CREATE INDEX "diagnoses_created_by_idx" ON "diagnoses"("created_by");
+
+-- CreateIndex
+CREATE INDEX "diagnoses_completed_by_idx" ON "diagnoses"("completed_by");
 
 -- CreateIndex
 CREATE INDEX "findings_diagnosis_id_idx" ON "findings"("diagnosis_id");
@@ -52,8 +56,16 @@ ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "diagnoses" 
-ADD CONSTRAINT "diagnoses_performed_by_fkey" 
-FOREIGN KEY ("performed_by") 
+ADD CONSTRAINT "diagnoses_created_by_fkey" 
+FOREIGN KEY ("created_by") 
+REFERENCES "users"("id") 
+ON DELETE RESTRICT 
+ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "diagnoses" 
+ADD CONSTRAINT "diagnoses_completed_by_fkey" 
+FOREIGN KEY ("completed_by") 
 REFERENCES "users"("id") 
 ON DELETE RESTRICT 
 ON UPDATE CASCADE;

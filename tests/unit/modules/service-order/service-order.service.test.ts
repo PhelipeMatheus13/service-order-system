@@ -11,6 +11,7 @@ import {
     CreateFindingInput,
     FindingRecord,
     UpdateFindingInput,
+    CompleteDiagnosisInput,
 } from "../../../../src/modules/service-order/service-order.types.js";
 // (shared)
 import { getPrisma } from "../../../../src/shared/config/database.js";
@@ -405,7 +406,7 @@ describe("Service Order Service (Unit)", () => {
     describe("startDiagnosis", () => {
         const validInput: StartDiagnosisInput = {
             serviceOrderId: "uuid-service-order-123",
-            performedById: "uuid-user-123",
+            createdById: "uuid-user-123",
         };
 
         const mockServiceOrderRecord = {
@@ -425,8 +426,9 @@ describe("Service Order Service (Unit)", () => {
         const mockDiagnosisRecord = {
             id: "uuid-diagnosis-123",
             serviceOrderId: validInput.serviceOrderId,
-            performedById: validInput.performedById,
+            createdById: validInput.createdById,
             result: null,
+            completedById: null,
             completedAt: null,
             createdAt: new Date(),
         } as DiagnosisRecord;
@@ -446,7 +448,7 @@ describe("Service Order Service (Unit)", () => {
                 fromStatus: "WAITING_DIAGNOSIS",
                 toStatus: "IN_DIAGNOSIS",
                 changeSource: "USER",
-                changedById: validInput.performedById,
+                changedById: validInput.createdById,
                 createdAt: new Date(),
             });
 
@@ -598,7 +600,7 @@ describe("Service Order Service (Unit)", () => {
                     fromStatus: "WAITING_DIAGNOSIS",
                     toStatus: "IN_DIAGNOSIS",
                     changeSource: "USER",
-                    changedById: validInput.performedById,
+                    changedById: validInput.createdById,
                 },
                 tx,
             );
@@ -630,8 +632,9 @@ describe("Service Order Service (Unit)", () => {
             const mockDiagnosisRecord = {
                 id: diagnosisId,
                 serviceOrderId: "uuid-service-order-123",
-                performedById: "uuid-user-123",
+                createdById: "uuid-user-123",
                 result: null,
+                completedById: null,
                 completedAt: null,
                 createdAt: new Date(),
             } as DiagnosisRecord;
@@ -656,8 +659,9 @@ describe("Service Order Service (Unit)", () => {
         const mockDiagnosisRecord = {
             id: validInput.diagnosisId,
             serviceOrderId: "uuid-service-order-123",
-            performedById: "uuid-user-123",
+            createdById: "uuid-user-123",
             result: null,
+            completedById: null,
             completedAt: null,
             createdAt: new Date(),
         } as DiagnosisRecord;
@@ -854,8 +858,9 @@ describe("Service Order Service (Unit)", () => {
         const mockDiagnosisRecord = {
             id: mockFindingRecord.diagnosisId,
             serviceOrderId: "uuid-service-order-123",
-            performedById: "uuid-user-456",
+            createdById: "uuid-user-456",
             result: null,
+            completedById: null,
             completedAt: null,
             createdAt: new Date(),
         } as DiagnosisRecord;
@@ -1029,8 +1034,9 @@ describe("Service Order Service (Unit)", () => {
         const mockDiagnosisRecord = {
             id: mockFindingRecord.diagnosisId,
             serviceOrderId: "uuid-service-order-123",
-            performedById: "uuid-user-456",
+            createdById: "uuid-user-456",
             result: null,
+            completedById: null,
             completedAt: null,
             createdAt: new Date(),
         } as DiagnosisRecord;
@@ -1158,6 +1164,161 @@ describe("Service Order Service (Unit)", () => {
             expect(serviceOrderRepository.findDiagnosisById).toHaveBeenCalledWith(mockFindingRecord.diagnosisId);
             expect(serviceOrderRepository.findById).toHaveBeenCalledWith(mockDiagnosisRecord.serviceOrderId);
             expect(serviceOrderRepository.deleteFindingById).toHaveBeenCalledWith(findingId);
+        });
+    });
+
+    describe("completeDiagnosis", () => {
+        const validInput: CompleteDiagnosisInput = {
+            diagnosisId: "uuid-diagnosis-123",
+            result: "FAULT_FOUND",
+            completedById: "uuid-user-123",
+        };
+
+        const mockDiagnosisRecord = {
+            id: validInput.diagnosisId,
+            serviceOrderId: "uuid-service-order-123",
+            createdById: "uuid-user-456",
+            completedById: null,
+            result: null,
+            createdAt: new Date(),
+            completedAt: null,
+        } as DiagnosisRecord;
+
+        const mockServiceOrderRecord = {
+            id: mockDiagnosisRecord.serviceOrderId,
+            customerId: "uuid-customer-123",
+            deviceId: "uuid-device-123",
+            reportedProblem: "Screen is cracked and touch is not responding.",
+            status: "IN_DIAGNOSIS",
+            createdById: "uuid-user-456",
+            cancelledAt: null,
+            cancelReason: null,
+            finishedAt: null,
+            createdAt: new Date(),
+            updatedAt: null,
+        } as ServiceOrderRecord;
+
+        const mockCompletedDiagnosisRecord = {
+            ...mockDiagnosisRecord,
+            result: "FAULT_FOUND",
+            completedById: validInput.completedById,
+            completedAt: new Date(),
+        } as DiagnosisRecord;
+
+        const setupCompleteDiagnosisMocks = () => {
+            vi.mocked(serviceOrderRepository.findDiagnosisById).mockResolvedValue(mockDiagnosisRecord);
+            vi.mocked(serviceOrderRepository.findById).mockResolvedValue(mockServiceOrderRecord);
+            vi.mocked(serviceOrderRepository.completeDiagnosis).mockResolvedValue(mockCompletedDiagnosisRecord);
+        };
+
+        it("should throw if serviceOrderRepository.findDiagnosisById fails", async () => {
+            const error = new Error("fake error");
+            vi.mocked(serviceOrderRepository.findDiagnosisById).mockRejectedValue(error);
+
+            await expect(serviceOrderService.completeDiagnosis(validInput))
+                .rejects.toThrow(error);
+        });
+
+        it("should throw NOT_FOUND if diagnosis does not exist", async () => {
+            vi.mocked(serviceOrderRepository.findDiagnosisById).mockResolvedValue(null);
+
+            await expect(serviceOrderService.completeDiagnosis(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 404,
+                    message: "Diagnosis not found",
+                });
+
+            expect(serviceOrderRepository.findById).not.toHaveBeenCalled();
+        });
+
+        it("should throw CONFLICT if diagnosis is already completed", async () => {
+            vi.mocked(serviceOrderRepository.findDiagnosisById).mockResolvedValue({
+                ...mockDiagnosisRecord,
+                result: "NO_FAULT_FOUND",
+                completedAt: new Date(),
+            });
+
+            await expect(serviceOrderService.completeDiagnosis(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 409,
+                    message: "Diagnosis already completed",
+                });
+
+            expect(serviceOrderRepository.findById).not.toHaveBeenCalled();
+        });
+
+        it("should throw if serviceOrderRepository.findById fails", async () => {
+            const error = new Error("fake error");
+            vi.mocked(serviceOrderRepository.findDiagnosisById).mockResolvedValue(mockDiagnosisRecord);
+            vi.mocked(serviceOrderRepository.findById).mockRejectedValue(error);
+
+            await expect(serviceOrderService.completeDiagnosis(validInput))
+                .rejects.toThrow(error);
+        });
+
+        it("should throw CONFLICT if service order is not IN_DIAGNOSIS", async () => {
+            vi.mocked(serviceOrderRepository.findDiagnosisById).mockResolvedValue(mockDiagnosisRecord);
+            vi.mocked(serviceOrderRepository.findById).mockResolvedValue({
+                ...mockServiceOrderRecord,
+                status: "AWAITING_DELIVERY",
+            });
+
+            await expect(serviceOrderService.completeDiagnosis(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 409,
+                    message: "Service order is not in diagnosis",
+                });
+
+            expect(serviceOrderRepository.completeDiagnosis).not.toHaveBeenCalled();
+        });
+
+        it("should throw CONFLICT if repository returns null (race condition)", async () => {
+            setupCompleteDiagnosisMocks();
+            vi.mocked(serviceOrderRepository.completeDiagnosis).mockResolvedValue(null);
+
+            await expect(serviceOrderService.completeDiagnosis(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 409,
+                    message: "Diagnosis can no longer be completed in its current state",
+                });
+        });
+
+        it("should throw UNAUTHORIZED if completed_by foreign key is violated", async () => {
+            const dbError = new Error("Foreign key constraint failed");
+            setupCompleteDiagnosisMocks();
+            vi.mocked(serviceOrderRepository.completeDiagnosis).mockRejectedValue(dbError);
+            vi.mocked(isForeignKeyConstraintOn).mockImplementation(
+                (_error, field) => field === "completed_by",
+            );
+
+            await expect(serviceOrderService.completeDiagnosis(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 401,
+                    message: "Authenticated user no longer exists",
+                });
+
+            expect(isForeignKeyConstraintOn).toHaveBeenCalledWith(dbError, "completed_by");
+        });
+
+        it("should propagate error if it is not a known constraint violation", async () => {
+            const error = new Error("fake error");
+            setupCompleteDiagnosisMocks();
+            vi.mocked(serviceOrderRepository.completeDiagnosis).mockRejectedValue(error);
+            vi.mocked(isForeignKeyConstraintOn).mockReturnValue(false);
+
+            await expect(serviceOrderService.completeDiagnosis(validInput))
+                .rejects.toThrow(error);
+        });
+
+        it("should complete diagnosis successfully", async () => {
+            setupCompleteDiagnosisMocks();
+
+            const result = await serviceOrderService.completeDiagnosis(validInput);
+
+            expect(serviceOrderRepository.findDiagnosisById).toHaveBeenCalledWith(validInput.diagnosisId);
+            expect(serviceOrderRepository.findById).toHaveBeenCalledWith(mockDiagnosisRecord.serviceOrderId);
+            expect(serviceOrderRepository.completeDiagnosis).toHaveBeenCalledWith(validInput);
+            expect(result).toBe(mockCompletedDiagnosisRecord);
         });
     });
 });

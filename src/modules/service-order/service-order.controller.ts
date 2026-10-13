@@ -117,6 +117,20 @@ const deleteFinding = asyncHandler(async (req, res) => {
     });
 });
 
+const completeDiagnosis = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (!id) throw badRequest({ message: "Diagnosis ID is required" });
+
+    const input = serviceOrderDTO.completeDiagnosisDTO(req.body, String(id), String(req.user?.id))
+
+    const diagnosis = await serviceOrderService.completeDiagnosis(input);
+    res.status(200).json({
+        success: true,
+        data: diagnosis,  
+        message: "Diagnosis successfully completed",
+    });
+});
+
 export default {
     createServiceOrder,
     getServiceOrderById,
@@ -127,4 +141,5 @@ export default {
     createFinding,
     updateFinding,
     deleteFinding,
+    completeDiagnosis,
 };

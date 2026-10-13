@@ -275,7 +275,7 @@ describe("Service Order Routes (Integration)", () => {
             expect(res.body.data).toBeTruthy();
             expect(res.body.data.id).toBeTruthy();
             expect(res.body.data.serviceOrderId).toBe(serviceOrderId);
-            expect(res.body.data.performedById).toBe(technicianId);
+            expect(res.body.data.createdById).toBe(technicianId);
             expect(res.body.data.result).toBeNull();
             expect(res.body.data.completedAt).toBeNull();
 
@@ -314,7 +314,7 @@ describe("Service Order Routes (Integration)", () => {
             const diagnosis = await prisma.diagnosis.create({
                 data: {
                     serviceOrderId: serviceOrder.id,
-                    performedById: userId,
+                    createdById: userId,
                 },
                 select: { id: true },
             });
@@ -331,7 +331,7 @@ describe("Service Order Routes (Integration)", () => {
             expect(res.body.success).toBe(true);
             expect(res.body.data).toMatchObject({
                 id: diagnosisId,
-                performedById: userId,
+                createdById: userId,
                 result: null,
                 completedAt: null,
             });
@@ -374,7 +374,7 @@ describe("Service Order Routes (Integration)", () => {
             const diagnosis = await prisma.diagnosis.create({
                 data: {
                     serviceOrderId: serviceOrder.id,
-                    performedById: technicianId,
+                    createdById: technicianId,
                 },
                 select: { id: true },
             });
@@ -445,7 +445,7 @@ describe("Service Order Routes (Integration)", () => {
             const diagnosis = await prisma.diagnosis.create({
                 data: {
                     serviceOrderId: serviceOrder.id,
-                    performedById: technicianId,
+                    createdById: technicianId,
                 },
                 select: { id: true },
             });
@@ -492,6 +492,76 @@ describe("Service Order Routes (Integration)", () => {
             expect(finding?.repairable).toBe(false);
             expect(finding?.updatedById).toBe(technicianId);
             expect(finding?.updatedAt).toBeTruthy();
+        });
+    });
+
+    describe("PATCH /service-orders/diagnoses/:id/complete", () => {
+        let diagnosisId: string;
+        let technicianId: string;
+        let technicianAccessToken: string;
+
+        beforeEach(async () => {
+            const technician = await prisma.user.create({
+                data: {
+                    firstName: "Jane",
+                    lastName: "Smith",
+                    email: "jane.smith@example.com",
+                    passwordHash: "passwordHash",
+                    role: "TECHNICIAN",
+                    active: true,
+                },
+                select: { id: true },
+            });
+            technicianId = technician.id;
+            technicianAccessToken = generateAccessToken(technicianId, "TECHNICIAN");
+
+            const serviceOrder = await prisma.serviceOrder.create({
+                data: {
+                    customerId,
+                    deviceId,
+                    reportedProblem: "Screen is cracked and touch is not responding.",
+                    createdById: userId,
+                    status: "IN_DIAGNOSIS",
+                },
+                select: { id: true },
+            });
+
+            const diagnosis = await prisma.diagnosis.create({
+                data: {
+                    serviceOrderId: serviceOrder.id,
+                    createdById: technicianId,
+                },
+                select: { id: true },
+            });
+
+            diagnosisId = diagnosis.id;
+        });
+
+        it("should complete the diagnosis successfully", async () => {
+            const res = await request(app)
+                .patch(`/service-orders/diagnoses/${diagnosisId}/complete`)
+                .set("Authorization", `Bearer ${technicianAccessToken}`)
+                .send({
+                    result: "FAULT_FOUND",
+                });
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(res.body.message).toBe("Diagnosis successfully completed");
+            expect(res.body.data).toMatchObject({
+                id: diagnosisId,
+                result: "FAULT_FOUND",
+                completedById: technicianId,
+            });
+            expect(res.body.data.completedAt).toBeTruthy();
+
+            const diagnosis = await prisma.diagnosis.findUnique({
+                where: { id: diagnosisId },
+            });
+
+            expect(diagnosis?.result).toBe("FAULT_FOUND");
+            expect(diagnosis?.completedById).toBe(technicianId);
+            expect(diagnosis?.completedAt).toBeTruthy();
         });
     });
 });

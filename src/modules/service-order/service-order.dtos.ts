@@ -2,14 +2,16 @@ import {
     CreateServiceOrderRequest,
     CancelServiceOrderRequest,
     CreateFindingRequest,
-    UpdateFindingRequest
+    UpdateFindingRequest,
+    CompleteDiagnosisRequest
 } from "./service-order.schemas.js";
 import {
     CreateServiceOrderInput,
     CancelServiceOrderInput,
     StartDiagnosisInput,
     CreateFindingInput,
-    UpdateFindingInput
+    UpdateFindingInput,
+    CompleteDiagnosisInput
 } from "./service-order.types.js";
 
 const createServiceOrderDTO = (body: CreateServiceOrderRequest, createdById: string): CreateServiceOrderInput => ({
@@ -24,9 +26,9 @@ const cancelServiceOrderDTO = (body: CancelServiceOrderRequest, serviceOrderId: 
     cancelById
 });
 
-const createDiagnosisDTO = (serviceOrderId: string, performedById: string): StartDiagnosisInput => ({
+const createDiagnosisDTO = (serviceOrderId: string, createdById: string): StartDiagnosisInput => ({
     serviceOrderId,
-    performedById
+    createdById
 });
 
 const createFindingDTO = (body: CreateFindingRequest, diagnosisId: string, createdById: string): CreateFindingInput => ({
@@ -43,10 +45,17 @@ const updateFindingDTO = (body: UpdateFindingRequest, findingId: string, updated
     updatedById,
 });
 
+const completeDiagnosisDTO = (body: CompleteDiagnosisRequest, diagnosisId: string, completedById: string): CompleteDiagnosisInput => ({
+    result: body.result,
+    diagnosisId,
+    completedById,
+});
+
 export default {
     createServiceOrderDTO,
     cancelServiceOrderDTO,
     createDiagnosisDTO,
     createFindingDTO,
     updateFindingDTO,
+    completeDiagnosisDTO,
 };

@@ -11,6 +11,7 @@ import type {
     FindingRecord,
     CreateFindingInput,
     UpdateFindingInput,
+    CompleteDiagnosisInput,
 } from "./service-order.types.ts";
 import { ServiceOrderStatus } from "./service-order.types.js";
 import { getPrisma } from "../../shared/config/database.js";
@@ -116,7 +117,7 @@ const createDiagnosis = async (input: StartDiagnosisInput, tx?: Prisma.Transacti
     return prisma.diagnosis.create({
         data: {
             serviceOrderId: input.serviceOrderId,
-            performedById: input.performedById,
+            createdById: input.createdById,
         },
     });
 };
@@ -200,6 +201,33 @@ const deleteFindingById = async (id: string): Promise<boolean> => {
     return rows.length > 0;
 };
 
+const completeDiagnosis = async (input: CompleteDiagnosisInput): Promise<DiagnosisRecord | null> => {
+    const prisma: PrismaClientOrTx = getPrisma();
+
+    // Atomic guard: the UPDATE only succeeds if the diagnosis has not been
+    // completed yet (completed_at IS NULL). This prevents two concurrent
+    // "complete" requests from both writing a result. No race window exists
+    // between check and write because the validation runs as part of the UPDATE.
+    const rows = await prisma.$queryRaw<DiagnosisRecord[]>`
+        UPDATE diagnoses
+        SET result       = ${input.result}::"diagnosis_result_enum",
+            completed_by = ${input.completedById}::uuid,
+            completed_at = NOW()
+        WHERE id = ${input.diagnosisId}::uuid
+          AND completed_at IS NULL
+        RETURNING
+            id,
+            service_order_id AS "serviceOrderId",
+            created_by       AS "createdById",
+            completed_by     AS "completedById",
+            result,
+            created_at       AS "createdAt",
+            completed_at     AS "completedAt"
+    `;
+
+    return rows[0] ?? null;
+};
+
 // Reader
 const findById = async (id: string): Promise<ServiceOrderRecord | null> => {
     const prisma = getPrisma();
@@ -239,6 +267,7 @@ export default {
     createFinding,
     updateFinding,
     deleteFindingById,
+    completeDiagnosis,
     // Reader
     findById,
     list,

@@ -75,9 +75,10 @@ model User {
   refreshTokens               RefreshToken[]
   serviceOrders               ServiceOrder[]
   serviceOrderStatusHistories ServiceOrderStatusHistory[]
-  diagnoses                   Diagnosis[]
-  findingsCreated Finding[] @relation("FindingCreatedBy")
-  findingsUpdated Finding[] @relation("FindingUpdatedBy")
+  diagnosisCreated            Diagnosis[]                 @relation("DiagnosisCreatedBy")
+  diagnosisCompletedBy        Diagnosis[]                 @relation("DiagnosisCompletedBy")
+  findingsCreated             Finding[]                   @relation("FindingCreatedBy")
+  findingsUpdated             Finding[]                   @relation("FindingUpdatedBy")
 
   @@index([createdAt(sort: Desc)])
   @@map("users")
@@ -217,17 +218,20 @@ model ServiceOrderStatusHistory {
 model Diagnosis {
   id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   serviceOrderId String           @map("service_order_id") @db.Uuid
-  performedById  String           @map("performed_by") @db.Uuid
   result         DiagnosisResult?
+  createdById    String           @map("created_by") @db.Uuid
   createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz()
+  completedById  String?          @map("completed_by") @db.Uuid
   completedAt    DateTime?        @map("completed_at") @db.Timestamptz()
 
   serviceOrder ServiceOrder @relation(fields: [serviceOrderId], references: [id], onDelete: Cascade)
-  performedBy  User         @relation(fields: [performedById], references: [id], onDelete: Restrict)
+  createdBy    User         @relation("DiagnosisCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  completedBy  User?         @relation("DiagnosisCompletedBy", fields: [completedById], references: [id], onDelete: Restrict)
   findings     Finding[]
 
   @@unique([serviceOrderId])
-  @@index([performedById])
+  @@index([createdById])
+  @@index([completedById])
   @@map("diagnoses")
 }
 
@@ -242,8 +246,8 @@ model Finding {
   updatedAt   DateTime? @map("updated_at") @db.Timestamptz()
 
   diagnosis Diagnosis @relation(fields: [diagnosisId], references: [id], onDelete: Cascade)
-  createdBy User  @relation("FindingCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
-  updatedBy User? @relation("FindingUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  createdBy User      @relation("FindingCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy User?     @relation("FindingUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
 
   @@index([diagnosisId])
   @@index([createdById])

@@ -9,6 +9,7 @@ import type {
     UpdateServiceOrderStatusData,
     CreateFindingInput,
     UpdateFindingInput,
+    CompleteDiagnosisInput,
 } from "../../../../src/modules/service-order/service-order.types.js";
 // (shared / infra)
 import { PrismaClient } from "../../../../src/generated/prisma/client.js";
@@ -655,7 +656,7 @@ describe("Service Order Repository (Integration)", () => {
             it("should insert a new diagnosis into the database", async () => {
                 const input: StartDiagnosisInput = {
                     serviceOrderId: serviceOrderCreatedId,
-                    performedById: userCreatedId,
+                    createdById: userCreatedId,
                 };
 
                 const diagnosisCreated = await serviceOrderRepository.createDiagnosis(input);
@@ -669,7 +670,7 @@ describe("Service Order Repository (Integration)", () => {
                 expect(diagnosisFound).not.toBeNull();
                 expect(diagnosisFound?.id).toBe(diagnosisCreated.id);
                 expect(diagnosisFound?.serviceOrderId).toBe(serviceOrderCreatedId);
-                expect(diagnosisFound?.performedById).toBe(userCreatedId);
+                expect(diagnosisFound?.createdById).toBe(userCreatedId);
                 expect(diagnosisFound?.result).toBeNull();
                 expect(diagnosisFound?.completedAt).toBeNull();
                 expect(diagnosisFound?.createdAt).toBeTruthy();
@@ -678,7 +679,7 @@ describe("Service Order Repository (Integration)", () => {
             it("should throw when a diagnosis already exists for the service order", async () => {
                 const input: StartDiagnosisInput = {
                     serviceOrderId: serviceOrderCreatedId,
-                    performedById: userCreatedId,
+                    createdById: userCreatedId,
                 };
 
                 await serviceOrderRepository.createDiagnosis(input);
@@ -690,7 +691,7 @@ describe("Service Order Repository (Integration)", () => {
             it("should use the transaction client when provided", async () => {
                 const input: StartDiagnosisInput = {
                     serviceOrderId: serviceOrderCreatedId,
-                    performedById: userCreatedId,
+                    createdById: userCreatedId,
                 };
 
                 let diagnosisCreatedId: string | undefined;
@@ -763,7 +764,7 @@ describe("Service Order Repository (Integration)", () => {
                 const diagnosisCreated = await prisma.diagnosis.create({
                     data: {
                         serviceOrderId: serviceOrderCreated.id,
-                        performedById: userCreated.id,
+                        createdById: userCreated.id,
                     },
                 });
 
@@ -861,7 +862,7 @@ describe("Service Order Repository (Integration)", () => {
                 const diagnosisCreated = await prisma.diagnosis.create({
                     data: {
                         serviceOrderId: serviceOrderCreated.id,
-                        performedById: userCreated.id,
+                        createdById: userCreated.id,
                         result: "FAULT_FOUND",
                         completedAt: new Date(),
                     },
@@ -927,7 +928,7 @@ describe("Service Order Repository (Integration)", () => {
                 const diagnosisCreated = await prisma.diagnosis.create({
                     data: {
                         serviceOrderId: serviceOrderCreated.id,
-                        performedById: userCreated.id,
+                        createdById: userCreated.id,
                     },
                 });
 
@@ -991,7 +992,7 @@ describe("Service Order Repository (Integration)", () => {
                 const diagnosisCreated = await prisma.diagnosis.create({
                     data: {
                         serviceOrderId: serviceOrderCreated.id,
-                        performedById: userCreated.id,
+                        createdById: userCreated.id,
                     },
                 });
 
@@ -1060,7 +1061,7 @@ describe("Service Order Repository (Integration)", () => {
                 const diagnosisCreated = await prisma.diagnosis.create({
                     data: {
                         serviceOrderId: serviceOrderCreated.id,
-                        performedById: userCreated.id,
+                        createdById: userCreated.id,
                     },
                 });
 
@@ -1233,7 +1234,7 @@ describe("Service Order Repository (Integration)", () => {
                 const diagnosisCreated = await prisma.diagnosis.create({
                     data: {
                         serviceOrderId: serviceOrderCreated.id,
-                        performedById: userCreated.id,
+                        createdById: userCreated.id,
                     },
                 });
 
@@ -1308,7 +1309,7 @@ describe("Service Order Repository (Integration)", () => {
                 const diagnosisCreated = await prisma.diagnosis.create({
                     data: {
                         serviceOrderId: serviceOrderCreated.id,
-                        performedById: userCreated.id,
+                        createdById: userCreated.id,
                         result: "FAULT_FOUND",
                         completedAt: new Date(),
                     },
@@ -1379,7 +1380,7 @@ describe("Service Order Repository (Integration)", () => {
                 const diagnosisCreated = await prisma.diagnosis.create({
                     data: {
                         serviceOrderId: serviceOrderCreated.id,
-                        performedById: userCreated.id,
+                        createdById: userCreated.id,
                     },
                 });
 
@@ -1401,6 +1402,234 @@ describe("Service Order Repository (Integration)", () => {
                 });
 
                 expect(findingFound).not.toBeNull();
+            });
+        });
+
+        describe("completeDiagnosis", () => {
+            it("should complete the diagnosis and return the updated record", async () => {
+                const userCreated = await prisma.user.create({
+                    data: {
+                        firstName: "John",
+                        lastName: "Doe",
+                        email: "john@example.com",
+                        role: "TECHNICIAN",
+                        active: true,
+                    },
+                });
+
+                const customerCreated = await prisma.customer.create({
+                    data: {
+                        firstName: "Jane",
+                        lastName: "Doe",
+                        email: "jane@example.com",
+                        phoneNumber: "5521995437105",
+                    },
+                });
+
+                const deviceCreated = await prisma.device.create({
+                    data: {
+                        customerId: customerCreated.id,
+                        type: "SMARTPHONE",
+                        brand: "Samsung",
+                        model: "Galaxy S23",
+                        serialNumber: "SN-123456",
+                        imei: "123456789012345",
+                        color: "Black",
+                    },
+                });
+
+                const serviceOrderCreated = await prisma.serviceOrder.create({
+                    data: {
+                        customerId: customerCreated.id,
+                        deviceId: deviceCreated.id,
+                        reportedProblem: "Screen is cracked and touch is not responding.",
+                        createdById: userCreated.id,
+                        status: "IN_DIAGNOSIS",
+                    },
+                });
+
+                const diagnosisCreated = await prisma.diagnosis.create({
+                    data: {
+                        serviceOrderId: serviceOrderCreated.id,
+                        createdById: userCreated.id,
+                    },
+                });
+
+                const input: CompleteDiagnosisInput = {
+                    diagnosisId: diagnosisCreated.id,
+                    result: "FAULT_FOUND",
+                    completedById: userCreated.id,
+                };
+
+                const diagnosisCompleted = await serviceOrderRepository.completeDiagnosis(input);
+
+                expect(diagnosisCompleted).toBeTruthy();
+                expect(diagnosisCompleted?.id).toBe(diagnosisCreated.id);
+                expect(diagnosisCompleted?.result).toBe("FAULT_FOUND");
+                expect(diagnosisCompleted?.completedById).toBe(userCreated.id);
+                expect(diagnosisCompleted?.completedAt).toBeTruthy();
+
+                const diagnosisFound = await prisma.diagnosis.findUnique({
+                    where: { id: diagnosisCreated.id },
+                });
+
+                expect(diagnosisFound?.result).toBe("FAULT_FOUND");
+                expect(diagnosisFound?.completedById).toBe(userCreated.id);
+                expect(diagnosisFound?.completedAt).toBeTruthy();
+            });
+
+            it("should return null when the diagnosis does not exist", async () => {
+                const input: CompleteDiagnosisInput = {
+                    diagnosisId: "0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa",
+                    result: "FAULT_FOUND",
+                    completedById: "0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa",
+                };
+
+                const diagnosisCompleted = await serviceOrderRepository.completeDiagnosis(input);
+
+                expect(diagnosisCompleted).toBeNull();
+            });
+
+            it("should return null when the diagnosis is already completed", async () => {
+                const userCreated = await prisma.user.create({
+                    data: {
+                        firstName: "John",
+                        lastName: "Doe",
+                        email: "john@example.com",
+                        role: "TECHNICIAN",
+                        active: true,
+                    },
+                });
+
+                const customerCreated = await prisma.customer.create({
+                    data: {
+                        firstName: "Jane",
+                        lastName: "Doe",
+                        email: "jane@example.com",
+                        phoneNumber: "5521995437105",
+                    },
+                });
+
+                const deviceCreated = await prisma.device.create({
+                    data: {
+                        customerId: customerCreated.id,
+                        type: "SMARTPHONE",
+                        brand: "Samsung",
+                        model: "Galaxy S23",
+                        serialNumber: "SN-123456",
+                        imei: "123456789012345",
+                        color: "Black",
+                    },
+                });
+
+                const serviceOrderCreated = await prisma.serviceOrder.create({
+                    data: {
+                        customerId: customerCreated.id,
+                        deviceId: deviceCreated.id,
+                        reportedProblem: "Screen is cracked and touch is not responding.",
+                        createdById: userCreated.id,
+                        status: "IN_DIAGNOSIS",
+                    },
+                });
+
+                const diagnosisCreated = await prisma.diagnosis.create({
+                    data: {
+                        serviceOrderId: serviceOrderCreated.id,
+                        createdById: userCreated.id,
+                    },
+                });
+
+                await prisma.diagnosis.update({
+                    where: { id: diagnosisCreated.id },
+                    data: {
+                        result: "NO_FAULT_FOUND",
+                        completedById: userCreated.id,
+                        completedAt: new Date(),
+                    },
+                });
+
+                const input: CompleteDiagnosisInput = {
+                    diagnosisId: diagnosisCreated.id,
+                    result: "FAULT_FOUND",
+                    completedById: userCreated.id,
+                };
+
+                const diagnosisCompleted = await serviceOrderRepository.completeDiagnosis(input);
+
+                expect(diagnosisCompleted).toBeNull();
+
+                const diagnosisFound = await prisma.diagnosis.findUnique({
+                    where: { id: diagnosisCreated.id },
+                });
+
+                expect(diagnosisFound?.result).toBe("NO_FAULT_FOUND");
+            });
+
+            it("should throw when the completed_by user does not exist", async () => {
+                const userCreated = await prisma.user.create({
+                    data: {
+                        firstName: "John",
+                        lastName: "Doe",
+                        email: "john@example.com",
+                        role: "TECHNICIAN",
+                        active: true,
+                    },
+                });
+
+                const customerCreated = await prisma.customer.create({
+                    data: {
+                        firstName: "Jane",
+                        lastName: "Doe",
+                        email: "jane@example.com",
+                        phoneNumber: "5521995437105",
+                    },
+                });
+
+                const deviceCreated = await prisma.device.create({
+                    data: {
+                        customerId: customerCreated.id,
+                        type: "SMARTPHONE",
+                        brand: "Samsung",
+                        model: "Galaxy S23",
+                        serialNumber: "SN-123456",
+                        imei: "123456789012345",
+                        color: "Black",
+                    },
+                });
+
+                const serviceOrderCreated = await prisma.serviceOrder.create({
+                    data: {
+                        customerId: customerCreated.id,
+                        deviceId: deviceCreated.id,
+                        reportedProblem: "Screen is cracked and touch is not responding.",
+                        createdById: userCreated.id,
+                        status: "IN_DIAGNOSIS",
+                    },
+                });
+
+                const diagnosisCreated = await prisma.diagnosis.create({
+                    data: {
+                        serviceOrderId: serviceOrderCreated.id,
+                        createdById: userCreated.id,
+                    },
+                });
+
+                const input: CompleteDiagnosisInput = {
+                    diagnosisId: diagnosisCreated.id,
+                    result: "FAULT_FOUND",
+                    completedById: "0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa",
+                };
+
+                await expect(serviceOrderRepository.completeDiagnosis(input))
+                    .rejects.toThrow();
+
+                const diagnosisFound = await prisma.diagnosis.findUnique({
+                    where: { id: diagnosisCreated.id },
+                });
+
+                expect(diagnosisFound?.result).toBeNull();
+                expect(diagnosisFound?.completedById).toBeNull();
+                expect(diagnosisFound?.completedAt).toBeNull();
             });
         });
     });
@@ -1624,7 +1853,7 @@ describe("Service Order Repository (Integration)", () => {
                 const diagnosisCreated = await prisma.diagnosis.create({
                     data: {
                         serviceOrderId: serviceOrderCreated.id,
-                        performedById: userCreated.id,
+                        createdById: userCreated.id,
                     },
                 });
 
@@ -1633,7 +1862,7 @@ describe("Service Order Repository (Integration)", () => {
                 expect(diagnosis).toBeTruthy();
                 expect(diagnosis?.id).toBe(diagnosisCreated.id);
                 expect(diagnosis?.serviceOrderId).toBe(serviceOrderCreated.id);
-                expect(diagnosis?.performedById).toBe(userCreated.id);
+                expect(diagnosis?.createdById).toBe(userCreated.id);
                 expect(diagnosis?.result).toBeNull();
                 expect(diagnosis?.completedAt).toBeNull();
                 expect(diagnosis?.createdAt).toBeTruthy();
@@ -1692,7 +1921,7 @@ describe("Service Order Repository (Integration)", () => {
                 const diagnosisCreated = await prisma.diagnosis.create({
                     data: {
                         serviceOrderId: serviceOrderCreated.id,
-                        performedById: userCreated.id,
+                        createdById: userCreated.id,
                     },
                 });
 

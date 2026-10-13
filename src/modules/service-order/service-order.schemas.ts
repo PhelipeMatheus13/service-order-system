@@ -23,9 +23,10 @@ const diagnosisSchema = registry.register(
     z.object({
         id: z.string(),
         serviceOrderId: z.string(),
-        performedBy: z.string(),
         result: z.string(),
+        createdBy: z.string(),
         createdAt: z.string(),
+        completedBy: z.string().nullable(),
         completedAt: z.string().nullable(),
     })
 );
@@ -127,6 +128,20 @@ const updateFindingSchema = registry.register(
 
 type UpdateFindingRequest = z.infer<typeof updateFindingSchema>;
 
+const completeDiagnosisSchema = registry.register(
+    "completeDiagnosisSchema",
+    z.object({
+        result: z
+            .enum(["FAULT_FOUND", "NO_FAULT_FOUND", "INCONCLUSIVE"])
+            .openapi({
+                example: "FAULT_FOUND",
+                description: "The Result of the diagnosis",
+            }),
+    })
+);
+
+type CompleteDiagnosisRequest = z.infer<typeof completeDiagnosisSchema>;
+
 export {
     serviceOrderSchema,
     createServiceOrderSchema,
@@ -134,6 +149,7 @@ export {
     diagnosisSchema,
     findingSchema,
     updateFindingSchema,
+    completeDiagnosisSchema,
 };
 
 export type {
@@ -141,4 +157,5 @@ export type {
     CancelServiceOrderRequest,
     CreateFindingRequest,
     UpdateFindingRequest,
+    CompleteDiagnosisRequest
 };

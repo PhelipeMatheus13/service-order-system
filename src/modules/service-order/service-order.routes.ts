@@ -13,7 +13,8 @@ import {
     cancelServiceOrderSchema,
     diagnosisSchema,
     findingSchema,
-    updateFindingSchema
+    updateFindingSchema,
+    completeDiagnosisSchema,
 } from "./service-order.schemas.js";
 import serviceOrderController from "./service-order.controller.js";
 
@@ -398,6 +399,53 @@ registry.registerPath({
 });
 router.patch("/findings/:id", checkAccessToken, authorize("ADMIN", "TECHNICIAN"), validate(updateFindingSchema), serviceOrderController.updateFinding);
 
+registry.registerPath({
+    tags: ["Diagnosis"],
+    method: "patch",
+    path: "/service-orders/diagnoses/{id}/complete",
+    summary: "Complete diagnosis by ID (requires ADMIN or TECHNICIAN role)",
+    security: [{ bearerAuth: [] }],
+    request: {
+        params: z.object({ id: z.string() }),
+        body: {
+            content: { "application/json": { schema: completeDiagnosisSchema } },
+        },
+    },
+    responses: {
+        200: {
+            description: "Diagnosis successfully completed",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        success: z.boolean().openapi({ example: true }),
+                        data: diagnosisSchema,
+                        message: z.string().openapi({ example: "Diagnosis successfully completed" }),
+                    }),
+                },
+            },
+        },
+        400: { $ref: "#/components/responses/missingDiagnosisIdError" },
+        401: {
+            description: "Authentication failed or because the authenticated user no longer exists",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
+                        invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
+                        accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
+                        authenticatedUserNoLongerExists: { $ref: "#/components/examples/authenticatedUserNoLongerExists" },
+                    },
+                },
+            },
+        },
+        404: { $ref: "#/components/responses/diagnosisNotFoundError" },
+        409: { $ref: "#/components/responses/completeDiagnosisConflictError" },
+        422: { $ref: "#/components/responses/completeDiagnosisValidationError" },
+        500: { $ref: "#/components/responses/internalError" },
+    }
+});
+router.patch("/diagnoses/:id/complete", checkAccessToken, authorize("ADMIN", "TECHNICIAN"), serviceOrderController.completeDiagnosis);
 
 // DELETE
 registry.registerPath({
