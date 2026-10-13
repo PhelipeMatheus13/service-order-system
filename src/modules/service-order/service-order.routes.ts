@@ -353,7 +353,7 @@ router.patch("/:id/cancel", checkAccessToken, authorize("ADMIN", "ATTENDANT"), v
 registry.registerPath({
     tags: ["Findings"],
     method: "patch",
-    path: "/service-orders/diagnoses/findings/{id}",
+    path: "/service-orders/findings/{id}",
     summary: "Update findings by ID (requires ADMIN or TECHNICIAN role)",
     security: [{ bearerAuth: [] }],
     request: {
@@ -396,6 +396,6 @@ registry.registerPath({
         500: { $ref: "#/components/responses/internalError" },
     }
 });
-router.patch("/diagnoses/findings/:id", checkAccessToken, authorize("ADMIN", "TECHNICIAN"), validate(updateFindingSchema), serviceOrderController.updateFinding);
+router.patch("/findings/:id", checkAccessToken, authorize("ADMIN", "TECHNICIAN"), validate(updateFindingSchema), serviceOrderController.updateFinding);
 
 export default router;

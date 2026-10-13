@@ -410,4 +410,88 @@ describe("Service Order Routes (Integration)", () => {
             expect(finding?.createdById).toBe(technicianId);
         });
     });
+
+    describe("PATCH /service-orders/findings/:id", () => {
+        let findingId: string;
+        let technicianId: string;
+        let technicianAccessToken: string;
+
+        beforeEach(async () => {
+            const technician = await prisma.user.create({
+                data: {
+                    firstName: "Jane",
+                    lastName: "Smith",
+                    email: "jane.smith@example.com",
+                    passwordHash: "passwordHash",
+                    role: "TECHNICIAN",
+                    active: true,
+                },
+                select: { id: true },
+            });
+            technicianId = technician.id;
+            technicianAccessToken = generateAccessToken(technicianId, "TECHNICIAN");
+
+            const serviceOrder = await prisma.serviceOrder.create({
+                data: {
+                    customerId,
+                    deviceId,
+                    reportedProblem: "Screen is cracked and touch is not responding.",
+                    createdById: userId,
+                    status: "IN_DIAGNOSIS",
+                },
+                select: { id: true },
+            });
+
+            const diagnosis = await prisma.diagnosis.create({
+                data: {
+                    serviceOrderId: serviceOrder.id,
+                    performedById: technicianId,
+                },
+                select: { id: true },
+            });
+
+            const finding = await prisma.finding.create({
+                data: {
+                    diagnosisId: diagnosis.id,
+                    createdById: technicianId,
+                    description: "Battery capacity below expected level",
+                    repairable: true,
+                },
+                select: { id: true },
+            });
+
+            findingId = finding.id;
+        });
+
+        it("should update the finding successfully", async () => {
+            const res = await request(app)
+                .patch(`/service-orders/findings/${findingId}`)
+                .set("Authorization", `Bearer ${technicianAccessToken}`)
+                .send({
+                    description: "Battery capacity critically below expected level",
+                    repairable: false,
+                });
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(res.body.message).toBe("Finding successfully updated");
+            expect(res.body.data).toMatchObject({
+                id: findingId,
+                description: "Battery capacity critically below expected level",
+                repairable: false,
+                createdById: technicianId,
+                updatedById: technicianId,
+            });
+            expect(res.body.data.updatedAt).toBeTruthy();
+
+            const finding = await prisma.finding.findUnique({
+                where: { id: findingId },
+            });
+
+            expect(finding?.description).toBe("Battery capacity critically below expected level");
+            expect(finding?.repairable).toBe(false);
+            expect(finding?.updatedById).toBe(technicianId);
+            expect(finding?.updatedAt).toBeTruthy();
+        });
+    });
 });
