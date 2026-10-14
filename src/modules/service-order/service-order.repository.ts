@@ -66,6 +66,9 @@ const createServiceOrderStatusHistory = async (input: CreateServiceOrderStatusHi
 const cancelServiceOrder = async (input: CancelServiceOrderData, tx?: Prisma.TransactionClient): Promise<boolean> => {
     const prisma: PrismaClientOrTx = tx || getPrisma();
 
+    // Atomic guard: the UPDATE only succeeds if the current status is one
+    // of the expected ones. This prevents concurrent operations from
+    // overwriting each other's state transitions.
     const result = await prisma.serviceOrder.updateMany({
         where: {
             id: input.serviceOrderId,
@@ -78,6 +81,7 @@ const cancelServiceOrder = async (input: CancelServiceOrderData, tx?: Prisma.Tra
                     ServiceOrderStatus.AWAITING_MAINTENANCE,
                 ],
             },
+            cancelledAt: null, // Prevents double-cancelling the same service order
         },
         data: {
             status: ServiceOrderStatus.CANCELLED,

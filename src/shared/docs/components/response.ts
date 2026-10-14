@@ -340,16 +340,6 @@ const createFindingConflictError = registry.registerComponent("responses", "crea
                         },
                     },
                 },
-                serviceOrderNotInDiagnosis: {
-                    summary: "Service order is not in diagnosis",
-                    value: {
-                        success: false,
-                        error: {
-                            code: "CONFLICT",
-                            message: "Service order is not in diagnosis",
-                        },
-                    },
-                },
                 diagnosisStateChanged: {
                     summary: "Diagnosis state changed during the request (race condition)",
                     value: {
@@ -365,88 +355,6 @@ const createFindingConflictError = registry.registerComponent("responses", "crea
     },
 });
 
-const updateFindingConflictError = registry.registerComponent("responses", "updateFindingConflictError", {
-    description: "Finding cannot be updated",
-    content: {
-        "application/json": {
-            schema: { $ref: "#/components/schemas/Error" },
-            examples: {
-                diagnosisAlreadyCompleted: {
-                    summary: "Diagnosis is already completed",
-                    value: {
-                        success: false,
-                        error: {
-                            code: "CONFLICT",
-                            message: "Diagnosis already completed",
-                        },
-                    },
-                },
-                serviceOrderNotInDiagnosis: {
-                    summary: "Service order is not in diagnosis",
-                    value: {
-                        success: false,
-                        error: {
-                            code: "CONFLICT",
-                            message: "Service order is not in diagnosis",
-                        },
-                    },
-                },
-                diagnosisStateChanged: {
-                    summary: "Finding state changed during the request (race condition)",
-                    value: {
-                        success: false,
-                        error: {
-                            code: "CONFLICT",
-                            message: "Finding can no longer be updated in its current state",
-                        },
-                    },
-                },
-            },
-        },
-    },
-});
-
-
-const deleteFindingConflictError = registry.registerComponent("responses", "deleteFindingConflictError", {
-    description: "Finding cannot be deleted",
-    content: {
-        "application/json": {
-            schema: { $ref: "#/components/schemas/Error" },
-            examples: {
-                diagnosisAlreadyCompleted: {
-                    summary: "Diagnosis is already completed",
-                    value: {
-                        success: false,
-                        error: {
-                            code: "CONFLICT",
-                            message: "Diagnosis already completed",
-                        },
-                    },
-                },
-                serviceOrderNotInDiagnosis: {
-                    summary: "Service order is not in diagnosis",
-                    value: {
-                        success: false,
-                        error: {
-                            code: "CONFLICT",
-                            message: "Service order is not in diagnosis",
-                        },
-                    },
-                },
-                diagnosisStateChanged: {
-                    summary: "Finding state changed during the request (race condition)",
-                    value: {
-                        success: false,
-                        error: {
-                            code: "CONFLICT",
-                            message: "Finding can no longer be deleted in its current state",
-                        },
-                    },
-                },
-            },
-        },
-    },
-});
 
 const completeDiagnosisConflictError = registry.registerComponent("responses", "completeDiagnosisConflictError", {
     description: "Diagnosis cannot be completed",
@@ -861,9 +769,6 @@ export {
     cancelServiceOrderConflictError,
     startDiagnosisConflictError,
     createFindingConflictError,
-    updateFindingConflictError,
-    updateFindingValidationError,
-    deleteFindingConflictError,
     completeDiagnosisConflictError,
     // 422
     registerValidationError,
@@ -878,6 +783,7 @@ export {
     createServiceOrderValidationError,
     cancelServiceOrderValidationError,
     createFindingValidationError,
+    updateFindingValidationError,
     completeDiagnosisValidationError,
     // 500
     internalError,

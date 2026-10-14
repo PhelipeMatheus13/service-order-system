@@ -392,7 +392,21 @@ registry.registerPath({
             },
         },
         404: { $ref: "#/components/responses/findingNotFoundError" },
-        409: { $ref: "#/components/responses/updateFindingConflictError" },
+        409: { 
+            description: "Finding can no longer be updated in its current state",
+            content: {
+                "application/json": {
+                    schema: { $ref: "#/components/schemas/Error" },
+                    example: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Finding can no longer be updated in its current state",
+                        },
+                    },
+                },
+            },
+        },
         422: { $ref: "#/components/responses/updateFindingValidationError" },
         500: { $ref: "#/components/responses/internalError" },
     }
@@ -484,7 +498,21 @@ registry.registerPath({
             },
         },
         404: { $ref: "#/components/responses/findingNotFoundError" },
-        409: { $ref: "#/components/responses/deleteFindingConflictError" },
+        409: { 
+            description: "Finding can no longer be deleted in its current state",
+            content: {
+                "application/json": {
+                    schema: { $ref: "#/components/schemas/Error" },
+                    example: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Finding can no longer be deleted in its current state",
+                        },
+                    },
+                },
+            },
+        },
         500: { $ref: "#/components/responses/internalError" },
     }
 });

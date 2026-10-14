@@ -659,26 +659,12 @@ describe("Service Order Service (Unit)", () => {
         const mockDiagnosisRecord = {
             id: validInput.diagnosisId,
             serviceOrderId: "uuid-service-order-123",
-            createdById: "uuid-user-123",
-            result: null,
+            createdById: "uuid-user-456",
             completedById: null,
+            result: null,
+            createdAt: new Date(),
             completedAt: null,
-            createdAt: new Date(),
         } as DiagnosisRecord;
-
-        const mockServiceOrderRecord = {
-            id: mockDiagnosisRecord.serviceOrderId,
-            customerId: "uuid-customer-123",
-            deviceId: "uuid-device-123",
-            reportedProblem: "Screen is cracked and touch is not responding.",
-            status: "IN_DIAGNOSIS",
-            createdById: "uuid-user-123",
-            cancelledAt: null,
-            cancelReason: null,
-            finishedAt: null,
-            createdAt: new Date(),
-            updatedAt: null,
-        } as ServiceOrderRecord;
 
         const mockFindingRecord = {
             id: "uuid-finding-123",
@@ -688,13 +674,8 @@ describe("Service Order Service (Unit)", () => {
             repairable: validInput.repairable,
             createdAt: new Date(),
             updatedAt: null,
+            updatedById: null,
         } as FindingRecord;
-
-        const setupCreateFindingMocks = () => {
-            vi.mocked(serviceOrderRepository.findDiagnosisById).mockResolvedValue(mockDiagnosisRecord);
-            vi.mocked(serviceOrderRepository.findById).mockResolvedValue(mockServiceOrderRecord);
-            vi.mocked(serviceOrderRepository.createFinding).mockResolvedValue(mockFindingRecord);
-        };
 
         it("should throw if serviceOrderRepository.findDiagnosisById fails", async () => {
             const error = new Error("fake error");
@@ -713,12 +694,13 @@ describe("Service Order Service (Unit)", () => {
                     message: "Diagnosis not found",
                 });
 
-            expect(serviceOrderRepository.findById).not.toHaveBeenCalled();
+            expect(serviceOrderRepository.createFinding).not.toHaveBeenCalled();
         });
 
         it("should throw CONFLICT if diagnosis is already completed", async () => {
             vi.mocked(serviceOrderRepository.findDiagnosisById).mockResolvedValue({
                 ...mockDiagnosisRecord,
+                result: "FAULT_FOUND",
                 completedAt: new Date(),
             });
 
@@ -728,49 +710,11 @@ describe("Service Order Service (Unit)", () => {
                     message: "Diagnosis already completed",
                 });
 
-            expect(serviceOrderRepository.findById).not.toHaveBeenCalled();
-        });
-
-        it("should throw if serviceOrderRepository.findById fails", async () => {
-            const error = new Error("fake error");
-            vi.mocked(serviceOrderRepository.findDiagnosisById).mockResolvedValue(mockDiagnosisRecord);
-            vi.mocked(serviceOrderRepository.findById).mockRejectedValue(error);
-
-            await expect(serviceOrderService.createFinding(validInput))
-                .rejects.toThrow(error);
-        });
-
-        it("should throw NOT_FOUND if service order does not exist", async () => {
-            vi.mocked(serviceOrderRepository.findDiagnosisById).mockResolvedValue(mockDiagnosisRecord);
-            vi.mocked(serviceOrderRepository.findById).mockResolvedValue(null);
-
-            await expect(serviceOrderService.createFinding(validInput))
-                .rejects.toMatchObject({
-                    statusCode: 404,
-                    message: "Service order not found",
-                });
-
-            expect(serviceOrderRepository.createFinding).not.toHaveBeenCalled();
-        });
-
-        it("should throw CONFLICT if service order is not IN_DIAGNOSIS", async () => {
-            vi.mocked(serviceOrderRepository.findDiagnosisById).mockResolvedValue(mockDiagnosisRecord);
-            vi.mocked(serviceOrderRepository.findById).mockResolvedValue({
-                ...mockServiceOrderRecord,
-                status: "AWAITING_DELIVERY",
-            });
-
-            await expect(serviceOrderService.createFinding(validInput))
-                .rejects.toMatchObject({
-                    statusCode: 409,
-                    message: "Service order is not in diagnosis",
-                });
-
             expect(serviceOrderRepository.createFinding).not.toHaveBeenCalled();
         });
 
         it("should throw CONFLICT if repository returns null (race condition)", async () => {
-            setupCreateFindingMocks();
+            vi.mocked(serviceOrderRepository.findDiagnosisById).mockResolvedValue(mockDiagnosisRecord);
             vi.mocked(serviceOrderRepository.createFinding).mockResolvedValue(null);
 
             await expect(serviceOrderService.createFinding(validInput))
@@ -782,7 +726,7 @@ describe("Service Order Service (Unit)", () => {
 
         it("should throw UNAUTHORIZED if created_by foreign key is violated", async () => {
             const dbError = new Error("Foreign key constraint failed");
-            setupCreateFindingMocks();
+            vi.mocked(serviceOrderRepository.findDiagnosisById).mockResolvedValue(mockDiagnosisRecord);
             vi.mocked(serviceOrderRepository.createFinding).mockRejectedValue(dbError);
             vi.mocked(isForeignKeyConstraintOn).mockImplementation(
                 (_error, field) => field === "created_by",
@@ -792,31 +736,15 @@ describe("Service Order Service (Unit)", () => {
                 .rejects.toMatchObject({
                     statusCode: 401,
                     message: "Authenticated user no longer exists",
+                    code: "USER_NOT_FOUND",
                 });
 
             expect(isForeignKeyConstraintOn).toHaveBeenCalledWith(dbError, "created_by");
         });
 
-        it("should throw NOT_FOUND if diagnosis_id foreign key is violated", async () => {
-            const dbError = new Error("Foreign key constraint failed");
-            setupCreateFindingMocks();
-            vi.mocked(serviceOrderRepository.createFinding).mockRejectedValue(dbError);
-            vi.mocked(isForeignKeyConstraintOn).mockImplementation(
-                (_error, field) => field === "diagnosis_id",
-            );
-
-            await expect(serviceOrderService.createFinding(validInput))
-                .rejects.toMatchObject({
-                    statusCode: 404,
-                    message: "Diagnosis not found",
-                });
-
-            expect(isForeignKeyConstraintOn).toHaveBeenCalledWith(dbError, "diagnosis_id");
-        });
-
         it("should propagate error if it is not a known constraint violation", async () => {
             const error = new Error("fake error");
-            setupCreateFindingMocks();
+            vi.mocked(serviceOrderRepository.findDiagnosisById).mockResolvedValue(mockDiagnosisRecord);
             vi.mocked(serviceOrderRepository.createFinding).mockRejectedValue(error);
             vi.mocked(isForeignKeyConstraintOn).mockReturnValue(false);
 
@@ -825,12 +753,12 @@ describe("Service Order Service (Unit)", () => {
         });
 
         it("should create finding successfully", async () => {
-            setupCreateFindingMocks();
+            vi.mocked(serviceOrderRepository.findDiagnosisById).mockResolvedValue(mockDiagnosisRecord);
+            vi.mocked(serviceOrderRepository.createFinding).mockResolvedValue(mockFindingRecord);
 
             const result = await serviceOrderService.createFinding(validInput);
 
             expect(serviceOrderRepository.findDiagnosisById).toHaveBeenCalledWith(validInput.diagnosisId);
-            expect(serviceOrderRepository.findById).toHaveBeenCalledWith(mockDiagnosisRecord.serviceOrderId);
             expect(serviceOrderRepository.createFinding).toHaveBeenCalledWith(validInput);
             expect(result).toBe(mockFindingRecord);
         });
@@ -855,30 +783,6 @@ describe("Service Order Service (Unit)", () => {
             updatedById: null,
         } as FindingRecord;
 
-        const mockDiagnosisRecord = {
-            id: mockFindingRecord.diagnosisId,
-            serviceOrderId: "uuid-service-order-123",
-            createdById: "uuid-user-456",
-            result: null,
-            completedById: null,
-            completedAt: null,
-            createdAt: new Date(),
-        } as DiagnosisRecord;
-
-        const mockServiceOrderRecord = {
-            id: mockDiagnosisRecord.serviceOrderId,
-            customerId: "uuid-customer-123",
-            deviceId: "uuid-device-123",
-            reportedProblem: "Screen is cracked and touch is not responding.",
-            status: "IN_DIAGNOSIS",
-            createdById: "uuid-user-456",
-            cancelledAt: null,
-            cancelReason: null,
-            finishedAt: null,
-            createdAt: new Date(),
-            updatedAt: null,
-        } as ServiceOrderRecord;
-
         const mockUpdatedFindingRecord = {
             ...mockFindingRecord,
             description: validInput.description,
@@ -886,13 +790,6 @@ describe("Service Order Service (Unit)", () => {
             updatedById: validInput.updatedById,
             updatedAt: new Date(),
         } as FindingRecord;
-
-        const setupUpdateFindingMocks = () => {
-            vi.mocked(serviceOrderRepository.findFindingById).mockResolvedValue(mockFindingRecord);
-            vi.mocked(serviceOrderRepository.findDiagnosisById).mockResolvedValue(mockDiagnosisRecord);
-            vi.mocked(serviceOrderRepository.findById).mockResolvedValue(mockServiceOrderRecord);
-            vi.mocked(serviceOrderRepository.updateFinding).mockResolvedValue(mockUpdatedFindingRecord);
-        };
 
         it("should throw if serviceOrderRepository.findFindingById fails", async () => {
             const error = new Error("fake error");
@@ -911,63 +808,11 @@ describe("Service Order Service (Unit)", () => {
                     message: "Finding not found",
                 });
 
-            expect(serviceOrderRepository.findDiagnosisById).not.toHaveBeenCalled();
-        });
-
-        it("should throw if serviceOrderRepository.findDiagnosisById fails", async () => {
-            const error = new Error("fake error");
-            vi.mocked(serviceOrderRepository.findFindingById).mockResolvedValue(mockFindingRecord);
-            vi.mocked(serviceOrderRepository.findDiagnosisById).mockRejectedValue(error);
-
-            await expect(serviceOrderService.updateFinding(validInput))
-                .rejects.toThrow(error);
-        });
-
-        it("should throw CONFLICT if diagnosis is already completed", async () => {
-            vi.mocked(serviceOrderRepository.findFindingById).mockResolvedValue(mockFindingRecord);
-            vi.mocked(serviceOrderRepository.findDiagnosisById).mockResolvedValue({
-                ...mockDiagnosisRecord,
-                completedAt: new Date(),
-            });
-
-            await expect(serviceOrderService.updateFinding(validInput))
-                .rejects.toMatchObject({
-                    statusCode: 409,
-                    message: "Diagnosis already completed",
-                });
-
-            expect(serviceOrderRepository.findById).not.toHaveBeenCalled();
-        });
-
-        it("should throw if serviceOrderRepository.findById fails", async () => {
-            const error = new Error("fake error");
-            vi.mocked(serviceOrderRepository.findFindingById).mockResolvedValue(mockFindingRecord);
-            vi.mocked(serviceOrderRepository.findDiagnosisById).mockResolvedValue(mockDiagnosisRecord);
-            vi.mocked(serviceOrderRepository.findById).mockRejectedValue(error);
-
-            await expect(serviceOrderService.updateFinding(validInput))
-                .rejects.toThrow(error);
-        });
-
-        it("should throw CONFLICT if service order is not IN_DIAGNOSIS", async () => {
-            vi.mocked(serviceOrderRepository.findFindingById).mockResolvedValue(mockFindingRecord);
-            vi.mocked(serviceOrderRepository.findDiagnosisById).mockResolvedValue(mockDiagnosisRecord);
-            vi.mocked(serviceOrderRepository.findById).mockResolvedValue({
-                ...mockServiceOrderRecord,
-                status: "AWAITING_DELIVERY",
-            });
-
-            await expect(serviceOrderService.updateFinding(validInput))
-                .rejects.toMatchObject({
-                    statusCode: 409,
-                    message: "Service order is not in diagnosis",
-                });
-
             expect(serviceOrderRepository.updateFinding).not.toHaveBeenCalled();
         });
 
         it("should throw CONFLICT if repository returns null (race condition)", async () => {
-            setupUpdateFindingMocks();
+            vi.mocked(serviceOrderRepository.findFindingById).mockResolvedValue(mockFindingRecord);
             vi.mocked(serviceOrderRepository.updateFinding).mockResolvedValue(null);
 
             await expect(serviceOrderService.updateFinding(validInput))
@@ -979,7 +824,7 @@ describe("Service Order Service (Unit)", () => {
 
         it("should throw UNAUTHORIZED if updated_by foreign key is violated", async () => {
             const dbError = new Error("Foreign key constraint failed");
-            setupUpdateFindingMocks();
+            vi.mocked(serviceOrderRepository.findFindingById).mockResolvedValue(mockFindingRecord);
             vi.mocked(serviceOrderRepository.updateFinding).mockRejectedValue(dbError);
             vi.mocked(isForeignKeyConstraintOn).mockImplementation(
                 (_error, field) => field === "updated_by",
@@ -989,6 +834,7 @@ describe("Service Order Service (Unit)", () => {
                 .rejects.toMatchObject({
                     statusCode: 401,
                     message: "Authenticated user no longer exists",
+                    code: "USER_NOT_FOUND",
                 });
 
             expect(isForeignKeyConstraintOn).toHaveBeenCalledWith(dbError, "updated_by");
@@ -996,7 +842,7 @@ describe("Service Order Service (Unit)", () => {
 
         it("should propagate error if it is not a known constraint violation", async () => {
             const error = new Error("fake error");
-            setupUpdateFindingMocks();
+            vi.mocked(serviceOrderRepository.findFindingById).mockResolvedValue(mockFindingRecord);
             vi.mocked(serviceOrderRepository.updateFinding).mockRejectedValue(error);
             vi.mocked(isForeignKeyConstraintOn).mockReturnValue(false);
 
@@ -1005,13 +851,12 @@ describe("Service Order Service (Unit)", () => {
         });
 
         it("should update finding successfully", async () => {
-            setupUpdateFindingMocks();
+            vi.mocked(serviceOrderRepository.findFindingById).mockResolvedValue(mockFindingRecord);
+            vi.mocked(serviceOrderRepository.updateFinding).mockResolvedValue(mockUpdatedFindingRecord);
 
             const result = await serviceOrderService.updateFinding(validInput);
 
             expect(serviceOrderRepository.findFindingById).toHaveBeenCalledWith(validInput.findingId);
-            expect(serviceOrderRepository.findDiagnosisById).toHaveBeenCalledWith(mockFindingRecord.diagnosisId);
-            expect(serviceOrderRepository.findById).toHaveBeenCalledWith(mockDiagnosisRecord.serviceOrderId);
             expect(serviceOrderRepository.updateFinding).toHaveBeenCalledWith(validInput);
             expect(result).toBe(mockUpdatedFindingRecord);
         });
@@ -1031,37 +876,6 @@ describe("Service Order Service (Unit)", () => {
             updatedById: null,
         } as FindingRecord;
 
-        const mockDiagnosisRecord = {
-            id: mockFindingRecord.diagnosisId,
-            serviceOrderId: "uuid-service-order-123",
-            createdById: "uuid-user-456",
-            result: null,
-            completedById: null,
-            completedAt: null,
-            createdAt: new Date(),
-        } as DiagnosisRecord;
-
-        const mockServiceOrderRecord = {
-            id: mockDiagnosisRecord.serviceOrderId,
-            customerId: "uuid-customer-123",
-            deviceId: "uuid-device-123",
-            reportedProblem: "Screen is cracked and touch is not responding.",
-            status: "IN_DIAGNOSIS",
-            createdById: "uuid-user-456",
-            cancelledAt: null,
-            cancelReason: null,
-            finishedAt: null,
-            createdAt: new Date(),
-            updatedAt: null,
-        } as ServiceOrderRecord;
-
-        const setupDeleteFindingMocks = () => {
-            vi.mocked(serviceOrderRepository.findFindingById).mockResolvedValue(mockFindingRecord);
-            vi.mocked(serviceOrderRepository.findDiagnosisById).mockResolvedValue(mockDiagnosisRecord);
-            vi.mocked(serviceOrderRepository.findById).mockResolvedValue(mockServiceOrderRecord);
-            vi.mocked(serviceOrderRepository.deleteFindingById).mockResolvedValue(true);
-        };
-
         it("should throw if serviceOrderRepository.findFindingById fails", async () => {
             const error = new Error("fake error");
             vi.mocked(serviceOrderRepository.findFindingById).mockRejectedValue(error);
@@ -1079,63 +893,11 @@ describe("Service Order Service (Unit)", () => {
                     message: "Finding not found",
                 });
 
-            expect(serviceOrderRepository.findDiagnosisById).not.toHaveBeenCalled();
-        });
-
-        it("should throw if serviceOrderRepository.findDiagnosisById fails", async () => {
-            const error = new Error("fake error");
-            vi.mocked(serviceOrderRepository.findFindingById).mockResolvedValue(mockFindingRecord);
-            vi.mocked(serviceOrderRepository.findDiagnosisById).mockRejectedValue(error);
-
-            await expect(serviceOrderService.deleteFinding(findingId))
-                .rejects.toThrow(error);
-        });
-
-        it("should throw CONFLICT if diagnosis is already completed", async () => {
-            vi.mocked(serviceOrderRepository.findFindingById).mockResolvedValue(mockFindingRecord);
-            vi.mocked(serviceOrderRepository.findDiagnosisById).mockResolvedValue({
-                ...mockDiagnosisRecord,
-                completedAt: new Date(),
-            });
-
-            await expect(serviceOrderService.deleteFinding(findingId))
-                .rejects.toMatchObject({
-                    statusCode: 409,
-                    message: "Diagnosis already completed",
-                });
-
-            expect(serviceOrderRepository.findById).not.toHaveBeenCalled();
-        });
-
-        it("should throw if serviceOrderRepository.findById fails", async () => {
-            const error = new Error("fake error");
-            vi.mocked(serviceOrderRepository.findFindingById).mockResolvedValue(mockFindingRecord);
-            vi.mocked(serviceOrderRepository.findDiagnosisById).mockResolvedValue(mockDiagnosisRecord);
-            vi.mocked(serviceOrderRepository.findById).mockRejectedValue(error);
-
-            await expect(serviceOrderService.deleteFinding(findingId))
-                .rejects.toThrow(error);
-        });
-
-        it("should throw CONFLICT if service order is not IN_DIAGNOSIS", async () => {
-            vi.mocked(serviceOrderRepository.findFindingById).mockResolvedValue(mockFindingRecord);
-            vi.mocked(serviceOrderRepository.findDiagnosisById).mockResolvedValue(mockDiagnosisRecord);
-            vi.mocked(serviceOrderRepository.findById).mockResolvedValue({
-                ...mockServiceOrderRecord,
-                status: "AWAITING_DELIVERY",
-            });
-
-            await expect(serviceOrderService.deleteFinding(findingId))
-                .rejects.toMatchObject({
-                    statusCode: 409,
-                    message: "Service order is not in diagnosis",
-                });
-
             expect(serviceOrderRepository.deleteFindingById).not.toHaveBeenCalled();
         });
 
         it("should throw CONFLICT if repository returns false (race condition)", async () => {
-            setupDeleteFindingMocks();
+            vi.mocked(serviceOrderRepository.findFindingById).mockResolvedValue(mockFindingRecord);
             vi.mocked(serviceOrderRepository.deleteFindingById).mockResolvedValue(false);
 
             await expect(serviceOrderService.deleteFinding(findingId))
@@ -1147,7 +909,7 @@ describe("Service Order Service (Unit)", () => {
 
         it("should propagate error if repository throws an unknown error", async () => {
             const error = new Error("fake error");
-            setupDeleteFindingMocks();
+            vi.mocked(serviceOrderRepository.findFindingById).mockResolvedValue(mockFindingRecord);
             vi.mocked(serviceOrderRepository.deleteFindingById).mockRejectedValue(error);
 
             await expect(serviceOrderService.deleteFinding(findingId))
@@ -1155,14 +917,13 @@ describe("Service Order Service (Unit)", () => {
         });
 
         it("should delete finding successfully", async () => {
-            setupDeleteFindingMocks();
+            vi.mocked(serviceOrderRepository.findFindingById).mockResolvedValue(mockFindingRecord);
+            vi.mocked(serviceOrderRepository.deleteFindingById).mockResolvedValue(true);
 
             await expect(serviceOrderService.deleteFinding(findingId))
                 .resolves.toBeUndefined();
 
             expect(serviceOrderRepository.findFindingById).toHaveBeenCalledWith(findingId);
-            expect(serviceOrderRepository.findDiagnosisById).toHaveBeenCalledWith(mockFindingRecord.diagnosisId);
-            expect(serviceOrderRepository.findById).toHaveBeenCalledWith(mockDiagnosisRecord.serviceOrderId);
             expect(serviceOrderRepository.deleteFindingById).toHaveBeenCalledWith(findingId);
         });
     });
@@ -1326,6 +1087,7 @@ describe("Service Order Service (Unit)", () => {
                 .rejects.toMatchObject({
                     statusCode: 401,
                     message: "Authenticated user no longer exists",
+                    code: "USER_NOT_FOUND",
                 });
 
             expect(isForeignKeyConstraintOn).toHaveBeenCalledWith(dbError, "completed_by");
