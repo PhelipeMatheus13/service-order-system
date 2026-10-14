@@ -13,6 +13,7 @@ import {
     cancelServiceOrderSchema,
     diagnosisSchema,
     findingSchema,
+    createFindingSchema,
     updateFindingSchema,
     completeDiagnosisSchema,
 } from "./service-order.schemas.js";
@@ -148,6 +149,9 @@ registry.registerPath({
     security: [{ bearerAuth: [] }],
     request: {
         params: z.object({ id: z.string() }),
+        body: {
+            content: { "application/json": { schema: createFindingSchema } },
+        },
     },
     responses: {
         201: {
@@ -178,7 +182,7 @@ registry.registerPath({
             },
         },
         409: { $ref: "#/components/responses/createFindingConflictError" },
-        404: { $ref: "#/components/responses/DiagnosisNotFoundError" },
+        404: { $ref: "#/components/responses/diagnosisNotFoundError" },
         422: { $ref: "#/components/responses/createFindingValidationError" },
         500: { $ref: "#/components/responses/internalError" },
     }
@@ -313,7 +317,7 @@ registry.registerPath({
     security: [{ bearerAuth: [] }],
     request: {
         params: z.object({ id: z.string() }),
-                body: {
+        body: {
             content: { "application/json": { schema: cancelServiceOrderSchema } },
         },
     },
@@ -392,7 +396,7 @@ registry.registerPath({
             },
         },
         404: { $ref: "#/components/responses/findingNotFoundError" },
-        409: { 
+        409: {
             description: "Finding can no longer be updated in its current state",
             content: {
                 "application/json": {
@@ -498,7 +502,7 @@ registry.registerPath({
             },
         },
         404: { $ref: "#/components/responses/findingNotFoundError" },
-        409: { 
+        409: {
             description: "Finding can no longer be deleted in its current state",
             content: {
                 "application/json": {

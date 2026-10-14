@@ -148,6 +148,7 @@ export {
     cancelServiceOrderSchema,
     diagnosisSchema,
     findingSchema,
+    createFindingSchema,
     updateFindingSchema,
     completeDiagnosisSchema,
 };

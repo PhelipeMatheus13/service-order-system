@@ -242,7 +242,7 @@ const deviceUniqueConstraintError = registry.registerComponent("responses", "dev
     },
 });
 
-const cancelServiceOrderConflictError = registry.registerComponent("responses", "serviceOrderCancellationError", {
+const cancelServiceOrderConflictError = registry.registerComponent("responses", "cancelServiceOrderConflictError", {
     description: "Service order cannot be cancelled",
     content: {
         "application/json": {
