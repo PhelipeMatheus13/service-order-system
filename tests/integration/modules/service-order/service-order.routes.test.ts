@@ -496,6 +496,7 @@ describe("Service Order Routes (Integration)", () => {
     });
 
     describe("PATCH /service-orders/diagnoses/:id/complete", () => {
+        let serviceOrderId: string;
         let diagnosisId: string;
         let technicianId: string;
         let technicianAccessToken: string;
@@ -525,19 +526,19 @@ describe("Service Order Routes (Integration)", () => {
                 },
                 select: { id: true },
             });
+            serviceOrderId = serviceOrder.id;
 
             const diagnosis = await prisma.diagnosis.create({
                 data: {
-                    serviceOrderId: serviceOrder.id,
+                    serviceOrderId,
                     createdById: technicianId,
                 },
                 select: { id: true },
             });
-
             diagnosisId = diagnosis.id;
         });
 
-        it("should complete the diagnosis successfully", async () => {
+        it("should complete the diagnosis and move to AWAITING_DELIVERY when there are no repairable findings", async () => {
             const res = await request(app)
                 .patch(`/service-orders/diagnoses/${diagnosisId}/complete`)
                 .set("Authorization", `Bearer ${technicianAccessToken}`)
@@ -558,10 +559,58 @@ describe("Service Order Routes (Integration)", () => {
             const diagnosis = await prisma.diagnosis.findUnique({
                 where: { id: diagnosisId },
             });
-
             expect(diagnosis?.result).toBe("FAULT_FOUND");
             expect(diagnosis?.completedById).toBe(technicianId);
             expect(diagnosis?.completedAt).toBeTruthy();
+
+            const serviceOrder = await prisma.serviceOrder.findUnique({
+                where: { id: serviceOrderId },
+            });
+            expect(serviceOrder?.status).toBe("AWAITING_DELIVERY");
+
+            const statusHistory = await prisma.serviceOrderStatusHistory.findFirst({
+                where: { serviceOrderId },
+                orderBy: { createdAt: "desc" },
+            });
+            expect(statusHistory?.fromStatus).toBe("IN_DIAGNOSIS");
+            expect(statusHistory?.toStatus).toBe("AWAITING_DELIVERY");
+            expect(statusHistory?.changeSource).toBe("USER");
+            expect(statusHistory?.changedById).toBe(technicianId);
+        });
+
+        it("should complete the diagnosis and move to AWAITING_QUOTE when there is at least one repairable finding", async () => {
+            await prisma.finding.create({
+                data: {
+                    diagnosisId,
+                    createdById: technicianId,
+                    description: "Battery capacity below expected level",
+                    repairable: true,
+                },
+            });
+
+            const res = await request(app)
+                .patch(`/service-orders/diagnoses/${diagnosisId}/complete`)
+                .set("Authorization", `Bearer ${technicianAccessToken}`)
+                .send({
+                    result: "FAULT_FOUND",
+                });
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body.success).toBe(true);
+
+            const serviceOrder = await prisma.serviceOrder.findUnique({
+                where: { id: serviceOrderId },
+            });
+            expect(serviceOrder?.status).toBe("AWAITING_QUOTE");
+
+            const statusHistory = await prisma.serviceOrderStatusHistory.findFirst({
+                where: { serviceOrderId },
+                orderBy: { createdAt: "desc" },
+            });
+            expect(statusHistory?.fromStatus).toBe("IN_DIAGNOSIS");
+            expect(statusHistory?.toStatus).toBe("AWAITING_QUOTE");
+            expect(statusHistory?.changeSource).toBe("USER");
+            expect(statusHistory?.changedById).toBe(technicianId);
         });
     });
 });

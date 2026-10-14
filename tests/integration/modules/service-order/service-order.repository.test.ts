@@ -10,6 +10,7 @@ import type {
     CreateFindingInput,
     UpdateFindingInput,
     CompleteDiagnosisInput,
+    DiagnosisRecord
 } from "../../../../src/modules/service-order/service-order.types.js";
 // (shared / infra)
 import { PrismaClient } from "../../../../src/generated/prisma/client.js";
@@ -1631,6 +1632,85 @@ describe("Service Order Repository (Integration)", () => {
                 expect(diagnosisFound?.completedById).toBeNull();
                 expect(diagnosisFound?.completedAt).toBeNull();
             });
+
+            it("should use the transaction client when provided", async () => {
+                const userCreated = await prisma.user.create({
+                    data: {
+                        firstName: "John",
+                        lastName: "Doe",
+                        email: "john@example.com",
+                        role: "TECHNICIAN",
+                        active: true,
+                    },
+                });
+
+                const customerCreated = await prisma.customer.create({
+                    data: {
+                        firstName: "Jane",
+                        lastName: "Doe",
+                        email: "jane@example.com",
+                        phoneNumber: "5521995437105",
+                    },
+                });
+
+                const deviceCreated = await prisma.device.create({
+                    data: {
+                        customerId: customerCreated.id,
+                        type: "SMARTPHONE",
+                        brand: "Samsung",
+                        model: "Galaxy S23",
+                        serialNumber: "SN-123456",
+                        imei: "123456789012345",
+                        color: "Black",
+                    },
+                });
+
+                const serviceOrderCreated = await prisma.serviceOrder.create({
+                    data: {
+                        customerId: customerCreated.id,
+                        deviceId: deviceCreated.id,
+                        reportedProblem: "Screen is cracked and touch is not responding.",
+                        createdById: userCreated.id,
+                        status: "IN_DIAGNOSIS",
+                    },
+                });
+
+                const diagnosisCreated = await prisma.diagnosis.create({
+                    data: {
+                        serviceOrderId: serviceOrderCreated.id,
+                        createdById: userCreated.id,
+                    },
+                });
+
+                const input: CompleteDiagnosisInput = {
+                    diagnosisId: diagnosisCreated.id,
+                    result: "FAULT_FOUND",
+                    completedById: userCreated.id,
+                };
+
+                const captured: { diagnosis: DiagnosisRecord | null } = { diagnosis: null };
+
+                await expect(
+                    prisma.$transaction(async (tx) => {
+                        captured.diagnosis = await serviceOrderRepository.completeDiagnosis(input, tx);
+
+                        throw new Error("rollback");
+                    }),
+                ).rejects.toThrow("rollback");
+
+                expect(captured.diagnosis).toBeTruthy();
+                expect(captured.diagnosis?.result).toBe("FAULT_FOUND");
+                expect(captured.diagnosis?.completedById).toBe(userCreated.id);
+                expect(captured.diagnosis?.completedAt).toBeTruthy();
+
+                const diagnosisAfterRollback = await prisma.diagnosis.findUnique({
+                    where: { id: diagnosisCreated.id },
+                });
+
+                expect(diagnosisAfterRollback?.result).toBeNull();
+                expect(diagnosisAfterRollback?.completedById).toBeNull();
+                expect(diagnosisAfterRollback?.completedAt).toBeNull();
+            });
         });
     });
 
@@ -1951,6 +2031,183 @@ describe("Service Order Repository (Integration)", () => {
                 const finding = await serviceOrderRepository.findFindingById("0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa");
 
                 expect(finding).toBeNull();
+            });
+        });
+
+        describe("countRepairableFindings", () => {
+            it("should count only repairable findings for the given diagnosis", async () => {
+                const userCreated = await prisma.user.create({
+                    data: {
+                        firstName: "John",
+                        lastName: "Doe",
+                        email: "john@example.com",
+                        role: "TECHNICIAN",
+                        active: true,
+                    },
+                });
+
+                const customerCreated = await prisma.customer.create({
+                    data: {
+                        firstName: "Jane",
+                        lastName: "Doe",
+                        email: "jane@example.com",
+                        phoneNumber: "5521995437105",
+                    },
+                });
+
+                const deviceCreated = await prisma.device.create({
+                    data: {
+                        customerId: customerCreated.id,
+                        type: "SMARTPHONE",
+                        brand: "Samsung",
+                        model: "Galaxy S23",
+                        serialNumber: "SN-123456",
+                        imei: "123456789012345",
+                        color: "Black",
+                    },
+                });
+
+                const serviceOrderCreated = await prisma.serviceOrder.create({
+                    data: {
+                        customerId: customerCreated.id,
+                        deviceId: deviceCreated.id,
+                        reportedProblem: "Screen is cracked and touch is not responding.",
+                        createdById: userCreated.id,
+                        status: "IN_DIAGNOSIS",
+                    },
+                });
+
+                const diagnosisCreated = await prisma.diagnosis.create({
+                    data: {
+                        serviceOrderId: serviceOrderCreated.id,
+                        createdById: userCreated.id,
+                    },
+                });
+
+                await prisma.finding.createMany({
+                    data: [
+                        {
+                            diagnosisId: diagnosisCreated.id,
+                            createdById: userCreated.id,
+                            description: "Battery capacity below expected level",
+                            repairable: true,
+                        },
+                        {
+                            diagnosisId: diagnosisCreated.id,
+                            createdById: userCreated.id,
+                            description: "Screen is deeply scratched",
+                            repairable: true,
+                        },
+                        {
+                            diagnosisId: diagnosisCreated.id,
+                            createdById: userCreated.id,
+                            description: "Motherboard corrosion",
+                            repairable: false,
+                        },
+                    ],
+                });
+
+                const count = await serviceOrderRepository.countRepairableFindings(diagnosisCreated.id);
+
+                expect(count).toBe(2);
+            });
+
+            it("should use the transaction client when provided", async () => {
+                const userCreated = await prisma.user.create({
+                    data: {
+                        firstName: "John",
+                        lastName: "Doe",
+                        email: "john@example.com",
+                        role: "TECHNICIAN",
+                        active: true,
+                    },
+                });
+
+                const customerCreated = await prisma.customer.create({
+                    data: {
+                        firstName: "Jane",
+                        lastName: "Doe",
+                        email: "jane@example.com",
+                        phoneNumber: "5521995437105",
+                    },
+                });
+
+                const deviceCreated = await prisma.device.create({
+                    data: {
+                        customerId: customerCreated.id,
+                        type: "SMARTPHONE",
+                        brand: "Samsung",
+                        model: "Galaxy S23",
+                        serialNumber: "SN-123456",
+                        imei: "123456789012345",
+                        color: "Black",
+                    },
+                });
+
+                const serviceOrderCreated = await prisma.serviceOrder.create({
+                    data: {
+                        customerId: customerCreated.id,
+                        deviceId: deviceCreated.id,
+                        reportedProblem: "Screen is cracked and touch is not responding.",
+                        createdById: userCreated.id,
+                        status: "IN_DIAGNOSIS",
+                    },
+                });
+
+                const diagnosisCreated = await prisma.diagnosis.create({
+                    data: {
+                        serviceOrderId: serviceOrderCreated.id,
+                        createdById: userCreated.id,
+                    },
+                });
+
+                let countInsideTransaction: number | undefined;
+
+                await expect(
+                    prisma.$transaction(async (tx) => {
+                        await tx.finding.createMany({
+                            data: [
+                                {
+                                    diagnosisId: diagnosisCreated.id,
+                                    createdById: userCreated.id,
+                                    description: "Battery capacity below expected level",
+                                    repairable: true,
+                                },
+                                {
+                                    diagnosisId: diagnosisCreated.id,
+                                    createdById: userCreated.id,
+                                    description: "Motherboard corrosion",
+                                    repairable: false,
+                                },
+                            ],
+                        });
+
+                        countInsideTransaction = await serviceOrderRepository.countRepairableFindings(
+                            diagnosisCreated.id,
+                            tx,
+                        );
+
+                        throw new Error("rollback");
+                    }),
+                ).rejects.toThrow("rollback");
+
+                expect(countInsideTransaction).toBe(1);
+
+                const countAfterRollback = await serviceOrderRepository.countRepairableFindings(
+                    diagnosisCreated.id,
+                    prisma,
+                );
+
+                expect(countAfterRollback).toBe(0);
+
+                const totalFindings = await prisma.finding.count();
+                expect(totalFindings).toBe(0);
+            });
+
+            it("should return 0 when the diagnosis does not exist", async () => {
+                const count = await serviceOrderRepository.countRepairableFindings("0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa");
+
+                expect(count).toBe(0);
             });
         });
     });

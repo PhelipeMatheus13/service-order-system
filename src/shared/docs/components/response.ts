@@ -464,16 +464,6 @@ const completeDiagnosisConflictError = registry.registerComponent("responses", "
                         },
                     },
                 },
-                serviceOrderNotInDiagnosis: {
-                    summary: "Service order is not in diagnosis",
-                    value: {
-                        success: false,
-                        error: {
-                            code: "CONFLICT",
-                            message: "Service order is not in diagnosis",
-                        },
-                    },
-                },
                 diagnosisStateChanged: {
                     summary: "Diagnosis state changed during the request (race condition)",
                     value: {
@@ -484,11 +474,20 @@ const completeDiagnosisConflictError = registry.registerComponent("responses", "
                         },
                     },
                 },
+                serviceOrderNoLongerInDiagnosis: {
+                    summary: "Service order is no longer in diagnosis (race condition)",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Service order is no longer in diagnosis",
+                        },
+                    },
+                },
             },
         },
     },
 });
-
 
 // VALIDATION ERRORS (422)
 const registerValidationError = registry.registerComponent("responses", "registerValidationError", {

@@ -9,6 +9,7 @@ import {
     CreateFindingInput,
     UpdateFindingInput,
     CompleteDiagnosisInput,
+    DiagnosisResult
 } from "./service-order.types.js";
 import { ServiceOrderStatus } from "./service-order.types.js";
 import { getPrisma } from "../../shared/config/database.js";
@@ -159,7 +160,7 @@ const startDiagnosis = async (input: StartDiagnosisInput): Promise<DiagnosisReco
             return diagnosis;
         });
     } catch (error) {
-        if (isForeignKeyConstraintOn(error, "performed_by")) {
+        if (isForeignKeyConstraintOn(error, "created_by")) {
             throw unauthorized({
                 message: "Authenticated user no longer exists",
                 code: "USER_NOT_FOUND",
@@ -309,6 +310,14 @@ const deleteFinding = async (findingId: string): Promise<void> => {
     }
 };
 
+const resolveStatusAfterDiagnosis = (result: DiagnosisResult, repairableFindingsCount: number): ServiceOrderStatus => {
+    if (result === DiagnosisResult.FAULT_FOUND && repairableFindingsCount > 0) {
+        return ServiceOrderStatus.AWAITING_QUOTE;
+    }
+
+    return ServiceOrderStatus.AWAITING_DELIVERY;
+};
+
 const completeDiagnosis = async (input: CompleteDiagnosisInput): Promise<DiagnosisRecord> => {
     const diagnosis = await serviceOrderRepository.findDiagnosisById(input.diagnosisId);
     if (!diagnosis) {
@@ -319,25 +328,44 @@ const completeDiagnosis = async (input: CompleteDiagnosisInput): Promise<Diagnos
         throw conflict({ message: "Diagnosis already completed" });
     }
 
-    const serviceOrder = await serviceOrderRepository.findById(diagnosis.serviceOrderId);
-    // The FK guarantees a diagnosis always has a service order.
-    // This check exists only to narrow the type from `ServiceOrderRecord | null` to `ServiceOrderRecord` for the compiler.
-    if (!serviceOrder) {
-        throw notFound({ message: "Service order not found" });
-    }
-
-    if (serviceOrder.status !== ServiceOrderStatus.IN_DIAGNOSIS) {
-        throw conflict({ message: "Service order is not in diagnosis" });
-    }
-
     try {
-        const completed = await serviceOrderRepository.completeDiagnosis(input);
+        return await getPrisma().$transaction(async (tx) => {
+            // Atomic guard
+            const completed = await serviceOrderRepository.completeDiagnosis(input, tx);
+            if (!completed) {
+                throw conflict({ message: "Diagnosis can no longer be completed in its current state" });
+            }
 
-        if (!completed) {
-            throw conflict({ message: "Diagnosis can no longer be completed in its current state" });
-        }
+            const repairableCount = await serviceOrderRepository.countRepairableFindings(diagnosis.id, tx);
+            const nextStatus = resolveStatusAfterDiagnosis(input.result, repairableCount);
 
-        return completed;
+            // Atomic guard
+            const statusUpdated = await serviceOrderRepository.updateServiceOrderStatus(
+                {
+                    serviceOrderId: diagnosis.serviceOrderId,
+                    expectedStatuses: [ServiceOrderStatus.IN_DIAGNOSIS],
+                    toStatus: nextStatus,
+                },
+                tx,
+            );
+
+            if (!statusUpdated) {
+                throw conflict({ message: "Service order is no longer in diagnosis" });
+            }
+
+            await serviceOrderRepository.createServiceOrderStatusHistory(
+                {
+                    serviceOrderId: diagnosis.serviceOrderId,
+                    fromStatus: ServiceOrderStatus.IN_DIAGNOSIS,
+                    toStatus: nextStatus,
+                    changeSource: "USER",
+                    changedById: input.completedById,
+                },
+                tx,
+            );
+
+            return completed;
+        });
     } catch (error) {
         if (isForeignKeyConstraintOn(error, "completed_by")) {
             throw unauthorized({ message: "Authenticated user no longer exists" });
@@ -358,4 +386,5 @@ export default {
     updateFinding,
     deleteFinding,
     completeDiagnosis,
+    resolveStatusAfterDiagnosis,
 };

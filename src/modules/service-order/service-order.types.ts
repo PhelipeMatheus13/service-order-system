@@ -75,6 +75,7 @@ interface CompleteDiagnosisInput {
 export {
     ServiceOrderStatus,
     ServiceOrderStatusChangeSource,
+    DiagnosisResult,
 };
 
 export type {

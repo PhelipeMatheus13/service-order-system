@@ -201,8 +201,8 @@ const deleteFindingById = async (id: string): Promise<boolean> => {
     return rows.length > 0;
 };
 
-const completeDiagnosis = async (input: CompleteDiagnosisInput): Promise<DiagnosisRecord | null> => {
-    const prisma: PrismaClientOrTx = getPrisma();
+const completeDiagnosis = async (input: CompleteDiagnosisInput, tx?: PrismaClientOrTx): Promise<DiagnosisRecord | null> => {
+    const prisma: PrismaClientOrTx = tx || getPrisma();
 
     // Atomic guard: the UPDATE only succeeds if the diagnosis has not been
     // completed yet (completed_at IS NULL). This prevents two concurrent
@@ -257,6 +257,16 @@ const findFindingById = async (id: string): Promise<FindingRecord | null> => {
     return prisma.finding.findUnique({ where: { id } });
 };
 
+const countRepairableFindings = async (diagnosisId: string, tx?: PrismaClientOrTx): Promise<number> => {
+    const prisma: PrismaClientOrTx = tx || getPrisma();
+    return prisma.finding.count({
+        where: {
+            diagnosisId,
+            repairable: true
+        }
+    });
+};
+
 export default {
     // Writer
     create,
@@ -273,4 +283,5 @@ export default {
     list,
     findDiagnosisById,
     findFindingById,
+    countRepairableFindings,
 };
