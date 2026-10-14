@@ -5,6 +5,10 @@ import { unauthorized } from "../errors/errors.js";
 
 const generateAccessToken = (userId: string, role: string): string => {
     const secret = getRequiredEnv("SECRET");
+    if (role == "ADMIN" || getRequiredEnv("NODE_ENV") === "development") {
+        return jwt.sign({ sub: userId, role: role }, secret, { expiresIn: "1h" }); // userful for testing
+    }
+
     return jwt.sign({ sub: userId, role: role }, secret, { expiresIn: "15m" });
 };
 

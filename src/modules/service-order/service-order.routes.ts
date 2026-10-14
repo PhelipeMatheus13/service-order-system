@@ -463,7 +463,7 @@ registry.registerPath({
         500: { $ref: "#/components/responses/internalError" },
     }
 });
-router.patch("/diagnoses/:id/complete", checkAccessToken, authorize("ADMIN", "TECHNICIAN"), serviceOrderController.completeDiagnosis);
+router.patch("/diagnoses/:id/complete", checkAccessToken, authorize("ADMIN", "TECHNICIAN"), validate(completeDiagnosisSchema), serviceOrderController.completeDiagnosis);
 
 // DELETE
 registry.registerPath({
