@@ -1160,4 +1160,90 @@ describe("Service Order Service (Unit)", () => {
             expect(result).toBe(mockCompletedDiagnosisRecord);
         });
     });
+
+    describe("listFindingsByDiagnosisId", () => {
+        const diagnosisId = "uuid-diagnosis-123";
+
+        const mockDiagnosisRecord = {
+            id: diagnosisId,
+            serviceOrderId: "uuid-service-order-123",
+            createdById: "uuid-user-456",
+            completedById: null,
+            result: null,
+            createdAt: new Date(),
+            completedAt: null,
+        } as DiagnosisRecord;
+
+        const mockFindings = [
+            {
+                id: "uuid-finding-1",
+                diagnosisId,
+                createdById: "uuid-user-456",
+                description: "Battery capacity below expected level",
+                repairable: true,
+                createdAt: new Date("2026-01-01T10:00:00Z"),
+                updatedAt: null,
+                updatedById: null,
+            },
+            {
+                id: "uuid-finding-2",
+                diagnosisId,
+                createdById: "uuid-user-456",
+                description: "Motherboard corrosion",
+                repairable: false,
+                createdAt: new Date("2026-01-01T11:00:00Z"),
+                updatedAt: null,
+                updatedById: null,
+            },
+        ] as FindingRecord[];
+
+        it("should throw if serviceOrderRepository.findDiagnosisById fails", async () => {
+            const error = new Error("fake error");
+            vi.mocked(serviceOrderRepository.findDiagnosisById).mockRejectedValue(error);
+
+            await expect(serviceOrderService.listFindingsByDiagnosisId(diagnosisId))
+                .rejects.toThrow(error);
+        });
+
+        it("should throw NOT_FOUND if diagnosis does not exist", async () => {
+            vi.mocked(serviceOrderRepository.findDiagnosisById).mockResolvedValue(null);
+
+            await expect(serviceOrderService.listFindingsByDiagnosisId(diagnosisId))
+                .rejects.toMatchObject({
+                    statusCode: 404,
+                    message: "Diagnosis not found",
+                });
+
+            expect(serviceOrderRepository.listFindingsByDiagnosisId).not.toHaveBeenCalled();
+        });
+
+        it("should throw if serviceOrderRepository.listFindingsByDiagnosisId fails", async () => {
+            const error = new Error("fake error");
+            vi.mocked(serviceOrderRepository.findDiagnosisById).mockResolvedValue(mockDiagnosisRecord);
+            vi.mocked(serviceOrderRepository.listFindingsByDiagnosisId).mockRejectedValue(error);
+
+            await expect(serviceOrderService.listFindingsByDiagnosisId(diagnosisId))
+                .rejects.toThrow(error);
+        });
+
+        it("should return findings", async () => {
+            vi.mocked(serviceOrderRepository.findDiagnosisById).mockResolvedValue(mockDiagnosisRecord);
+            vi.mocked(serviceOrderRepository.listFindingsByDiagnosisId).mockResolvedValue(mockFindings);
+
+            const result = await serviceOrderService.listFindingsByDiagnosisId(diagnosisId);
+
+            expect(serviceOrderRepository.findDiagnosisById).toHaveBeenCalledWith(diagnosisId);
+            expect(serviceOrderRepository.listFindingsByDiagnosisId).toHaveBeenCalledWith(diagnosisId);
+            expect(result).toBe(mockFindings);
+        });
+
+        it("should return an empty array when the diagnosis has no findings", async () => {
+            vi.mocked(serviceOrderRepository.findDiagnosisById).mockResolvedValue(mockDiagnosisRecord);
+            vi.mocked(serviceOrderRepository.listFindingsByDiagnosisId).mockResolvedValue([]);
+
+            const result = await serviceOrderService.listFindingsByDiagnosisId(diagnosisId);
+
+            expect(result).toEqual([]);
+        });
+    });
 });

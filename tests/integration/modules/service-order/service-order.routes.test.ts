@@ -613,4 +613,86 @@ describe("Service Order Routes (Integration)", () => {
             expect(statusHistory?.changedById).toBe(technicianId);
         });
     });
+
+    describe("GET /service-orders/diagnoses/:id/findings", () => {
+        let diagnosisId: string;
+
+        beforeEach(async () => {
+            const technician = await prisma.user.create({
+                data: {
+                    firstName: "Jane",
+                    lastName: "Smith",
+                    email: "jane.smith@example.com",
+                    passwordHash: "passwordHash",
+                    role: "TECHNICIAN",
+                    active: true,
+                },
+                select: { id: true },
+            });
+
+            const serviceOrder = await prisma.serviceOrder.create({
+                data: {
+                    customerId,
+                    deviceId,
+                    reportedProblem: "Screen is cracked and touch is not responding.",
+                    createdById: userId,
+                    status: "IN_DIAGNOSIS",
+                },
+                select: { id: true },
+            });
+
+            const diagnosis = await prisma.diagnosis.create({
+                data: {
+                    serviceOrderId: serviceOrder.id,
+                    createdById: technician.id,
+                },
+                select: { id: true },
+            });
+
+            diagnosisId = diagnosis.id;
+
+            await prisma.finding.createMany({
+                data: [
+                    {
+                        diagnosisId,
+                        createdById: technician.id,
+                        description: "Battery capacity below expected level",
+                        repairable: true,
+                    },
+                    {
+                        diagnosisId,
+                        createdById: technician.id,
+                        description: "Motherboard corrosion",
+                        repairable: false,
+                    },
+                ],
+            });
+        });
+
+        it("should return the findings ordered by creation date ascending", async () => {
+            const res = await request(app)
+                .get(`/service-orders/diagnoses/${diagnosisId}/findings`)
+                .set("Authorization", `Bearer ${accessToken}`);
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(res.body.data).toHaveLength(2);
+            expect(res.body.data[0].description).toBe("Battery capacity below expected level");
+            expect(res.body.data[0].repairable).toBe(true);
+            expect(res.body.data[1].description).toBe("Motherboard corrosion");
+            expect(res.body.data[1].repairable).toBe(false);
+        });
+
+        it("should return an empty array when the diagnosis has no findings", async () => {
+            await prisma.finding.deleteMany({ where: { diagnosisId } });
+
+            const res = await request(app)
+                .get(`/service-orders/diagnoses/${diagnosisId}/findings`)
+                .set("Authorization", `Bearer ${accessToken}`);
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(res.body.data).toEqual([]);
+        });
+    });
 });

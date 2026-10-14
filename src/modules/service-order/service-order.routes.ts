@@ -308,6 +308,47 @@ registry.registerPath({
 });
 router.get("/diagnoses/:id", checkAccessToken, serviceOrderController.getDiagnosisById);
 
+registry.registerPath({
+    tags: ["Findings"],
+    method: "get",
+    path: "/service-orders/diagnoses/{id}/findings",
+    summary: "Get findings by diagnosis ID",
+    security: [{ bearerAuth: [] }],
+    request: {
+        params: z.object({ id: z.string() }),
+    },
+    responses: {
+        200: {
+            description: "Findings retrieved successfully",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        success: z.boolean().openapi({ example: true }),
+                        data: z.array(findingSchema),
+                    }),
+                },
+            },
+        },
+        400: { $ref: "#/components/responses/missingDiagnosisIdError" },
+        401: {
+            description: "Missing, invalid or expired access token",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
+                        invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
+                        accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
+                    },
+                },
+            },
+        },
+        404: { $ref: "#/components/responses/diagnosisNotFoundError" },
+        500: { $ref: "#/components/responses/internalError" },
+    }
+});
+router.get("/diagnoses/:id/findings", checkAccessToken, serviceOrderController.listFindingsByDiagnosisId);
+
 // PATCH
 registry.registerPath({
     tags: ["Service-order"],

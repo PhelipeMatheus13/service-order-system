@@ -131,6 +131,16 @@ const completeDiagnosis = asyncHandler(async (req, res) => {
     });
 });
 
+const listFindingsByDiagnosisId = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (!id) throw badRequest({ message: "Diagnosis ID is required" });
+    const findings = await serviceOrderService.listFindingsByDiagnosisId(String(id));
+    res.status(200).json({
+        success: true,
+        data: findings,
+    });
+});
+
 export default {
     createServiceOrder,
     getServiceOrderById,
@@ -142,4 +152,5 @@ export default {
     updateFinding,
     deleteFinding,
     completeDiagnosis,
+    listFindingsByDiagnosisId,
 };

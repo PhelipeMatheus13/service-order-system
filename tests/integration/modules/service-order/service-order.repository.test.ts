@@ -2210,5 +2210,95 @@ describe("Service Order Repository (Integration)", () => {
                 expect(count).toBe(0);
             });
         });
+
+        describe("listFindingsByDiagnosisId", () => {
+            it("should return findings ordered by creation date ascending", async () => {
+                const userCreated = await prisma.user.create({
+                    data: {
+                        firstName: "John",
+                        lastName: "Doe",
+                        email: "john@example.com",
+                        role: "TECHNICIAN",
+                        active: true,
+                    },
+                });
+
+                const customerCreated = await prisma.customer.create({
+                    data: {
+                        firstName: "Jane",
+                        lastName: "Doe",
+                        email: "jane@example.com",
+                        phoneNumber: "5521995437105",
+                    },
+                });
+
+                const deviceCreated = await prisma.device.create({
+                    data: {
+                        customerId: customerCreated.id,
+                        type: "SMARTPHONE",
+                        brand: "Samsung",
+                        model: "Galaxy S23",
+                        serialNumber: "SN-123456",
+                        imei: "123456789012345",
+                        color: "Black",
+                    },
+                });
+
+                const serviceOrderCreated = await prisma.serviceOrder.create({
+                    data: {
+                        customerId: customerCreated.id,
+                        deviceId: deviceCreated.id,
+                        reportedProblem: "Screen is cracked and touch is not responding.",
+                        createdById: userCreated.id,
+                        status: "IN_DIAGNOSIS",
+                    },
+                });
+
+                const diagnosisCreated = await prisma.diagnosis.create({
+                    data: {
+                        serviceOrderId: serviceOrderCreated.id,
+                        createdById: userCreated.id,
+                    },
+                });
+
+                const now = new Date();
+
+                const findings = await prisma.finding.createManyAndReturn({
+                    data: [
+                        {
+                            diagnosisId: diagnosisCreated.id,
+                            createdById: userCreated.id,
+                            description: "Motherboard corrosion",
+                            repairable: false,
+                            createdAt: new Date(now.getTime() - 60 * 60 * 1000),
+                        },
+                        {
+                            diagnosisId: diagnosisCreated.id,
+                            createdById: userCreated.id,
+                            description: "Battery capacity below expected level",
+                            repairable: true,
+                            createdAt: now,
+                        },
+                    ],
+                });
+
+                const olderFinding = findings.find((f) => f.description === "Motherboard corrosion")!;
+                const newerFinding = findings.find((f) => f.description === "Battery capacity below expected level")!;
+
+                const result = await serviceOrderRepository.listFindingsByDiagnosisId(diagnosisCreated.id);
+
+                expect(result).toHaveLength(2);
+                expect(result[0].id).toBe(olderFinding.id);
+                expect(result[0].description).toBe("Motherboard corrosion");
+                expect(result[1].id).toBe(newerFinding.id);
+                expect(result[1].description).toBe("Battery capacity below expected level");
+            });
+
+            it("should return an empty array when the diagnosis has no findings", async () => {
+                const findings = await serviceOrderRepository.listFindingsByDiagnosisId("0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa");
+
+                expect(findings).toEqual([]);
+            });
+        });
     });
 });

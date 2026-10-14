@@ -271,6 +271,18 @@ const countRepairableFindings = async (diagnosisId: string, tx?: PrismaClientOrT
     });
 };
 
+const listFindingsByDiagnosisId = async (diagnosisId: string): Promise<FindingRecord[]> => {
+    const prisma: PrismaClientOrTx = getPrisma();
+    return prisma.finding.findMany({
+        where: {
+            diagnosisId,
+        },
+        orderBy: {
+            createdAt: "asc",
+        },
+    });
+};
+
 export default {
     // Writer
     create,
@@ -288,4 +300,5 @@ export default {
     findDiagnosisById,
     findFindingById,
     countRepairableFindings,
+    listFindingsByDiagnosisId,
 };

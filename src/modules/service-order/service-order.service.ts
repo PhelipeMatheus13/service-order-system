@@ -335,6 +335,15 @@ const completeDiagnosis = async (input: CompleteDiagnosisInput): Promise<Diagnos
     }
 };
 
+const listFindingsByDiagnosisId = async (diagnosisId: string): Promise<FindingRecord[]> => {
+    const diagnosis = await serviceOrderRepository.findDiagnosisById(diagnosisId);
+    if (!diagnosis) {
+        throw notFound({ message: "Diagnosis not found" });
+    }
+
+    return serviceOrderRepository.listFindingsByDiagnosisId(diagnosisId);
+};
+
 export default {
     createServiceOrder,
     getServiceOrderById,
@@ -347,4 +356,5 @@ export default {
     deleteFinding,
     completeDiagnosis,
     resolveStatusAfterDiagnosis,
+    listFindingsByDiagnosisId,
 };

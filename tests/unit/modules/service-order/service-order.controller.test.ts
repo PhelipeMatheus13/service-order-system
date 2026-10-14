@@ -592,4 +592,86 @@ describe("Service Order Controller (Unit)", () => {
             expect(res.status).not.toHaveBeenCalled();
         });
     });
+
+    describe("listFindingsByDiagnosisId", () => {
+        it("should return 200 with findings data", async () => {
+            req.params.id = "uuid-diagnosis-123";
+
+            const mockFindings = [
+                {
+                    id: "uuid-finding-1",
+                    diagnosisId: "uuid-diagnosis-123",
+                    createdById: "uuid-user-456",
+                    description: "Battery capacity below expected level",
+                    repairable: true,
+                    createdAt: new Date(),
+                    updatedAt: null,
+                    updatedById: null,
+                },
+                {
+                    id: "uuid-finding-2",
+                    diagnosisId: "uuid-diagnosis-123",
+                    createdById: "uuid-user-456",
+                    description: "Motherboard corrosion",
+                    repairable: false,
+                    createdAt: new Date(),
+                    updatedAt: null,
+                    updatedById: null,
+                },
+            ] as FindingRecord[];
+
+            vi.mocked(serviceOrderService).listFindingsByDiagnosisId.mockResolvedValue(mockFindings);
+
+            await serviceOrderController.listFindingsByDiagnosisId(req, res, next);
+
+            expect(serviceOrderService.listFindingsByDiagnosisId).toHaveBeenCalledWith("uuid-diagnosis-123");
+
+            expect(res.status).toHaveBeenCalledWith(200);
+            expect(res.json).toHaveBeenCalledWith({
+                success: true,
+                data: mockFindings,
+            });
+            expect(next).not.toHaveBeenCalled();
+        });
+
+        it("should return 200 with an empty array when the diagnosis has no findings", async () => {
+            req.params.id = "uuid-diagnosis-123";
+
+            vi.mocked(serviceOrderService).listFindingsByDiagnosisId.mockResolvedValue([]);
+
+            await serviceOrderController.listFindingsByDiagnosisId(req, res, next);
+
+            expect(res.status).toHaveBeenCalledWith(200);
+            expect(res.json).toHaveBeenCalledWith({
+                success: true,
+                data: [],
+            });
+            expect(next).not.toHaveBeenCalled();
+        });
+
+        it("should call next with badRequest error if id is missing", async () => {
+            req.params = {};
+
+            await serviceOrderController.listFindingsByDiagnosisId(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(expect.objectContaining({
+                statusCode: 400,
+                message: "Diagnosis ID is required",
+            }));
+            expect(serviceOrderService.listFindingsByDiagnosisId).not.toHaveBeenCalled();
+            expect(res.status).not.toHaveBeenCalled();
+        });
+
+        it("should propagate error when service fails", async () => {
+            req.params.id = "uuid-diagnosis-123";
+
+            const error = new Error("Service error");
+            vi.mocked(serviceOrderService).listFindingsByDiagnosisId.mockRejectedValue(error);
+
+            await serviceOrderController.listFindingsByDiagnosisId(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(error);
+            expect(res.status).not.toHaveBeenCalled();
+        });
+    });
 });
