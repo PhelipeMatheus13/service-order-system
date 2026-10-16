@@ -2,12 +2,19 @@ import {
     CreateServiceOrderInput,
     ServiceOrderRecord,
     ListServiceOrdersInput,
-    CancelServiceOrderInput
+    CancelServiceOrderInput,
+    DiagnosisRecord,
+    StartDiagnosisInput,
+    FindingRecord,
+    CreateFindingInput,
+    UpdateFindingInput,
+    CompleteDiagnosisInput,
+    DiagnosisResult
 } from "./service-order.types.js";
 import { ServiceOrderStatus } from "./service-order.types.js";
 import { getPrisma } from "../../shared/config/database.js";
 import { notFound, unauthorized, conflict } from "../../shared/errors/errors.js";
-import { isForeignKeyConstraintOn, isUniqueConstraintOn, isNotFoundError } from "../../shared/utils/prisma-error.js";
+import { isForeignKeyConstraintOn, isUniqueConstraintOn } from "../../shared/utils/prisma-error.js";
 import serviceOrderRepository from "./service-order.repository.js";
 
 const createServiceOrder = async (input: CreateServiceOrderInput): Promise<ServiceOrderRecord> => {
@@ -19,11 +26,12 @@ const createServiceOrder = async (input: CreateServiceOrderInput): Promise<Servi
                 throw notFound({ message: "Device not found" });
             }
 
+            // atomic guard: only succeeds if the service order is still in WAITING_DIAGNOSIS
             await serviceOrderRepository.createServiceOrderStatusHistory(
                 {
                     serviceOrderId: serviceOrder.id,
                     fromStatus: null,
-                    toStatus: "WAITING_DIAGNOSIS",
+                    toStatus: ServiceOrderStatus.WAITING_DIAGNOSIS,
                     changeSource: "USER",
                     changedById: input.createdById,
                 },
@@ -43,7 +51,6 @@ const createServiceOrder = async (input: CreateServiceOrderInput): Promise<Servi
         if (isUniqueConstraintOn(error, "device_id")) {
             throw conflict({
                 message: "This device already has an active service order",
-                code: "DEVICE_ALREADY_IN_SERVICE",
             });
         }
 
@@ -77,7 +84,7 @@ const cancelServiceOrder = async (input: CancelServiceOrderInput): Promise<void>
         throw notFound({ message: "Service order not found" });
     }
 
-    if (serviceOrder.status === ServiceOrderStatus.CANCELLED) {
+    if (serviceOrder.cancelledAt) {
         throw conflict({ message: "Service order is already cancelled" });
     }
 
@@ -86,6 +93,7 @@ const cancelServiceOrder = async (input: CancelServiceOrderInput): Promise<void>
     }
 
     await getPrisma().$transaction(async (tx) => {
+        // atomic guard: only succeeds if the service order is still in a cancelable status and not already cancelled
         const cancelled = await serviceOrderRepository.cancelServiceOrder(
             input,
             tx,
@@ -108,10 +116,245 @@ const cancelServiceOrder = async (input: CancelServiceOrderInput): Promise<void>
     });
 };
 
+const startDiagnosis = async (input: StartDiagnosisInput): Promise<DiagnosisRecord> => {
+    const serviceOrder = await serviceOrderRepository.findById(input.serviceOrderId);
+
+    if (!serviceOrder) {
+        throw notFound({ message: "Service order not found" });
+    }
+
+    if (serviceOrder.status !== ServiceOrderStatus.WAITING_DIAGNOSIS) {
+        throw conflict({
+            message: "Service order is not waiting for diagnosis",
+        });
+    }
+
+    try {
+        return await getPrisma().$transaction(async (tx) => {
+            const diagnosis = await serviceOrderRepository.createDiagnosis(input, tx);
+
+            // atomic guard: only succeeds if the service order is still in WAITING_DIAGNOSIS
+            const statusUpdated = await serviceOrderRepository.updateServiceOrderStatus(
+                {
+                    serviceOrderId: input.serviceOrderId,
+                    expectedStatuses: [ServiceOrderStatus.WAITING_DIAGNOSIS],
+                    toStatus: ServiceOrderStatus.IN_DIAGNOSIS,
+                },
+                tx,
+            );
+
+            if (!statusUpdated) {
+                throw conflict({
+                    message: "Service order is no longer available to start diagnosis",
+                });
+            }
+
+            await serviceOrderRepository.createServiceOrderStatusHistory(
+                {
+                    serviceOrderId: input.serviceOrderId,
+                    fromStatus: ServiceOrderStatus.WAITING_DIAGNOSIS,
+                    toStatus: ServiceOrderStatus.IN_DIAGNOSIS,
+                    changeSource: "USER",
+                    changedById: input.createdById,
+                },
+                tx,
+            );
+
+            return diagnosis;
+        });
+    } catch (error) {
+        if (isForeignKeyConstraintOn(error, "created_by")) {
+            throw unauthorized({
+                message: "Authenticated user no longer exists",
+                code: "USER_NOT_FOUND",
+            });
+        }
+
+        if (isForeignKeyConstraintOn(error, "service_order_id")) {
+            throw notFound({
+                message: "Service order not found",
+            });
+        }
+
+        if (isUniqueConstraintOn(error, "service_order_id")) {
+            throw conflict({
+                message: "A diagnosis already exists for this service order",
+            });
+        }
+
+        throw error;
+    }
+};
+
+const getDiagnosisById = async (id: string): Promise<DiagnosisRecord> => {
+    const diagnosis = await serviceOrderRepository.findDiagnosisById(id);
+    if (!diagnosis) throw notFound({ message: "Diagnosis not found" });
+    return diagnosis;
+};
+
+const createFinding = async (input: CreateFindingInput): Promise<FindingRecord> => {
+    const diagnosis = await serviceOrderRepository.findDiagnosisById(input.diagnosisId);
+    if (!diagnosis) {
+        throw notFound({ message: "Diagnosis not found" });
+    }
+
+    if (diagnosis.completedAt) {
+        throw conflict({ message: "Diagnosis already completed" });
+    }
+
+    try {
+        // Atomic guard: only succeeds if the diagnosis is still open and the
+        // Diagnosis not completed(completed_at IS NULL) and the service order is in IN_DIAGNOSIS
+        const finding = await serviceOrderRepository.createFinding(input);
+
+        if (!finding) {
+            throw conflict({ message: "Finding can no longer be created in its current state" });
+        }
+
+        return finding;
+    } catch (error) {
+        if (isForeignKeyConstraintOn(error, "created_by")) {
+            throw unauthorized({
+                message: "Authenticated user no longer exists",
+                code: "USER_NOT_FOUND",
+            });
+        }
+
+        throw error;
+    }
+};
+
+const updateFinding = async (input: UpdateFindingInput): Promise<FindingRecord> => {
+    const finding = await serviceOrderRepository.findFindingById(input.findingId);
+    if (!finding) {
+        throw notFound({ message: "Finding not found" });
+    }
+
+    try {
+        // Atomic guard: only succeeds if the diagnosis is still open and the
+        // Diagnosis not completed(completed_at IS NULL) and the service order is in IN_DIAGNOSIS
+        const updated = await serviceOrderRepository.updateFinding(input);
+
+        if (!updated) {
+            throw conflict({ message: "Finding can no longer be updated in its current state" });
+        }
+
+        return updated;
+    } catch (error) {
+        if (isForeignKeyConstraintOn(error, "updated_by")) {
+            throw unauthorized({
+                message: "Authenticated user no longer exists",
+                code: "USER_NOT_FOUND",
+            });
+        }
+
+        throw error;
+    }
+};
+
+const deleteFinding = async (findingId: string): Promise<void> => {
+    const finding = await serviceOrderRepository.findFindingById(findingId);
+    if (!finding) {
+        throw notFound({ message: "Finding not found" });
+    }
+
+    // Atomic guard: only succeeds if the diagnosis is still open and the
+    // Diagnosis not completed(completed_at IS NULL) and the service order is in IN_DIAGNOSIS
+    const deleted = await serviceOrderRepository.deleteFindingById(findingId);
+    if (!deleted) {
+        throw conflict({ message: "Finding can no longer be deleted in its current state" });
+    }
+};
+
+const resolveStatusAfterDiagnosis = (result: DiagnosisResult, repairableFindingsCount: number): ServiceOrderStatus => {
+    if (result === DiagnosisResult.FAULT_FOUND && repairableFindingsCount > 0) {
+        return ServiceOrderStatus.AWAITING_QUOTE;
+    }
+
+    return ServiceOrderStatus.AWAITING_DELIVERY;
+};
+
+const completeDiagnosis = async (input: CompleteDiagnosisInput): Promise<DiagnosisRecord> => {
+    const diagnosis = await serviceOrderRepository.findDiagnosisById(input.diagnosisId);
+    if (!diagnosis) {
+        throw notFound({ message: "Diagnosis not found" });
+    }
+
+    if (diagnosis.completedAt) {
+        throw conflict({ message: "Diagnosis already completed" });
+    }
+
+    try {
+        return await getPrisma().$transaction(async (tx) => {
+            // Only succeeds if the diagnosis is still open and the
+            // Diagnosis not completed(completed_at IS NULL)
+            const completed = await serviceOrderRepository.completeDiagnosis(input, tx);
+            if (!completed) {
+                throw conflict({ message: "Diagnosis can no longer be completed in its current state" });
+            }
+
+            const repairableCount = await serviceOrderRepository.countRepairableFindings(diagnosis.id, tx);
+            const nextStatus = resolveStatusAfterDiagnosis(input.result, repairableCount);
+
+            // Only succeeds if the service order is still in IN_DIAGNOSIS
+            const statusUpdated = await serviceOrderRepository.updateServiceOrderStatus(
+                {
+                    serviceOrderId: diagnosis.serviceOrderId,
+                    expectedStatuses: [ServiceOrderStatus.IN_DIAGNOSIS],
+                    toStatus: nextStatus,
+                },
+                tx,
+            );
+
+            if (!statusUpdated) {
+                throw conflict({ message: "Service order is no longer in diagnosis" });
+            }
+
+            await serviceOrderRepository.createServiceOrderStatusHistory(
+                {
+                    serviceOrderId: diagnosis.serviceOrderId,
+                    fromStatus: ServiceOrderStatus.IN_DIAGNOSIS,
+                    toStatus: nextStatus,
+                    changeSource: "USER",
+                    changedById: input.completedById,
+                },
+                tx,
+            );
+
+            return completed;
+        });
+    } catch (error) {
+        if (isForeignKeyConstraintOn(error, "completed_by")) {
+            throw unauthorized({
+                message: "Authenticated user no longer exists",
+                code: "USER_NOT_FOUND",
+            });
+        }
+
+        throw error;
+    }
+};
+
+const listFindingsByDiagnosisId = async (diagnosisId: string): Promise<FindingRecord[]> => {
+    const diagnosis = await serviceOrderRepository.findDiagnosisById(diagnosisId);
+    if (!diagnosis) {
+        throw notFound({ message: "Diagnosis not found" });
+    }
+
+    return serviceOrderRepository.listFindingsByDiagnosisId(diagnosisId);
+};
 
 export default {
     createServiceOrder,
     getServiceOrderById,
     listServiceOrders,
     cancelServiceOrder,
+    startDiagnosis,
+    getDiagnosisById,
+    createFinding,
+    updateFinding,
+    deleteFinding,
+    completeDiagnosis,
+    resolveStatusAfterDiagnosis,
+    listFindingsByDiagnosisId,
 };

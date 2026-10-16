@@ -8,9 +8,10 @@ import { Prisma } from "../../generated/prisma/client.js";
 export type PrismaDriverAdapterMeta = {
     driverAdapterError?: {
         cause?: {
+            originalCode?: string;
             constraint?: {
                 fields?: string[];
-                index?: string; 
+                index?: string;
             };
         };
     };
@@ -26,11 +27,20 @@ export type PrismaDriverAdapterMeta = {
  */
 const isUniqueConstraintOn = (error: unknown, field: string): boolean => {
     if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
-    if (error.code !== "P2002") return false;
 
-    // Prisma 7+ with driver adapter
     const meta = error.meta as PrismaDriverAdapterMeta | undefined;
-    const fields = meta?.driverAdapterError?.cause?.constraint?.fields;
+    const cause = meta?.driverAdapterError?.cause;
+
+    // P2002 → Prisma-managed operations (e.g. prisma.user.create)
+    // P2010 → raw queries ($queryRaw) with driver adapter; the original
+    //         Postgres code lives under `cause.originalCode`
+    const isUnique =
+        error.code === "P2002" ||
+        (error.code === "P2010" && cause?.originalCode === "23505");
+
+    if (!isUnique) return false;
+
+    const fields = cause?.constraint?.fields;
 
     return Array.isArray(fields) && fields.includes(field);
 };
@@ -45,11 +55,17 @@ const isUniqueConstraintOn = (error: unknown, field: string): boolean => {
  */
 const isForeignKeyConstraintOn = (error: unknown, field: string): boolean => {
     if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
-    if (error.code !== "P2003") return false;
 
-    // Prisma 7+ with driver adapter: the field name is part of the constraint index
     const meta = error.meta as PrismaDriverAdapterMeta | undefined;
-    const index = meta?.driverAdapterError?.cause?.constraint?.index;
+    const cause = meta?.driverAdapterError?.cause;
+
+    const isFk =
+        error.code === "P2003" ||
+        (error.code === "P2010" && cause?.originalCode === "23503");
+
+    if (!isFk) return false;
+
+    const index = cause?.constraint?.index;
 
     return typeof index === "string" && index.includes(field);
 };

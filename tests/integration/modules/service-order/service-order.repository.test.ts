@@ -1,15 +1,22 @@
 // (Node built‑ins)
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
 // (Types)
-import type { 
-    CreateServiceOrderInput, 
-    CreateServiceOrderStatusHistoryData, 
-    CancelServiceOrderData 
+import type {
+    CreateServiceOrderInput,
+    CreateServiceOrderStatusHistoryData,
+    CancelServiceOrderData,
+    StartDiagnosisInput,
+    UpdateServiceOrderStatusData,
+    CreateFindingInput,
+    UpdateFindingInput,
+    CompleteDiagnosisInput,
+    DiagnosisRecord
 } from "../../../../src/modules/service-order/service-order.types.js";
 // (shared / infra)
 import { PrismaClient } from "../../../../src/generated/prisma/client.js";
 import { setPrismaInstance } from "../../../../src/shared/config/database";
 import { setupTestDatabase } from "../../../helpers/testDatabase.js";
+import { ServiceOrderBuilder } from "./fixture/serviceOrderBuilder.js";
 // (local modules)
 import serviceOrderRepository from "../../../../src/modules/service-order/service-order.repository.js";
 
@@ -28,6 +35,9 @@ describe("Service Order Repository (Integration)", () => {
     });
 
     beforeEach(async () => {
+        await prisma.finding.deleteMany();
+        await prisma.diagnosis.deleteMany();
+        await prisma.serviceOrderStatusHistory.deleteMany();
         await prisma.serviceOrder.deleteMany();
         await prisma.device.deleteMany();
         await prisma.customer.deleteMany();
@@ -36,51 +46,17 @@ describe("Service Order Repository (Integration)", () => {
 
     describe("Writer repository", () => {
         describe("create", () => {
-            let customerCreatedId: string;
-            let deviceCreatedId: string;
-            let userCreatedId: string;
-
-            beforeEach(async () => {
-                const userCreated = await prisma.user.create({
-                    data: {
-                        firstName: "John",
-                        lastName: "Doe",
-                        email: "john@example.com",
-                        role: "ATTENDANT",
-                        active: true,
-                    },
-                });
-                userCreatedId = userCreated.id;
-
-                const customerCreated = await prisma.customer.create({
-                    data: {
-                        firstName: "Jane",
-                        lastName: "Doe",
-                        email: "jane@example.com",
-                        phoneNumber: "5521995437105",
-                    },
-                });
-                customerCreatedId = customerCreated.id;
-
-                const deviceCreated = await prisma.device.create({
-                    data: {
-                        customerId: customerCreatedId,
-                        type: "SMARTPHONE",
-                        brand: "Samsung",
-                        model: "Galaxy S23",
-                        serialNumber: "SN-123456",
-                        imei: "123456789012345",
-                        color: "Black",
-                    },
-                });
-                deviceCreatedId = deviceCreated.id;
-            });
-
             it("should insert a service order deriving customerId from the device", async () => {
+                const { user, customer, device } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "ATTENDANT" })
+                    .withCustomer()
+                    .withDevice()
+                    .build();
+
                 const input: CreateServiceOrderInput = {
-                    deviceId: deviceCreatedId,
+                    deviceId: device.id,
                     reportedProblem: "Screen is cracked and touch is not responding.",
-                    createdById: userCreatedId,
+                    createdById: user.id,
                 };
 
                 const serviceOrderCreated = await serviceOrderRepository.create(input);
@@ -93,11 +69,11 @@ describe("Service Order Repository (Integration)", () => {
 
                 expect(serviceOrderFound).not.toBeNull();
                 expect(serviceOrderFound?.id).toBe(serviceOrderCreated!.id);
-                expect(serviceOrderFound?.deviceId).toBe(deviceCreatedId);
-                expect(serviceOrderFound?.customerId).toBe(customerCreatedId);
+                expect(serviceOrderFound?.deviceId).toBe(device.id);
+                expect(serviceOrderFound?.customerId).toBe(customer.id);
                 expect(serviceOrderFound?.reportedProblem).toBe(input.reportedProblem);
                 expect(serviceOrderFound?.status).toBe("WAITING_DIAGNOSIS");
-                expect(serviceOrderFound?.createdById).toBe(userCreatedId);
+                expect(serviceOrderFound?.createdById).toBe(user.id);
                 expect(serviceOrderFound?.cancelledAt).toBeNull();
                 expect(serviceOrderFound?.cancelReason).toBeNull();
                 expect(serviceOrderFound?.finishedAt).toBeNull();
@@ -106,10 +82,16 @@ describe("Service Order Repository (Integration)", () => {
             });
 
             it("should return the record with camelCase fields", async () => {
+                const { user, device } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "ATTENDANT" })
+                    .withCustomer()
+                    .withDevice()
+                    .build();
+
                 const input: CreateServiceOrderInput = {
-                    deviceId: deviceCreatedId,
+                    deviceId: device.id,
                     reportedProblem: "Battery drains too fast.",
-                    createdById: userCreatedId,
+                    createdById: user.id,
                 };
 
                 const serviceOrderCreated = await serviceOrderRepository.create(input);
@@ -126,10 +108,16 @@ describe("Service Order Repository (Integration)", () => {
             });
 
             it("should return null when the device does not exist", async () => {
+                const { user } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "ATTENDANT" })
+                    .withCustomer()
+                    .withDevice()
+                    .build();
+
                 const input: CreateServiceOrderInput = {
                     deviceId: "0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa",
                     reportedProblem: "Screen is cracked.",
-                    createdById: userCreatedId,
+                    createdById: user.id,
                 };
 
                 const serviceOrderCreated = await serviceOrderRepository.create(input);
@@ -141,10 +129,16 @@ describe("Service Order Repository (Integration)", () => {
             });
 
             it("should use the transaction client when provided", async () => {
+                const { user, device } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "ATTENDANT" })
+                    .withCustomer()
+                    .withDevice()
+                    .build();
+
                 const input: CreateServiceOrderInput = {
-                    deviceId: deviceCreatedId,
+                    deviceId: device.id,
                     reportedProblem: "Screen is cracked and touch is not responding.",
-                    createdById: userCreatedId,
+                    createdById: user.id,
                 };
 
                 let serviceOrderCreatedId: string | undefined;
@@ -172,56 +166,24 @@ describe("Service Order Repository (Integration)", () => {
         });
 
         describe("createServiceOrderStatusHistory", () => {
-            let serviceOrderCreatedId: string;
-            let userCreatedId: string;
+            let userId: string;
+            let serviceOrderId: string;
 
             beforeEach(async () => {
-                const userCreated = await prisma.user.create({
-                    data: {
-                        firstName: "John",
-                        lastName: "Doe",
-                        email: "john@example.com",
-                        role: "ATTENDANT",
-                        active: true,
-                    },
-                });
-                userCreatedId = userCreated.id;
+                const { user, serviceOrder } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "ATTENDANT" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder()
+                    .build();
 
-                const customerCreated = await prisma.customer.create({
-                    data: {
-                        firstName: "Jane",
-                        lastName: "Doe",
-                        email: "jane@example.com",
-                        phoneNumber: "5521995437105",
-                    },
-                });
-
-                const deviceCreated = await prisma.device.create({
-                    data: {
-                        customerId: customerCreated.id,
-                        type: "SMARTPHONE",
-                        brand: "Samsung",
-                        model: "Galaxy S23",
-                        serialNumber: "SN-123456",
-                        imei: "123456789012345",
-                        color: "Black",
-                    },
-                });
-
-                const serviceOrderCreated = await prisma.serviceOrder.create({
-                    data: {
-                        customerId: customerCreated.id,
-                        deviceId: deviceCreated.id,
-                        reportedProblem: "Screen is cracked and touch is not responding.",
-                        createdById: userCreated.id,
-                    },
-                });
-                serviceOrderCreatedId = serviceOrderCreated.id;
+                userId = user.id;
+                serviceOrderId = serviceOrder!.id;
             });
 
             it("should insert a status history entry with all fields populated", async () => {
                 const input: CreateServiceOrderStatusHistoryData = {
-                    serviceOrderId: serviceOrderCreatedId,
+                    serviceOrderId,
                     fromStatus: "AWAITING_APPROVAL",
                     toStatus: "AWAITING_MAINTENANCE",
                     changeSource: "SYSTEM",
@@ -238,7 +200,7 @@ describe("Service Order Repository (Integration)", () => {
 
                 expect(historyFound).not.toBeNull();
                 expect(historyFound?.id).toBe(historyCreated.id);
-                expect(historyFound?.serviceOrderId).toBe(serviceOrderCreatedId);
+                expect(historyFound?.serviceOrderId).toBe(serviceOrderId);
                 expect(historyFound?.fromStatus).toBe("AWAITING_APPROVAL");
                 expect(historyFound?.toStatus).toBe("AWAITING_MAINTENANCE");
                 expect(historyFound?.changeSource).toBe("SYSTEM");
@@ -248,11 +210,11 @@ describe("Service Order Repository (Integration)", () => {
 
             it("should insert a status history entry with null fromStatus (initial status)", async () => {
                 const input: CreateServiceOrderStatusHistoryData = {
-                    serviceOrderId: serviceOrderCreatedId,
+                    serviceOrderId,
                     fromStatus: null,
                     toStatus: "WAITING_DIAGNOSIS",
                     changeSource: "USER",
-                    changedById: userCreatedId,
+                    changedById: userId,
                 };
 
                 const historyCreated = await serviceOrderRepository.createServiceOrderStatusHistory(input);
@@ -265,16 +227,16 @@ describe("Service Order Repository (Integration)", () => {
                 expect(historyFound?.fromStatus).toBeNull();
                 expect(historyFound?.toStatus).toBe("WAITING_DIAGNOSIS");
                 expect(historyFound?.changeSource).toBe("USER");
-                expect(historyFound?.changedById).toBe(userCreatedId);
+                expect(historyFound?.changedById).toBe(userId);
             });
 
             it("should use the transaction client when provided", async () => {
                 const input: CreateServiceOrderStatusHistoryData = {
-                    serviceOrderId: serviceOrderCreatedId,
+                    serviceOrderId,
                     fromStatus: null,
                     toStatus: "WAITING_DIAGNOSIS",
                     changeSource: "USER",
-                    changedById: userCreatedId,
+                    changedById: userId,
                 };
 
                 let historyCreatedId: string | undefined;
@@ -302,55 +264,16 @@ describe("Service Order Repository (Integration)", () => {
         });
 
         describe("cancelServiceOrder", () => {
-            let serviceOrderCreatedId: string;
-
-            beforeEach(async () => {
-                const userCreated = await prisma.user.create({
-                    data: {
-                        firstName: "John",
-                        lastName: "Doe",
-                        email: "john@example.com",
-                        role: "ATTENDANT",
-                        active: true,
-                    },
-                });
-
-                const customerCreated = await prisma.customer.create({
-                    data: {
-                        firstName: "Jane",
-                        lastName: "Doe",
-                        email: "jane@example.com",
-                        phoneNumber: "5521995437105",
-                    },
-                });
-
-                const deviceCreated = await prisma.device.create({
-                    data: {
-                        customerId: customerCreated.id,
-                        type: "SMARTPHONE",
-                        brand: "Samsung",
-                        model: "Galaxy S23",
-                        serialNumber: "SN-123456",
-                        imei: "123456789012345",
-                        color: "Black",
-                    },
-                });
-
-                const serviceOrderCreated = await prisma.serviceOrder.create({
-                    data: {
-                        customerId: customerCreated.id,
-                        deviceId: deviceCreated.id,
-                        reportedProblem: "Screen is cracked and touch is not responding.",
-                        createdById: userCreated.id,
-                    },
-                });
-
-                serviceOrderCreatedId = serviceOrderCreated.id;
-            });
-
             it("should cancel a service order when its status allows cancellation and return true", async () => {
+                const { serviceOrder } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "ATTENDANT" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder()
+                    .build();
+
                 const input: CancelServiceOrderData = {
-                    serviceOrderId: serviceOrderCreatedId,
+                    serviceOrderId: serviceOrder!.id,
                     reason: "Customer requested cancellation.",
                 };
 
@@ -359,23 +282,26 @@ describe("Service Order Repository (Integration)", () => {
                 expect(cancelled).toBe(true);
 
                 const serviceOrderFound = await prisma.serviceOrder.findUnique({
-                    where: { id: serviceOrderCreatedId },
+                    where: { id: serviceOrder!.id },
                 });
 
                 expect(serviceOrderFound).not.toBeNull();
                 expect(serviceOrderFound?.status).toBe("CANCELLED");
                 expect(serviceOrderFound?.cancelReason).toBe(input.reason);
                 expect(serviceOrderFound?.cancelledAt).toBeTruthy();
+                expect(serviceOrderFound?.updatedAt).toBeTruthy();
             });
 
             it("should return false when the current status does not allow cancellation", async () => {
-                await prisma.serviceOrder.update({
-                    where: { id: serviceOrderCreatedId },
-                    data: { status: "DELIVERED" },
-                });
+                const { serviceOrder } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "ATTENDANT" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "DELIVERED" })
+                    .build();
 
                 const input: CancelServiceOrderData = {
-                    serviceOrderId: serviceOrderCreatedId,
+                    serviceOrderId: serviceOrder!.id,
                     reason: "Customer requested cancellation.",
                 };
 
@@ -384,7 +310,7 @@ describe("Service Order Repository (Integration)", () => {
                 expect(cancelled).toBe(false);
 
                 const serviceOrderFound = await prisma.serviceOrder.findUnique({
-                    where: { id: serviceOrderCreatedId },
+                    where: { id: serviceOrder!.id },
                 });
 
                 expect(serviceOrderFound?.status).toBe("DELIVERED");
@@ -393,20 +319,27 @@ describe("Service Order Repository (Integration)", () => {
             });
 
             it("should return false when the service order is already cancelled", async () => {
+                const { serviceOrder } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "ATTENDANT" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder()
+                    .build();
+
                 await serviceOrderRepository.cancelServiceOrder({
-                    serviceOrderId: serviceOrderCreatedId,
+                    serviceOrderId: serviceOrder!.id,
                     reason: "First cancellation.",
                 });
 
                 const cancelled = await serviceOrderRepository.cancelServiceOrder({
-                    serviceOrderId: serviceOrderCreatedId,
+                    serviceOrderId: serviceOrder!.id,
                     reason: "Second cancellation attempt.",
                 });
 
                 expect(cancelled).toBe(false);
 
                 const serviceOrderFound = await prisma.serviceOrder.findUnique({
-                    where: { id: serviceOrderCreatedId },
+                    where: { id: serviceOrder!.id },
                 });
 
                 expect(serviceOrderFound?.status).toBe("CANCELLED");
@@ -423,8 +356,15 @@ describe("Service Order Repository (Integration)", () => {
             });
 
             it("should use the transaction client when provided", async () => {
+                const { serviceOrder } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "ATTENDANT" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder()
+                    .build();
+
                 const input: CancelServiceOrderData = {
-                    serviceOrderId: serviceOrderCreatedId,
+                    serviceOrderId: serviceOrder!.id,
                     reason: "Customer requested cancellation.",
                 };
 
@@ -438,7 +378,7 @@ describe("Service Order Repository (Integration)", () => {
                 ).rejects.toThrow("rollback");
 
                 const serviceOrderFound = await prisma.serviceOrder.findUnique({
-                    where: { id: serviceOrderCreatedId },
+                    where: { id: serviceOrder!.id },
                 });
 
                 expect(serviceOrderFound?.status).toBe("WAITING_DIAGNOSIS");
@@ -446,65 +386,746 @@ describe("Service Order Repository (Integration)", () => {
                 expect(serviceOrderFound?.cancelReason).toBeNull();
             });
         });
+
+        describe("updateServiceOrderStatus", () => {
+            it("should update the status when the current status is in expectedStatuses and return true", async () => {
+                const { serviceOrder } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "TECHNICIAN" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder()
+                    .build();
+
+                const input: UpdateServiceOrderStatusData = {
+                    serviceOrderId: serviceOrder!.id,
+                    expectedStatuses: ["WAITING_DIAGNOSIS"],
+                    toStatus: "IN_DIAGNOSIS",
+                };
+
+                const updated = await serviceOrderRepository.updateServiceOrderStatus(input);
+
+                expect(updated).toBe(true);
+
+                const serviceOrderFound = await prisma.serviceOrder.findUnique({
+                    where: { id: serviceOrder!.id },
+                });
+
+                expect(serviceOrderFound?.status).toBe("IN_DIAGNOSIS");
+                expect(serviceOrderFound?.updatedAt).toBeTruthy();
+            });
+
+            it("should return false when the current status is not in expectedStatuses", async () => {
+                const { serviceOrder } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "TECHNICIAN" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "DELIVERED" })
+                    .build();
+
+                const input: UpdateServiceOrderStatusData = {
+                    serviceOrderId: serviceOrder!.id,
+                    expectedStatuses: ["WAITING_DIAGNOSIS", "IN_DIAGNOSIS"],
+                    toStatus: "IN_DIAGNOSIS",
+                };
+
+                const updated = await serviceOrderRepository.updateServiceOrderStatus(input);
+
+                expect(updated).toBe(false);
+
+                const serviceOrderFound = await prisma.serviceOrder.findUnique({
+                    where: { id: serviceOrder!.id },
+                });
+
+                expect(serviceOrderFound?.status).toBe("DELIVERED");
+            });
+
+            it("should return false when the service order does not exist", async () => {
+                const input: UpdateServiceOrderStatusData = {
+                    serviceOrderId: "0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa",
+                    expectedStatuses: ["WAITING_DIAGNOSIS"],
+                    toStatus: "IN_DIAGNOSIS",
+                };
+
+                const updated = await serviceOrderRepository.updateServiceOrderStatus(input);
+
+                expect(updated).toBe(false);
+            });
+
+            it("should accept multiple expected statuses", async () => {
+                const { serviceOrder } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "TECHNICIAN" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "AWAITING_QUOTE" })
+                    .build();
+
+                const input: UpdateServiceOrderStatusData = {
+                    serviceOrderId: serviceOrder!.id,
+                    expectedStatuses: ["WAITING_DIAGNOSIS", "IN_DIAGNOSIS", "AWAITING_QUOTE"],
+                    toStatus: "AWAITING_APPROVAL",
+                };
+
+                const updated = await serviceOrderRepository.updateServiceOrderStatus(input);
+
+                expect(updated).toBe(true);
+
+                const serviceOrderFound = await prisma.serviceOrder.findUnique({
+                    where: { id: serviceOrder!.id },
+                });
+
+                expect(serviceOrderFound?.status).toBe("AWAITING_APPROVAL");
+            });
+
+            it("should use the transaction client when provided", async () => {
+                const { serviceOrder } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "TECHNICIAN" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder()
+                    .build();
+
+                const input: UpdateServiceOrderStatusData = {
+                    serviceOrderId: serviceOrder!.id,
+                    expectedStatuses: ["WAITING_DIAGNOSIS"],
+                    toStatus: "IN_DIAGNOSIS",
+                };
+
+                await expect(
+                    prisma.$transaction(async (tx) => {
+                        const updated = await serviceOrderRepository.updateServiceOrderStatus(input, tx);
+                        expect(updated).toBe(true);
+
+                        throw new Error("rollback");
+                    }),
+                ).rejects.toThrow("rollback");
+
+                const serviceOrderFound = await prisma.serviceOrder.findUnique({
+                    where: { id: serviceOrder!.id },
+                });
+
+                expect(serviceOrderFound?.status).toBe("WAITING_DIAGNOSIS");
+                expect(serviceOrderFound?.updatedAt).toBeNull();
+            });
+        });
+
+        describe("createDiagnosis", () => {
+            let userId: string;
+            let serviceOrderId: string;
+
+            beforeEach(async () => {
+                const { user, serviceOrder } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "TECHNICIAN" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "IN_DIAGNOSIS" })
+                    .build();
+
+                userId = user.id;
+                serviceOrderId = serviceOrder!.id;
+            });
+
+            it("should insert a new diagnosis into the database", async () => {
+                const input: StartDiagnosisInput = {
+                    serviceOrderId,
+                    createdById: userId,
+                };
+
+                const diagnosisCreated = await serviceOrderRepository.createDiagnosis(input);
+
+                expect(diagnosisCreated).toBeTruthy();
+
+                const diagnosisFound = await prisma.diagnosis.findUnique({
+                    where: { id: diagnosisCreated.id },
+                });
+
+                expect(diagnosisFound).not.toBeNull();
+                expect(diagnosisFound?.id).toBe(diagnosisCreated.id);
+                expect(diagnosisFound?.serviceOrderId).toBe(serviceOrderId);
+                expect(diagnosisFound?.createdById).toBe(userId);
+                expect(diagnosisFound?.result).toBeNull();
+                expect(diagnosisFound?.completedAt).toBeNull();
+                expect(diagnosisFound?.createdAt).toBeTruthy();
+            });
+
+            it("should throw when a diagnosis already exists for the service order", async () => {
+                const input: StartDiagnosisInput = {
+                    serviceOrderId,
+                    createdById: userId,
+                };
+
+                await serviceOrderRepository.createDiagnosis(input);
+
+                await expect(serviceOrderRepository.createDiagnosis(input))
+                    .rejects.toThrow();
+            });
+
+            it("should use the transaction client when provided", async () => {
+                const input: StartDiagnosisInput = {
+                    serviceOrderId,
+                    createdById: userId,
+                };
+
+                let diagnosisCreatedId: string | undefined;
+
+                await expect(
+                    prisma.$transaction(async (tx) => {
+                        const diagnosisCreated = await serviceOrderRepository.createDiagnosis(input, tx);
+
+                        diagnosisCreatedId = diagnosisCreated.id;
+
+                        throw new Error("rollback");
+                    }),
+                ).rejects.toThrow("rollback");
+
+                if (diagnosisCreatedId === undefined) {
+                    throw new Error("diagnosisCreatedId should have been defined");
+                }
+
+                const diagnosisFound = await prisma.diagnosis.findUnique({
+                    where: { id: diagnosisCreatedId },
+                });
+
+                expect(diagnosisFound).toBeNull();
+            });
+        });
+
+        describe("createFinding", () => {
+            it("should insert a new finding into the database", async () => {
+                const { user, diagnosis } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "TECHNICIAN" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "IN_DIAGNOSIS" })
+                    .withDiagnosis()
+                    .build();
+
+                const input: CreateFindingInput = {
+                    diagnosisId: diagnosis!.id,
+                    createdById: user.id,
+                    description: "Battery capacity below expected level",
+                    repairable: true,
+                };
+
+                const findingCreated = await serviceOrderRepository.createFinding(input);
+
+                expect(findingCreated).toBeTruthy();
+                expect(findingCreated?.id).toBeTruthy();
+                expect(findingCreated?.diagnosisId).toBe(diagnosis!.id);
+                expect(findingCreated?.createdById).toBe(user.id);
+                expect(findingCreated?.description).toBe(input.description);
+                expect(findingCreated?.repairable).toBe(true);
+                expect(findingCreated?.createdAt).toBeTruthy();
+                expect(findingCreated?.updatedAt).toBeNull();
+                expect(findingCreated?.updatedById).toBeNull();
+
+                const findingFound = await prisma.finding.findUnique({
+                    where: { id: findingCreated!.id },
+                });
+
+                expect(findingFound).not.toBeNull();
+            });
+
+            it("should return null when the diagnosis does not exist", async () => {
+                const { user } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "TECHNICIAN" })
+                    .withCustomer()
+                    .withDevice()
+                    .build();
+
+                const input: CreateFindingInput = {
+                    diagnosisId: "0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa",
+                    createdById: user.id,
+                    description: "Battery capacity below expected level",
+                    repairable: true,
+                };
+
+                const findingCreated = await serviceOrderRepository.createFinding(input);
+
+                expect(findingCreated).toBeNull();
+            });
+
+            it("should return null when the diagnosis is already completed", async () => {
+                const { user, diagnosis } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "TECHNICIAN" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "IN_DIAGNOSIS" })
+                    .withDiagnosis({ result: "FAULT_FOUND", completedAt: new Date() })
+                    .build();
+
+                const input: CreateFindingInput = {
+                    diagnosisId: diagnosis!.id,
+                    createdById: user.id,
+                    description: "Battery capacity below expected level",
+                    repairable: true,
+                };
+
+                const findingCreated = await serviceOrderRepository.createFinding(input);
+
+                expect(findingCreated).toBeNull();
+
+                const count = await prisma.finding.count();
+                expect(count).toBe(0);
+            });
+
+            it("should return null when the service order is not IN_DIAGNOSIS", async () => {
+                const { user, diagnosis } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "TECHNICIAN" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "AWAITING_DELIVERY" })
+                    .withDiagnosis()
+                    .build();
+
+                const input: CreateFindingInput = {
+                    diagnosisId: diagnosis!.id,
+                    createdById: user.id,
+                    description: "Battery capacity below expected level",
+                    repairable: true,
+                };
+
+                const findingCreated = await serviceOrderRepository.createFinding(input);
+
+                expect(findingCreated).toBeNull();
+
+                const count = await prisma.finding.count();
+                expect(count).toBe(0);
+            });
+
+            it("should throw when the authenticated user does not exist", async () => {
+                const { diagnosis } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "TECHNICIAN" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "IN_DIAGNOSIS" })
+                    .withDiagnosis()
+                    .build();
+
+                const input: CreateFindingInput = {
+                    diagnosisId: diagnosis!.id,
+                    createdById: "0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa",
+                    description: "Battery capacity below expected level",
+                    repairable: true,
+                };
+
+                await expect(serviceOrderRepository.createFinding(input))
+                    .rejects.toThrow();
+
+                const count = await prisma.finding.count();
+                expect(count).toBe(0);
+            });
+        });
+
+        describe("updateFinding", () => {
+            it("should update the finding and set updatedById and updatedAt", async () => {
+                const { user, findings } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "TECHNICIAN" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "IN_DIAGNOSIS" })
+                    .withDiagnosis()
+                    .withFinding()
+                    .build();
+
+                const findingId = findings[0].id;
+
+                const input: UpdateFindingInput = {
+                    findingId,
+                    description: "Battery capacity critically below expected level",
+                    repairable: false,
+                    updatedById: user.id,
+                };
+
+                const findingUpdated = await serviceOrderRepository.updateFinding(input);
+
+                expect(findingUpdated).toBeTruthy();
+                expect(findingUpdated?.id).toBe(findingId);
+                expect(findingUpdated?.description).toBe("Battery capacity critically below expected level");
+                expect(findingUpdated?.repairable).toBe(false);
+                expect(findingUpdated?.createdById).toBe(user.id);
+                expect(findingUpdated?.updatedById).toBe(user.id);
+                expect(findingUpdated?.updatedAt).toBeTruthy();
+
+                const findingFound = await prisma.finding.findUnique({
+                    where: { id: findingId },
+                });
+
+                expect(findingFound?.description).toBe("Battery capacity critically below expected level");
+                expect(findingFound?.repairable).toBe(false);
+                expect(findingFound?.updatedById).toBe(user.id);
+                expect(findingFound?.updatedAt).toBeTruthy();
+            });
+
+            it("should return null when the finding does not exist", async () => {
+                const { user } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "TECHNICIAN" })
+                    .withCustomer()
+                    .withDevice()
+                    .build();
+
+                const input: UpdateFindingInput = {
+                    findingId: "0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa",
+                    description: "Battery capacity critically below expected level",
+                    repairable: false,
+                    updatedById: user.id,
+                };
+
+                const findingUpdated = await serviceOrderRepository.updateFinding(input);
+
+                expect(findingUpdated).toBeNull();
+            });
+
+            it("should return null when the diagnosis is already completed", async () => {
+                const { user, findings } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "TECHNICIAN" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "IN_DIAGNOSIS" })
+                    .withDiagnosis({ result: "FAULT_FOUND", completedAt: new Date() })
+                    .withFinding()
+                    .build();
+
+                const findingId = findings[0].id;
+
+                const input: UpdateFindingInput = {
+                    findingId,
+                    description: "Battery capacity critically below expected level",
+                    repairable: false,
+                    updatedById: user.id,
+                };
+
+                const findingUpdated = await serviceOrderRepository.updateFinding(input);
+
+                expect(findingUpdated).toBeNull();
+
+                const findingFound = await prisma.finding.findUnique({
+                    where: { id: findingId },
+                });
+
+                expect(findingFound?.description).toBe("Battery capacity below expected level");
+                expect(findingFound?.repairable).toBe(true);
+                expect(findingFound?.updatedById).toBeNull();
+                expect(findingFound?.updatedAt).toBeNull();
+            });
+
+            it("should return null when the service order is not IN_DIAGNOSIS", async () => {
+                const { user, findings } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "TECHNICIAN" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "AWAITING_DELIVERY" })
+                    .withDiagnosis()
+                    .withFinding()
+                    .build();
+
+                const findingId = findings[0].id;
+
+                const input: UpdateFindingInput = {
+                    findingId,
+                    description: "Battery capacity critically below expected level",
+                    repairable: false,
+                    updatedById: user.id,
+                };
+
+                const findingUpdated = await serviceOrderRepository.updateFinding(input);
+
+                expect(findingUpdated).toBeNull();
+
+                const findingFound = await prisma.finding.findUnique({
+                    where: { id: findingId },
+                });
+
+                expect(findingFound?.description).toBe("Battery capacity below expected level");
+                expect(findingFound?.updatedById).toBeNull();
+            });
+
+            it("should throw when the updated_by user does not exist", async () => {
+                const { findings } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "TECHNICIAN" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "IN_DIAGNOSIS" })
+                    .withDiagnosis()
+                    .withFinding()
+                    .build();
+
+                const findingId = findings[0].id;
+
+                const input: UpdateFindingInput = {
+                    findingId,
+                    description: "Battery capacity critically below expected level",
+                    repairable: false,
+                    updatedById: "0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa",
+                };
+
+                await expect(serviceOrderRepository.updateFinding(input))
+                    .rejects.toThrow();
+
+                const findingFound = await prisma.finding.findUnique({
+                    where: { id: findingId },
+                });
+
+                expect(findingFound?.description).toBe("Battery capacity below expected level");
+                expect(findingFound?.updatedById).toBeNull();
+            });
+        });
+
+        describe("deleteFindingById", () => {
+            it("should delete the finding and return true", async () => {
+                const { findings } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "TECHNICIAN" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "IN_DIAGNOSIS" })
+                    .withDiagnosis()
+                    .withFinding()
+                    .build();
+
+                const findingId = findings[0].id;
+
+                const deleted = await serviceOrderRepository.deleteFindingById(findingId);
+
+                expect(deleted).toBe(true);
+
+                const findingFound = await prisma.finding.findUnique({
+                    where: { id: findingId },
+                });
+
+                expect(findingFound).toBeNull();
+            });
+
+            it("should return false when the finding does not exist", async () => {
+                const deleted = await serviceOrderRepository.deleteFindingById("0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa");
+
+                expect(deleted).toBe(false);
+            });
+
+            it("should return false when the diagnosis is already completed", async () => {
+                const { findings } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "TECHNICIAN" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "IN_DIAGNOSIS" })
+                    .withDiagnosis({ result: "FAULT_FOUND", completedAt: new Date() })
+                    .withFinding()
+                    .build();
+
+                const findingId = findings[0].id;
+
+                const deleted = await serviceOrderRepository.deleteFindingById(findingId);
+
+                expect(deleted).toBe(false);
+
+                const findingFound = await prisma.finding.findUnique({
+                    where: { id: findingId },
+                });
+
+                expect(findingFound).not.toBeNull();
+            });
+
+            it("should return false when the service order is not IN_DIAGNOSIS", async () => {
+                const { findings } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "TECHNICIAN" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "AWAITING_DELIVERY" })
+                    .withDiagnosis()
+                    .withFinding()
+                    .build();
+
+                const findingId = findings[0].id;
+
+                const deleted = await serviceOrderRepository.deleteFindingById(findingId);
+
+                expect(deleted).toBe(false);
+
+                const findingFound = await prisma.finding.findUnique({
+                    where: { id: findingId },
+                });
+
+                expect(findingFound).not.toBeNull();
+            });
+        });
+
+        describe("completeDiagnosis", () => {
+            it("should complete the diagnosis and return the updated record", async () => {
+                const { user, diagnosis } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "TECHNICIAN" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "IN_DIAGNOSIS" })
+                    .withDiagnosis()
+                    .build();
+
+                const input: CompleteDiagnosisInput = {
+                    diagnosisId: diagnosis!.id,
+                    result: "FAULT_FOUND",
+                    completedById: user.id,
+                };
+
+                const diagnosisCompleted = await serviceOrderRepository.completeDiagnosis(input);
+
+                expect(diagnosisCompleted).toBeTruthy();
+                expect(diagnosisCompleted?.id).toBe(diagnosis!.id);
+                expect(diagnosisCompleted?.result).toBe("FAULT_FOUND");
+                expect(diagnosisCompleted?.completedById).toBe(user.id);
+                expect(diagnosisCompleted?.completedAt).toBeTruthy();
+
+                const diagnosisFound = await prisma.diagnosis.findUnique({
+                    where: { id: diagnosis!.id },
+                });
+
+                expect(diagnosisFound?.result).toBe("FAULT_FOUND");
+                expect(diagnosisFound?.completedById).toBe(user.id);
+                expect(diagnosisFound?.completedAt).toBeTruthy();
+            });
+
+            it("should return null when the diagnosis does not exist", async () => {
+                const input: CompleteDiagnosisInput = {
+                    diagnosisId: "0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa",
+                    result: "FAULT_FOUND",
+                    completedById: "0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa",
+                };
+
+                const diagnosisCompleted = await serviceOrderRepository.completeDiagnosis(input);
+
+                expect(diagnosisCompleted).toBeNull();
+            });
+
+            it("should return null when the diagnosis is already completed", async () => {
+                const completedBy = await prisma.user.create({
+                    data: {
+                        firstName: "Jane",
+                        lastName: "Smith",
+                        email: "jane.smith@example.com",
+                        passwordHash: "passwordHash",
+                        role: "TECHNICIAN",
+                        active: true,
+                    },
+                    select: { id: true },
+                });
+
+                const { user, diagnosis } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "TECHNICIAN" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "IN_DIAGNOSIS" })
+                    .withDiagnosis({
+                        result: "NO_FAULT_FOUND",
+                        completedAt: new Date(),
+                        completedById: completedBy.id,
+                    })
+                    .build();
+
+                const input: CompleteDiagnosisInput = {
+                    diagnosisId: diagnosis!.id,
+                    result: "FAULT_FOUND",
+                    completedById: user.id,
+                };
+
+                const diagnosisCompleted = await serviceOrderRepository.completeDiagnosis(input);
+
+                expect(diagnosisCompleted).toBeNull();
+
+                const diagnosisFound = await prisma.diagnosis.findUnique({
+                    where: { id: diagnosis!.id },
+                });
+
+                expect(diagnosisFound?.result).toBe("NO_FAULT_FOUND");
+            });
+
+            it("should throw when the completed_by user does not exist", async () => {
+                const { diagnosis } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "TECHNICIAN" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "IN_DIAGNOSIS" })
+                    .withDiagnosis()
+                    .build();
+
+                const input: CompleteDiagnosisInput = {
+                    diagnosisId: diagnosis!.id,
+                    result: "FAULT_FOUND",
+                    completedById: "0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa",
+                };
+
+                await expect(serviceOrderRepository.completeDiagnosis(input))
+                    .rejects.toThrow();
+
+                const diagnosisFound = await prisma.diagnosis.findUnique({
+                    where: { id: diagnosis!.id },
+                });
+
+                expect(diagnosisFound?.result).toBeNull();
+                expect(diagnosisFound?.completedById).toBeNull();
+                expect(diagnosisFound?.completedAt).toBeNull();
+            });
+
+            it("should use the transaction client when provided", async () => {
+                const { user, diagnosis } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "TECHNICIAN" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "IN_DIAGNOSIS" })
+                    .withDiagnosis()
+                    .build();
+
+                const input: CompleteDiagnosisInput = {
+                    diagnosisId: diagnosis!.id,
+                    result: "FAULT_FOUND",
+                    completedById: user.id,
+                };
+
+                const captured: { diagnosis: DiagnosisRecord | null } = { diagnosis: null };
+
+                await expect(
+                    prisma.$transaction(async (tx) => {
+                        captured.diagnosis = await serviceOrderRepository.completeDiagnosis(input, tx);
+
+                        throw new Error("rollback");
+                    }),
+                ).rejects.toThrow("rollback");
+
+                expect(captured.diagnosis).toBeTruthy();
+                expect(captured.diagnosis?.result).toBe("FAULT_FOUND");
+                expect(captured.diagnosis?.completedById).toBe(user.id);
+                expect(captured.diagnosis?.completedAt).toBeTruthy();
+
+                const diagnosisAfterRollback = await prisma.diagnosis.findUnique({
+                    where: { id: diagnosis!.id },
+                });
+
+                expect(diagnosisAfterRollback?.result).toBeNull();
+                expect(diagnosisAfterRollback?.completedById).toBeNull();
+                expect(diagnosisAfterRollback?.completedAt).toBeNull();
+            });
+        });
     });
 
     describe("Reader repository", () => {
         describe("findById", () => {
             it("should return the service order if a service order with the given ID exists", async () => {
-                const userCreated = await prisma.user.create({
-                    data: {
-                        firstName: "John",
-                        lastName: "Doe",
-                        email: "john@example.com",
-                        role: "ATTENDANT",
-                        active: true,
-                    },
-                });
+                const { user, customer, device, serviceOrder } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "ATTENDANT" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder()
+                    .build();
 
-                const customerCreated = await prisma.customer.create({
-                    data: {
-                        firstName: "Jane",
-                        lastName: "Doe",
-                        email: "jane@example.com",
-                        phoneNumber: "5521995437105",
-                    },
-                });
+                const serviceOrderFound = await serviceOrderRepository.findById(serviceOrder!.id);
 
-                const deviceCreated = await prisma.device.create({
-                    data: {
-                        customerId: customerCreated.id,
-                        type: "SMARTPHONE",
-                        brand: "Samsung",
-                        model: "Galaxy S23",
-                        serialNumber: "SN-123456",
-                        imei: "123456789012345",
-                        color: "Black",
-                    },
-                });
-
-                const serviceOrderCreated = await prisma.serviceOrder.create({
-                    data: {
-                        customerId: customerCreated.id,
-                        deviceId: deviceCreated.id,
-                        reportedProblem: "Screen is cracked and touch is not responding.",
-                        createdById: userCreated.id,
-                    },
-                });
-
-                const serviceOrder = await serviceOrderRepository.findById(serviceOrderCreated.id);
-
-                expect(serviceOrder).toBeTruthy();
-                expect(serviceOrder?.id).toBe(serviceOrderCreated.id);
-                expect(serviceOrder?.customerId).toBe(customerCreated.id);
-                expect(serviceOrder?.deviceId).toBe(deviceCreated.id);
-                expect(serviceOrder?.reportedProblem).toBe("Screen is cracked and touch is not responding.");
-                expect(serviceOrder?.status).toBe("WAITING_DIAGNOSIS");
-                expect(serviceOrder?.createdById).toBe(userCreated.id);
-                expect(serviceOrder?.cancelledAt).toBeNull();
-                expect(serviceOrder?.cancelReason).toBeNull();
-                expect(serviceOrder?.finishedAt).toBeNull();
-                expect(serviceOrder?.createdAt).toBeTruthy();
-                expect(serviceOrder?.updatedAt).toBeNull();
+                expect(serviceOrderFound).toBeTruthy();
+                expect(serviceOrderFound?.id).toBe(serviceOrder!.id);
+                expect(serviceOrderFound?.customerId).toBe(customer.id);
+                expect(serviceOrderFound?.deviceId).toBe(device.id);
+                expect(serviceOrderFound?.reportedProblem).toBe("Screen is cracked and touch is not responding.");
+                expect(serviceOrderFound?.status).toBe("WAITING_DIAGNOSIS");
+                expect(serviceOrderFound?.createdById).toBe(user.id);
+                expect(serviceOrderFound?.cancelledAt).toBeNull();
+                expect(serviceOrderFound?.cancelReason).toBeNull();
+                expect(serviceOrderFound?.finishedAt).toBeNull();
+                expect(serviceOrderFound?.createdAt).toBeTruthy();
+                expect(serviceOrderFound?.updatedAt).toBeNull();
             });
 
             it("should return null if a service order with the given ID does not exist", async () => {
@@ -514,44 +1135,20 @@ describe("Service Order Repository (Integration)", () => {
         });
 
         describe("list", () => {
-            let userCreatedId: string;
-            let customerCreatedId: string;
-            let deviceCreatedId: string;
+            let userId: string;
+            let customerId: string;
+            let deviceId: string;
 
             beforeEach(async () => {
-                const userCreated = await prisma.user.create({
-                    data: {
-                        firstName: "John",
-                        lastName: "Doe",
-                        email: "john@example.com",
-                        role: "ATTENDANT",
-                        active: true,
-                    },
-                });
-                userCreatedId = userCreated.id;
+                const { user, customer, device } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "ATTENDANT" })
+                    .withCustomer()
+                    .withDevice()
+                    .build();
 
-                const customerCreated = await prisma.customer.create({
-                    data: {
-                        firstName: "Jane",
-                        lastName: "Doe",
-                        email: "jane@example.com",
-                        phoneNumber: "5521995437105",
-                    },
-                });
-                customerCreatedId = customerCreated.id;
-
-                const deviceCreated = await prisma.device.create({
-                    data: {
-                        customerId: customerCreatedId,
-                        type: "SMARTPHONE",
-                        brand: "Samsung",
-                        model: "Galaxy S23",
-                        serialNumber: "SN-123456",
-                        imei: "123456789012345",
-                        color: "Black",
-                    },
-                });
-                deviceCreatedId = deviceCreated.id;
+                userId = user.id;
+                customerId = customer.id;
+                deviceId = device.id;
             });
 
             it("should return service orders ordered by creation date descending and respect the given limit", async () => {
@@ -560,18 +1157,18 @@ describe("Service Order Repository (Integration)", () => {
                 const serviceOrders = await prisma.serviceOrder.createManyAndReturn({
                     data: [
                         {
-                            customerId: customerCreatedId,
-                            deviceId: deviceCreatedId,
+                            customerId,
+                            deviceId,
                             reportedProblem: "Screen is cracked and touch is not responding.",
-                            createdById: userCreatedId,
+                            createdById: userId,
                             createdAt: new Date(now.getTime() - 60 * 60 * 1000),
                             finishedAt: new Date(now.getTime() - 30 * 60 * 1000), // (only 1 Service Order active for the device)
                         },
                         {
-                            customerId: customerCreatedId,
-                            deviceId: deviceCreatedId,
+                            customerId,
+                            deviceId,
                             reportedProblem: "Battery drains too fast.",
-                            createdById: userCreatedId,
+                            createdById: userId,
                             createdAt: now,
                         },
                     ],
@@ -604,10 +1201,10 @@ describe("Service Order Repository (Integration)", () => {
             it("should default to 100 when limit is not provided", async () => {
                 await prisma.serviceOrder.create({
                     data: {
-                        customerId: customerCreatedId,
-                        deviceId: deviceCreatedId,
+                        customerId,
+                        deviceId,
                         reportedProblem: "Screen is cracked and touch is not responding.",
-                        createdById: userCreatedId,
+                        createdById: userId,
                     },
                 });
 
@@ -618,6 +1215,192 @@ describe("Service Order Repository (Integration)", () => {
                 });
 
                 expect(result).toHaveLength(1);
+            });
+        });
+
+        describe("findDiagnosisById", () => {
+            it("should return the diagnosis if a diagnosis with the given ID exists", async () => {
+                const { user, serviceOrder, diagnosis } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "TECHNICIAN" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "IN_DIAGNOSIS" })
+                    .withDiagnosis()
+                    .build();
+
+                const foundDiagnosis = await serviceOrderRepository.findDiagnosisById(diagnosis!.id);
+
+                expect(foundDiagnosis).toBeTruthy();
+                expect(foundDiagnosis?.id).toBe(diagnosis!.id);
+                expect(foundDiagnosis?.serviceOrderId).toBe(serviceOrder!.id);
+                expect(foundDiagnosis?.createdById).toBe(user.id);
+                expect(foundDiagnosis?.result).toBeNull();
+                expect(foundDiagnosis?.completedAt).toBeNull();
+                expect(foundDiagnosis?.createdAt).toBeTruthy();
+            });
+
+            it("should return null if a diagnosis with the given ID does not exist", async () => {
+                const diagnosis = await serviceOrderRepository.findDiagnosisById("0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa");
+
+                expect(diagnosis).toBeNull();
+            });
+        });
+
+        describe("findFindingById", () => {
+            it("should return the finding if a finding with the given ID exists", async () => {
+                const { user, diagnosis, findings } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "TECHNICIAN" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "IN_DIAGNOSIS" })
+                    .withDiagnosis()
+                    .withFinding()
+                    .build();
+
+                const finding = await serviceOrderRepository.findFindingById(findings[0].id);
+
+                expect(finding).toBeTruthy();
+                expect(finding?.id).toBe(findings[0].id);
+                expect(finding?.diagnosisId).toBe(diagnosis!.id);
+                expect(finding?.createdById).toBe(user.id);
+                expect(finding?.description).toBe("Battery capacity below expected level");
+                expect(finding?.repairable).toBe(true);
+                expect(finding?.createdAt).toBeTruthy();
+                expect(finding?.updatedAt).toBeNull();
+                expect(finding?.updatedById).toBeNull();
+            });
+
+            it("should return null if a finding with the given ID does not exist", async () => {
+                const finding = await serviceOrderRepository.findFindingById("0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa");
+
+                expect(finding).toBeNull();
+            });
+        });
+
+        describe("countRepairableFindings", () => {
+            it("should count only repairable findings for the given diagnosis", async () => {
+                const { diagnosis } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "TECHNICIAN" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "IN_DIAGNOSIS" })
+                    .withDiagnosis()
+                    .withFinding({ description: "Battery capacity below expected level", repairable: true })
+                    .withFinding({ description: "Screen is deeply scratched", repairable: true })
+                    .withFinding({ description: "Motherboard corrosion", repairable: false })
+                    .build();
+
+                const count = await serviceOrderRepository.countRepairableFindings(diagnosis!.id);
+
+                expect(count).toBe(2);
+            });
+
+            it("should use the transaction client when provided", async () => {
+                const { user, diagnosis } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "TECHNICIAN" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "IN_DIAGNOSIS" })
+                    .withDiagnosis()
+                    .build();
+
+                let countInsideTransaction: number | undefined;
+
+                await expect(
+                    prisma.$transaction(async (tx) => {
+                        await tx.finding.createMany({
+                            data: [
+                                {
+                                    diagnosisId: diagnosis!.id,
+                                    createdById: user.id,
+                                    description: "Battery capacity below expected level",
+                                    repairable: true,
+                                },
+                                {
+                                    diagnosisId: diagnosis!.id,
+                                    createdById: user.id,
+                                    description: "Motherboard corrosion",
+                                    repairable: false,
+                                },
+                            ],
+                        });
+
+                        countInsideTransaction = await serviceOrderRepository.countRepairableFindings(
+                            diagnosis!.id,
+                            tx,
+                        );
+
+                        throw new Error("rollback");
+                    }),
+                ).rejects.toThrow("rollback");
+
+                expect(countInsideTransaction).toBe(1);
+
+                const countAfterRollback = await serviceOrderRepository.countRepairableFindings(
+                    diagnosis!.id,
+                    prisma,
+                );
+
+                expect(countAfterRollback).toBe(0);
+
+                const totalFindings = await prisma.finding.count();
+                expect(totalFindings).toBe(0);
+            });
+
+            it("should return 0 when the diagnosis does not exist", async () => {
+                const count = await serviceOrderRepository.countRepairableFindings("0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa");
+
+                expect(count).toBe(0);
+            });
+        });
+
+        describe("listFindingsByDiagnosisId", () => {
+            it("should return findings ordered by creation date ascending", async () => {
+                const { user, diagnosis } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "TECHNICIAN" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "IN_DIAGNOSIS" })
+                    .withDiagnosis()
+                    .build();
+
+                const now = new Date();
+
+                const findings = await prisma.finding.createManyAndReturn({
+                    data: [
+                        {
+                            diagnosisId: diagnosis!.id,
+                            createdById: user.id,
+                            description: "Motherboard corrosion",
+                            repairable: false,
+                            createdAt: new Date(now.getTime() - 60 * 60 * 1000),
+                        },
+                        {
+                            diagnosisId: diagnosis!.id,
+                            createdById: user.id,
+                            description: "Battery capacity below expected level",
+                            repairable: true,
+                            createdAt: now,
+                        },
+                    ],
+                });
+
+                const olderFinding = findings.find((f) => f.description === "Motherboard corrosion")!;
+                const newerFinding = findings.find((f) => f.description === "Battery capacity below expected level")!;
+
+                const result = await serviceOrderRepository.listFindingsByDiagnosisId(diagnosis!.id);
+
+                expect(result).toHaveLength(2);
+                expect(result[0].id).toBe(olderFinding.id);
+                expect(result[0].description).toBe("Motherboard corrosion");
+                expect(result[1].id).toBe(newerFinding.id);
+                expect(result[1].description).toBe("Battery capacity below expected level");
+            });
+
+            it("should return an empty array when the diagnosis has no findings", async () => {
+                const findings = await serviceOrderRepository.listFindingsByDiagnosisId("0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa");
+
+                expect(findings).toEqual([]);
             });
         });
     });

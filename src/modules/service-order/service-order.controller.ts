@@ -54,10 +54,103 @@ const cancelServiceOrder = asyncHandler(async (req, res) => {
     });
 });
 
+const startDiagnosis = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (!id) throw badRequest({ message: "service order ID is required" });
+
+    const input = serviceOrderDTO.createDiagnosisDTO(String(id), String(req.user?.id));
+    
+    const diagnosis = await serviceOrderService.startDiagnosis(input);
+
+    res.status(201).json({
+        success: true,
+        data: diagnosis, // diagnosis does not possess any sensitive data, so we can return directly
+        message: "Diagnosis successfully created",
+    });
+});
+
+const getDiagnosisById = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (!id) throw badRequest({ message: "Diagnosis ID is required" });
+    const diagnosis = await serviceOrderService.getDiagnosisById(String(id));
+    res.status(200).json({
+        success: true,
+        data: diagnosis,
+    });
+});
+
+const createFinding = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (!id) throw badRequest({ message: "Diagnosis ID is required" });
+
+    const input = serviceOrderDTO.createFindingDTO(req.body, String(id), String(req.user?.id))
+
+    const finding = await serviceOrderService.createFinding(input);
+    res.status(201).json({
+        success: true,
+        data: finding,  // finding does not possess any sensitive data, so we can return directly
+        message: "Finding successfully created",
+    });
+});
+
+const updateFinding = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (!id) throw badRequest({ message: "Finding ID is required" });
+
+    const input = serviceOrderDTO.updateFindingDTO(req.body, String(id), String(req.user?.id))
+
+    const finding = await serviceOrderService.updateFinding(input);
+    res.status(200).json({
+        success: true,
+        data: finding,  
+        message: "Finding successfully updated",
+    });
+});
+
+const deleteFinding = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (!id) throw badRequest({ message: "Finding ID is required" });
+    await serviceOrderService.deleteFinding(String(id));
+    res.status(200).json({
+        success: true,
+        message: "Finding successfully deleted",
+    });
+});
+
+const completeDiagnosis = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (!id) throw badRequest({ message: "Diagnosis ID is required" });
+
+    const input = serviceOrderDTO.completeDiagnosisDTO(req.body, String(id), String(req.user?.id))
+
+    const diagnosis = await serviceOrderService.completeDiagnosis(input);
+    res.status(200).json({
+        success: true,
+        data: diagnosis,  
+        message: "Diagnosis successfully completed",
+    });
+});
+
+const listFindingsByDiagnosisId = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (!id) throw badRequest({ message: "Diagnosis ID is required" });
+    const findings = await serviceOrderService.listFindingsByDiagnosisId(String(id));
+    res.status(200).json({
+        success: true,
+        data: findings,
+    });
+});
 
 export default {
     createServiceOrder,
     getServiceOrderById,
     listServiceOrders,
     cancelServiceOrder,
+    startDiagnosis,
+    getDiagnosisById,
+    createFinding,
+    updateFinding,
+    deleteFinding,
+    completeDiagnosis,
+    listFindingsByDiagnosisId,
 };

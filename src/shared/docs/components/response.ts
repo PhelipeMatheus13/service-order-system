@@ -65,6 +65,38 @@ const missingServiceOrderIdError = registry.registerComponent("responses", "miss
     },
 });
 
+const missingDiagnosisIdError = registry.registerComponent("responses", "missingDiagnosisIdError", {
+    description: "Invalid request, missing diagnosis id",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            example: {
+                success: false,
+                error: {
+                    code: "BAD_REQUEST",
+                    message: "Diagnosis ID is required",
+                },
+            },
+        },
+    },
+});
+
+const missingFindingIdError = registry.registerComponent("responses", "missingFindingIdError", {
+    description: "Invalid request, missing finding id",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            example: {
+                success: false,
+                error: {
+                    code: "BAD_REQUEST",
+                    message: "Finding ID is required",
+                },
+            },
+        },
+    },
+});
+
 // 404
 const userNotFoundError = registry.registerComponent("responses", "userNotFoundError", {
     description: "User not found or does not exist",
@@ -130,6 +162,37 @@ const serviceOrderNotFoundError = registry.registerComponent("responses", "servi
     },
 });
 
+const diagnosisNotFoundError = registry.registerComponent("responses", "diagnosisNotFoundError", {
+    description: "Diagnosis not found or does not exist",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            example: {
+                success: false,
+                error: {
+                    code: "NOT_FOUND",
+                    message: "Diagnosis not found",
+                },
+            },
+        },
+    },
+});
+
+const findingNotFoundError = registry.registerComponent("responses", "findingNotFoundError", {
+    description: "Finding not found or does not exist",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            example: {
+                success: false,
+                error: {
+                    code: "NOT_FOUND",
+                    message: "Finding not found",
+                },
+            },
+        },
+    },
+});
 // 409
 const emailAlreadyExistsError = registry.registerComponent("responses", "emailAlreadyExistsError", {
     description: "Email already in use",
@@ -179,23 +242,7 @@ const deviceUniqueConstraintError = registry.registerComponent("responses", "dev
     },
 });
 
-const deviceAlreadyInServicerror = registry.registerComponent("responses", "deviceAlreadyInServicerror", {
-    description: "This device already has an active service order",
-    content: {
-        "application/json": {
-            schema: { $ref: "#/components/schemas/Error" },
-            example: {
-                success: false,
-                error: {
-                    code: "DEVICE_ALREADY_IN_SERVICE",
-                    message: "This device already has an active service order",
-                },
-            },
-        },
-    },
-});
-
-const serviceOrderCancellationError = registry.registerComponent("responses", "serviceOrderCancellationError", {
+const cancelServiceOrderConflictError = registry.registerComponent("responses", "cancelServiceOrderConflictError", {
     description: "Service order cannot be cancelled",
     content: {
         "application/json": {
@@ -228,6 +275,120 @@ const serviceOrderCancellationError = registry.registerComponent("responses", "s
                         error: {
                             code: "CONFLICT",
                             message: "Service order could not be cancelled because its status changed",
+                        },
+                    },
+                },
+            },
+        },
+    },
+});
+
+const startDiagnosisConflictError = registry.registerComponent("responses", "startDiagnosisConflictError", {
+    description: "Diagnosis cannot be created",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            examples: {
+                notWaitingForDiagnosis: {
+                    summary: "Service order is not in WAITING_DIAGNOSIS status",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Service order is not waiting for diagnosis",
+                        },
+                    },
+                },
+                statusChanged: {
+                    summary: "Status changed during diagnosis creation (race condition)",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Service order is no longer available to start diagnosis",
+                        },
+                    },
+                },
+                diagnosisAlreadyExists: {
+                    summary: "A diagnosis already exists for this service order",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "A diagnosis already exists for this service order",
+                        },
+                    },
+                },
+            },
+        },
+    },
+});
+
+const createFindingConflictError = registry.registerComponent("responses", "createFindingConflictError", {
+    description: "Finding cannot be created",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            examples: {
+                diagnosisAlreadyCompleted: {
+                    summary: "Diagnosis is already completed",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Diagnosis already completed",
+                        },
+                    },
+                },
+                diagnosisStateChanged: {
+                    summary: "Diagnosis state changed during the request (race condition)",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Finding can no longer be created in its current state",
+                        },
+                    },
+                },
+            },
+        },
+    },
+});
+
+
+const completeDiagnosisConflictError = registry.registerComponent("responses", "completeDiagnosisConflictError", {
+    description: "Diagnosis cannot be completed",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            examples: {
+                diagnosisAlreadyCompleted: {
+                    summary: "Diagnosis is already completed",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Diagnosis already completed",
+                        },
+                    },
+                },
+                diagnosisStateChanged: {
+                    summary: "Diagnosis state changed during the request (race condition)",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Diagnosis can no longer be completed in its current state",
+                        },
+                    },
+                },
+                serviceOrderNoLongerInDiagnosis: {
+                    summary: "Service order is no longer in diagnosis (race condition)",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Service order is no longer in diagnosis",
                         },
                     },
                 },
@@ -507,6 +668,68 @@ const cancelServiceOrderValidationError = registry.registerComponent("responses"
     },
 });
 
+const createFindingValidationError = registry.registerComponent("responses", "createFindingValidationError", {
+    description: "Create finding validation error",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/ValidationError" },
+            example: {
+                success: false,
+                error: {
+                    code: "VALIDATION_ERROR",
+                    message: "Validation failed",
+                    details: [
+                        { field: "description", message: "Reason must be at least 5 characters long" },
+                        { field: "repairable", message: "Expected a boolean value" },
+                    ],
+                },
+            },
+        },
+    },
+});
+
+const updateFindingValidationError = registry.registerComponent("responses", "updateFindingValidationError", {
+    description: "Update finding validation error",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/ValidationError" },
+            example: {
+                success: false,
+                error: {
+                    code: "VALIDATION_ERROR",
+                    message: "Validation failed",
+                    details: [
+                        { field: "description", message: "Reason must be at least 5 characters long" },
+                        { field: "repairable", message: "Expected a boolean value" },
+                    ],
+                },
+            },
+        },
+    },
+});
+
+const completeDiagnosisValidationError = registry.registerComponent("responses", "completeDiagnosisValidationError", {
+    description: "Complete diagnosis validation error",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/ValidationError" },
+            example: {
+                success: false,
+                error: {
+                    code: "VALIDATION_ERROR",
+                    message: "Validation failed",
+                    details: [
+                        { 
+                            field: "result", 
+                            message: "Invalid enum value. Expected 'FAULT_FOUND' | 'NO_FAULT_FOUND' | 'INCONCLUSIVE', received 'DONE'",
+                        },
+                    ],
+                },
+            },
+        },
+    },
+});
+
 
 // 500
 const internalError = registry.registerComponent("responses", "internalError", {
@@ -531,16 +754,22 @@ export {
     missingCustomerIdError,
     missingDeviceIdError,
     missingServiceOrderIdError,
+    missingDiagnosisIdError,
+    missingFindingIdError,
     // 404
     userNotFoundError,
     customerNotFoundError,
     deviceNotFoundError,
     serviceOrderNotFoundError,
+    diagnosisNotFoundError,
+    findingNotFoundError,
     // 409
     emailAlreadyExistsError,
     deviceUniqueConstraintError,
-    deviceAlreadyInServicerror,
-    serviceOrderCancellationError,
+    cancelServiceOrderConflictError,
+    startDiagnosisConflictError,
+    createFindingConflictError,
+    completeDiagnosisConflictError,
     // 422
     registerValidationError,
     confirmEmailValidationError,
@@ -553,6 +782,9 @@ export {
     updateDeviceValidationError,
     createServiceOrderValidationError,
     cancelServiceOrderValidationError,
+    createFindingValidationError,
+    updateFindingValidationError,
+    completeDiagnosisValidationError,
     // 500
     internalError,
 };

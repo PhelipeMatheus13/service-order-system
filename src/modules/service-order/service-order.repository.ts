@@ -5,6 +5,13 @@ import type {
     ServiceOrderStatusHistoryRecord,
     CreateServiceOrderStatusHistoryData,
     CancelServiceOrderData,
+    StartDiagnosisInput,
+    DiagnosisRecord,
+    UpdateServiceOrderStatusData,
+    FindingRecord,
+    CreateFindingInput,
+    UpdateFindingInput,
+    CompleteDiagnosisInput,
 } from "./service-order.types.ts";
 import { ServiceOrderStatus } from "./service-order.types.js";
 import { getPrisma } from "../../shared/config/database.js";
@@ -59,6 +66,9 @@ const createServiceOrderStatusHistory = async (input: CreateServiceOrderStatusHi
 const cancelServiceOrder = async (input: CancelServiceOrderData, tx?: Prisma.TransactionClient): Promise<boolean> => {
     const prisma: PrismaClientOrTx = tx || getPrisma();
 
+    // Atomic guard: the UPDATE only succeeds if the current status is one
+    // of the expected ones. This prevents concurrent operations from
+    // overwriting each other's state transitions.
     const result = await prisma.serviceOrder.updateMany({
         where: {
             id: input.serviceOrderId,
@@ -71,15 +81,155 @@ const cancelServiceOrder = async (input: CancelServiceOrderData, tx?: Prisma.Tra
                     ServiceOrderStatus.AWAITING_MAINTENANCE,
                 ],
             },
+            cancelledAt: null, // Prevents double-cancelling the same service order
         },
         data: {
             status: ServiceOrderStatus.CANCELLED,
             cancelledAt: new Date(),
             cancelReason: input.reason,
+            updatedAt: new Date(),
         },
     });
 
     return result.count > 0;
+};
+
+const updateServiceOrderStatus = async (input: UpdateServiceOrderStatusData, tx?: Prisma.TransactionClient): Promise<boolean> => {
+    const prisma: PrismaClientOrTx = tx || getPrisma();
+
+    // Atomic guard: the UPDATE only succeeds if the current status is one
+    // of the expected ones. This prevents concurrent operations from
+    // overwriting each other's state transitions.
+    const result = await prisma.serviceOrder.updateMany({
+        where: {
+            id: input.serviceOrderId,
+            status: {
+                in: input.expectedStatuses,
+            },
+        },
+        data: {
+            status: input.toStatus,
+            updatedAt: new Date(),
+        },
+    });
+
+    return result.count > 0;
+};
+
+const createDiagnosis = async (input: StartDiagnosisInput, tx?: Prisma.TransactionClient): Promise<DiagnosisRecord> => {
+    const prisma: PrismaClientOrTx = tx || getPrisma();
+    return prisma.diagnosis.create({
+        data: {
+            serviceOrderId: input.serviceOrderId,
+            createdById: input.createdById,
+        },
+    });
+};
+
+const createFinding = async (input: CreateFindingInput): Promise<FindingRecord | null> => {
+    const prisma = getPrisma();
+
+    // Atomic guard: validates the diagnosis and service order state as part
+    // of the INSERT, so no race window exists between check and write.
+    const rows = await prisma.$queryRaw<FindingRecord[]>`
+        INSERT INTO findings (diagnosis_id, created_by, description, repairable)
+        SELECT ${input.diagnosisId}::uuid, ${input.createdById}::uuid, ${input.description}, ${input.repairable}
+        WHERE EXISTS (
+            SELECT 1
+            FROM diagnoses d
+            JOIN service_orders so ON so.id = d.service_order_id
+            WHERE d.id = ${input.diagnosisId}::uuid
+              AND d.completed_at IS NULL
+              AND so.status = 'IN_DIAGNOSIS'
+        )
+        RETURNING
+            id,
+            diagnosis_id AS "diagnosisId",
+            description,
+            repairable,
+            created_at   AS "createdAt",
+            created_by   AS "createdById",
+            updated_at   AS "updatedAt",
+            updated_by   AS "updatedById"
+    `;
+
+    return rows[0] ?? null;
+};
+
+const updateFinding = async (input: UpdateFindingInput): Promise<FindingRecord | null> => {
+    const prisma = getPrisma();
+    // Atomic guard: validates the diagnosis and service order state as part
+    // of the UPDATE, so no race window exists between check and write.
+    const rows = await prisma.$queryRaw<FindingRecord[]>`
+        UPDATE findings f
+        SET description = ${input.description},
+            repairable  = ${input.repairable},
+            updated_by  = ${input.updatedById}::uuid,
+            updated_at  = NOW()
+        FROM diagnoses d
+        JOIN service_orders so ON so.id = d.service_order_id
+        WHERE f.id = ${input.findingId}::uuid
+          AND f.diagnosis_id = d.id
+          AND d.completed_at IS NULL
+          AND so.status = 'IN_DIAGNOSIS'
+        RETURNING
+            f.id,
+            f.diagnosis_id AS "diagnosisId",
+            f.created_by   AS "createdById",
+            f.description,
+            f.repairable,
+            f.created_at   AS "createdAt",
+            f.updated_at   AS "updatedAt",
+            f.updated_by   AS "updatedById"
+    `;
+
+    return rows[0] ?? null;
+};
+
+const deleteFindingById = async (id: string): Promise<boolean> => {
+    const prisma = getPrisma();
+
+    // Atomic guard: validates the diagnosis and service order state as part
+    // of the DELETE, so no race window exists between check and write.
+    const rows = await prisma.$queryRaw<{ id: string }[]>`
+        DELETE FROM findings f
+        USING diagnoses d, service_orders so
+        WHERE f.id = ${id}::uuid
+          AND f.diagnosis_id = d.id
+          AND d.service_order_id = so.id
+          AND d.completed_at IS NULL
+          AND so.status = 'IN_DIAGNOSIS'
+        RETURNING f.id
+    `;
+
+    return rows.length > 0;
+};
+
+const completeDiagnosis = async (input: CompleteDiagnosisInput, tx?: PrismaClientOrTx): Promise<DiagnosisRecord | null> => {
+    const prisma: PrismaClientOrTx = tx || getPrisma();
+
+    // Atomic guard: the UPDATE only succeeds if the diagnosis has not been
+    // completed yet (completed_at IS NULL). This prevents two concurrent
+    // "complete" requests from both writing a result. No race window exists
+    // between check and write because the validation runs as part of the UPDATE.
+    const rows = await prisma.$queryRaw<DiagnosisRecord[]>`
+        UPDATE diagnoses
+        SET result       = ${input.result}::"diagnosis_result_enum",
+            completed_by = ${input.completedById}::uuid,
+            completed_at = NOW()
+        WHERE id = ${input.diagnosisId}::uuid
+          AND completed_at IS NULL
+        RETURNING
+            id,
+            service_order_id AS "serviceOrderId",
+            created_by       AS "createdById",
+            completed_by     AS "completedById",
+            result,
+            created_at       AS "createdAt",
+            completed_at     AS "completedAt"
+    `;
+
+    return rows[0] ?? null;
 };
 
 // Reader
@@ -101,13 +251,54 @@ const list = async (input: ListServiceOrdersInput): Promise<ServiceOrderRecord[]
     });
 };
 
+const findDiagnosisById = async (id: string): Promise<DiagnosisRecord | null> => {
+    const prisma = getPrisma();
+    return prisma.diagnosis.findUnique({ where: { id } });
+};
+
+const findFindingById = async (id: string): Promise<FindingRecord | null> => {
+    const prisma = getPrisma();
+    return prisma.finding.findUnique({ where: { id } });
+};
+
+const countRepairableFindings = async (diagnosisId: string, tx?: PrismaClientOrTx): Promise<number> => {
+    const prisma: PrismaClientOrTx = tx || getPrisma();
+    return prisma.finding.count({
+        where: {
+            diagnosisId,
+            repairable: true
+        }
+    });
+};
+
+const listFindingsByDiagnosisId = async (diagnosisId: string): Promise<FindingRecord[]> => {
+    const prisma: PrismaClientOrTx = getPrisma();
+    return prisma.finding.findMany({
+        where: {
+            diagnosisId,
+        },
+        orderBy: {
+            createdAt: "asc",
+        },
+    });
+};
 
 export default {
     // Writer
     create,
     createServiceOrderStatusHistory,
     cancelServiceOrder,
+    updateServiceOrderStatus,
+    createDiagnosis,
+    createFinding,
+    updateFinding,
+    deleteFindingById,
+    completeDiagnosis,
     // Reader
     findById,
     list,
+    findDiagnosisById,
+    findFindingById,
+    countRepairableFindings,
+    listFindingsByDiagnosisId,
 };
