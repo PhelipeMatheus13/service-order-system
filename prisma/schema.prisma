@@ -58,6 +58,31 @@ enum DiagnosisResult {
   @@map("diagnosis_result_enum")
 }
 
+enum QuoteStatus {
+  DRAFT
+  SENT
+  DECIDED
+  SUPERSEDED
+
+  @@map("quote_status_enum")
+}
+
+enum QuoteItemDecision {
+  PENDING
+  APPROVED
+  DECLINED
+
+  @@map("quote_item_decision_enum")
+}
+
+enum QuoteItemComponentType {
+  PART
+  LABOR
+  OTHER
+
+  @@map("quote_item_component_type_enum")
+}
+
 model User {
   id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   firstName    String    @map("first_name") @db.VarChar(255)
@@ -79,6 +104,7 @@ model User {
   diagnosisCompletedBy        Diagnosis[]                 @relation("DiagnosisCompletedBy")
   findingsCreated             Finding[]                   @relation("FindingCreatedBy")
   findingsUpdated             Finding[]                   @relation("FindingUpdatedBy")
+  quotes                      Quote[]
 
   @@index([createdAt(sort: Desc)])
   @@map("users")
@@ -192,6 +218,7 @@ model ServiceOrder {
   createdBy                   User                        @relation(fields: [createdById], references: [id], onDelete: Restrict)
   serviceOrderStatusHistories ServiceOrderStatusHistory[]
   diagnosis                   Diagnosis?
+  quotes                      Quote[]
 
   @@index([customerId])
   @@index([deviceId])
@@ -226,8 +253,9 @@ model Diagnosis {
 
   serviceOrder ServiceOrder @relation(fields: [serviceOrderId], references: [id], onDelete: Cascade)
   createdBy    User         @relation("DiagnosisCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
-  completedBy  User?         @relation("DiagnosisCompletedBy", fields: [completedById], references: [id], onDelete: Restrict)
+  completedBy  User?        @relation("DiagnosisCompletedBy", fields: [completedById], references: [id], onDelete: Restrict)
   findings     Finding[]
+  quotes       Quote[]
 
   @@unique([serviceOrderId])
   @@index([createdById])
@@ -245,12 +273,69 @@ model Finding {
   updatedById String?   @map("updated_by") @db.Uuid
   updatedAt   DateTime? @map("updated_at") @db.Timestamptz()
 
-  diagnosis Diagnosis @relation(fields: [diagnosisId], references: [id], onDelete: Cascade)
-  createdBy User      @relation("FindingCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
-  updatedBy User?     @relation("FindingUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  diagnosis  Diagnosis   @relation(fields: [diagnosisId], references: [id], onDelete: Cascade)
+  createdBy  User        @relation("FindingCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy  User?       @relation("FindingUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  quoteItems QuoteItem[]
 
   @@index([diagnosisId])
   @@index([createdById])
   @@index([updatedById])
   @@map("findings")
+}
+
+model Quote {
+  id             String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  serviceOrderId String      @map("service_order_id") @db.Uuid
+  diagnosisId    String?     @map("diagnosis_id") @db.Uuid
+  status         QuoteStatus @default(DRAFT)
+  submittedAt    DateTime?   @map("submitted_at") @db.Timestamptz()
+  respondedAt    DateTime?   @map("responded_at") @db.Timestamptz()
+  createdById    String      @map("created_by") @db.Uuid
+  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt      DateTime?   @map("updated_at") @db.Timestamptz()
+
+  serviceOrder ServiceOrder @relation(fields: [serviceOrderId], references: [id], onDelete: Cascade)
+  diagnosis    Diagnosis?   @relation(fields: [diagnosisId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  quoteItems   QuoteItem[]
+
+  @@index([serviceOrderId])
+  @@index([diagnosisId])
+  @@index([createdById])
+  @@map("quotes")
+}
+
+model QuoteItem {
+  id          String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  quoteId     String            @map("quote_id") @db.Uuid
+  findingId   String?           @map("finding_id") @db.Uuid
+  description String            @db.Text
+  decision    QuoteItemDecision @default(PENDING)
+  createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt   DateTime?         @map("updated_at") @db.Timestamptz()
+
+  quote               Quote                @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  finding             Finding?             @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  quoteItemComponents QuoteItemComponent[]
+
+  @@index([quoteId])
+  @@index([findingId])
+  @@map("quote_items")
+}
+
+model QuoteItemComponent {
+  id          String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  quoteItemId String                 @map("quote_item_id") @db.Uuid
+  type        QuoteItemComponentType 
+  description String                 @db.Text
+  quantity    Int                    
+  unitPrice   Decimal                @map("unit_price") @db.Decimal(10, 2)
+  createdAt   DateTime               @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt   DateTime?              @map("updated_at") @db.Timestamptz()
+
+  quoteItem QuoteItem @relation(fields: [quoteItemId], references: [id], onDelete: Cascade)
+
+  @@index([quoteItemId])
+  @@map("quote_item_components")
 }
