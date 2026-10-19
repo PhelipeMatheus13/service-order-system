@@ -67,6 +67,135 @@ describe("Service Order Routes (Integration)", () => {
         });
     });
 
+    describe("POST /service-orders/:id/diagnoses", () => {
+        it("should start a diagnosis successfully", async () => {
+            const { user: technician, serviceOrder } = await new ServiceOrderBuilder(prisma)
+                .withUser({ role: "TECHNICIAN" })
+                .withCustomer()
+                .withDevice()
+                .withServiceOrder()
+                .build();
+
+            const technicianAccessToken = generateAccessToken(technician.id, "TECHNICIAN");
+
+            const res = await request(app)
+                .post(`/service-orders/${serviceOrder!.id}/diagnoses`)
+                .set("Authorization", `Bearer ${technicianAccessToken}`);
+
+            expect(res.statusCode).toBe(201);
+            expect(res.body.success).toBe(true);
+            expect(res.body.message).toBe("Diagnosis successfully created");
+            expect(res.body.data).toBeTruthy();
+            expect(res.body.data.id).toBeTruthy();
+            expect(res.body.data.serviceOrderId).toBe(serviceOrder!.id);
+            expect(res.body.data.createdById).toBe(technician.id);
+            expect(res.body.data.result).toBeNull();
+            expect(res.body.data.completedAt).toBeNull();
+
+            const serviceOrderFound = await prisma.serviceOrder.findUnique({
+                where: { id: serviceOrder!.id },
+            });
+            expect(serviceOrderFound?.status).toBe("IN_DIAGNOSIS");
+
+            const statusHistory = await prisma.serviceOrderStatusHistory.findFirst({
+                where: { serviceOrderId: serviceOrder!.id },
+                orderBy: { createdAt: "desc" },
+            });
+            expect(statusHistory).toBeTruthy();
+            expect(statusHistory?.fromStatus).toBe("WAITING_DIAGNOSIS");
+            expect(statusHistory?.toStatus).toBe("IN_DIAGNOSIS");
+            expect(statusHistory?.changeSource).toBe("USER");
+            expect(statusHistory?.changedById).toBe(technician.id);
+        });
+    });
+
+    describe("POST /service-orders/diagnoses/:id/findings", () => {
+        it("should create a new finding successfully", async () => {
+            const { user: technician, serviceOrder, diagnosis } = await new ServiceOrderBuilder(prisma)
+                .withUser({ role: "TECHNICIAN" })
+                .withCustomer()
+                .withDevice()
+                .withServiceOrder({ status: "IN_DIAGNOSIS" })
+                .withDiagnosis()
+                .build();
+
+            const technicianAccessToken = generateAccessToken(technician.id, "TECHNICIAN");
+
+            const res = await request(app)
+                .post(`/service-orders/diagnoses/${diagnosis!.id}/findings`)
+                .set("Authorization", `Bearer ${technicianAccessToken}`)
+                .send({
+                    description: "Battery capacity below expected level.",
+                    repairable: true,
+                });
+
+            expect(res.statusCode).toBe(201);
+            expect(res.body.success).toBe(true);
+            expect(res.body.message).toBe("Finding successfully created");
+            expect(res.body.data).toBeTruthy();
+            expect(res.body.data.id).toBeTruthy();
+            expect(res.body.data.diagnosisId).toBe(diagnosis!.id);
+            expect(res.body.data.createdById).toBe(technician.id);
+            expect(res.body.data.description).toBe("Battery capacity below expected level.");
+            expect(res.body.data.repairable).toBe(true);
+
+            const finding = await prisma.finding.findUnique({
+                where: { id: res.body.data.id },
+            });
+
+            expect(finding).toBeTruthy();
+            expect(finding?.diagnosisId).toBe(diagnosis!.id);
+            expect(finding?.createdById).toBe(technician.id);
+
+            expect(serviceOrder!.id).toBeTruthy();
+        });
+    });
+
+    describe("POST /service-orders/:id/quotes", () => {
+        it("should create a new quote successfully", async () => {
+            const { user, serviceOrder, diagnosis } = await new ServiceOrderBuilder(prisma)
+                .withUser({ role: "ATTENDANT" })
+                .withCustomer()
+                .withDevice()
+                .withServiceOrder({ status: "AWAITING_QUOTE" })
+                .withDiagnosis()
+                .build();
+
+            const accessToken = generateAccessToken(user.id, "ATTENDANT");
+
+            const res = await request(app)
+                .post(`/service-orders/${serviceOrder!.id}/quotes`)
+                .set("Authorization", `Bearer ${accessToken}`)
+                .send({
+                    diagnosisId: diagnosis!.id,
+                });
+
+            expect(res.statusCode).toBe(201);
+            expect(res.body.success).toBe(true);
+            expect(res.body.message).toBe("Quote successfully created");
+            expect(res.body.data).toMatchObject({
+                serviceOrderId: serviceOrder!.id,
+                diagnosisId: diagnosis!.id,
+                createdById: user.id,
+                status: "DRAFT",
+            });
+            expect(res.body.data.id).toBeTruthy();
+            expect(res.body.data.submittedAt).toBeNull();
+            expect(res.body.data.respondedAt).toBeNull();
+            expect(res.body.data.createdAt).toBeTruthy();
+
+            const quote = await prisma.quote.findUnique({
+                where: { id: res.body.data.id },
+            });
+
+            expect(quote).toBeTruthy();
+            expect(quote?.serviceOrderId).toBe(serviceOrder!.id);
+            expect(quote?.diagnosisId).toBe(diagnosis!.id);
+            expect(quote?.createdById).toBe(user.id);
+            expect(quote?.status).toBe("DRAFT");
+        });
+    });
+
     describe("GET /service-orders/:id", () => {
         it("should return the service order data", async () => {
             const { user, customer, device, serviceOrder } = await new ServiceOrderBuilder(prisma)
@@ -151,6 +280,100 @@ describe("Service Order Routes (Integration)", () => {
         });
     });
 
+    describe("GET /service-orders/diagnoses/:id", () => {
+        it("should return the diagnosis data", async () => {
+            const { user, serviceOrder, diagnosis } = await new ServiceOrderBuilder(prisma)
+                .withUser({ role: "ATTENDANT" })
+                .withCustomer()
+                .withDevice()
+                .withServiceOrder({ status: "IN_DIAGNOSIS" })
+                .withDiagnosis()
+                .build();
+
+            const accessToken = generateAccessToken(user.id, "ATTENDANT");
+
+            const res = await request(app)
+                .get(`/service-orders/diagnoses/${diagnosis!.id}`)
+                .set("Authorization", `Bearer ${accessToken}`);
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(res.body.data).toMatchObject({
+                id: diagnosis!.id,
+                createdById: user.id,
+                result: null,
+                completedAt: null,
+            });
+            expect(res.body.data.serviceOrderId).toBe(serviceOrder!.id);
+            expect(res.body.data.createdAt).toBeTruthy();
+        });
+    });
+
+    describe("GET /service-orders/diagnoses/:id/findings", () => {
+        let userId: string;
+        let diagnosisId: string;
+        let accessToken: string;
+
+        beforeEach(async () => {
+            const { user, diagnosis } = await new ServiceOrderBuilder(prisma)
+                .withUser({ role: "ATTENDANT" })
+                .withCustomer()
+                .withDevice()
+                .withServiceOrder({ status: "IN_DIAGNOSIS" })
+                .withDiagnosis()
+                .build();
+
+            userId = user.id;
+            diagnosisId = diagnosis!.id;
+            accessToken = generateAccessToken(user.id, "ATTENDANT");
+        });
+
+        it("should return the findings ordered by creation date ascending", async () => {
+            const now = new Date();
+
+            await prisma.finding.createManyAndReturn({
+                data: [
+                    {
+                        diagnosisId,
+                        createdById: userId,
+                        description: "Battery capacity below expected level",
+                        repairable: true,
+                        createdAt: new Date(now.getTime() - 60 * 60 * 1000),
+                    },
+                    {
+                        diagnosisId,
+                        createdById: userId,
+                        description: "Motherboard corrosion",
+                        repairable: false,
+                        createdAt: now,
+                    },
+                ],
+            });
+
+            const res = await request(app)
+                .get(`/service-orders/diagnoses/${diagnosisId}/findings`)
+                .set("Authorization", `Bearer ${accessToken}`);
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(res.body.data).toHaveLength(2);
+            expect(res.body.data[0].description).toBe("Battery capacity below expected level");
+            expect(res.body.data[0].repairable).toBe(true);
+            expect(res.body.data[1].description).toBe("Motherboard corrosion");
+            expect(res.body.data[1].repairable).toBe(false);
+        });
+
+        it("should return an empty array when the diagnosis has no findings", async () => {
+            const res = await request(app)
+                .get(`/service-orders/diagnoses/${diagnosisId}/findings`)
+                .set("Authorization", `Bearer ${accessToken}`);
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(res.body.data).toEqual([]);
+        });
+    });
+
     describe("PATCH /service-orders/:id/cancel", () => {
         it("should cancel the service order successfully", async () => {
             const { user, serviceOrder } = await new ServiceOrderBuilder(prisma)
@@ -191,119 +414,6 @@ describe("Service Order Routes (Integration)", () => {
             expect(statusHistory?.toStatus).toBe("CANCELLED");
             expect(statusHistory?.changeSource).toBe("USER");
             expect(statusHistory?.changedById).toBe(user.id);
-        });
-    });
-
-    describe("POST /service-orders/:id/diagnoses", () => {
-        it("should start a diagnosis successfully", async () => {
-            const { user: technician, serviceOrder } = await new ServiceOrderBuilder(prisma)
-                .withUser({ role: "TECHNICIAN" })
-                .withCustomer()
-                .withDevice()
-                .withServiceOrder()
-                .build();
-
-            const technicianAccessToken = generateAccessToken(technician.id, "TECHNICIAN");
-
-            const res = await request(app)
-                .post(`/service-orders/${serviceOrder!.id}/diagnoses`)
-                .set("Authorization", `Bearer ${technicianAccessToken}`);
-
-            expect(res.statusCode).toBe(201);
-            expect(res.body.success).toBe(true);
-            expect(res.body.message).toBe("Diagnosis successfully created");
-            expect(res.body.data).toBeTruthy();
-            expect(res.body.data.id).toBeTruthy();
-            expect(res.body.data.serviceOrderId).toBe(serviceOrder!.id);
-            expect(res.body.data.createdById).toBe(technician.id);
-            expect(res.body.data.result).toBeNull();
-            expect(res.body.data.completedAt).toBeNull();
-
-            const serviceOrderFound = await prisma.serviceOrder.findUnique({
-                where: { id: serviceOrder!.id },
-            });
-            expect(serviceOrderFound?.status).toBe("IN_DIAGNOSIS");
-
-            const statusHistory = await prisma.serviceOrderStatusHistory.findFirst({
-                where: { serviceOrderId: serviceOrder!.id },
-                orderBy: { createdAt: "desc" },
-            });
-            expect(statusHistory).toBeTruthy();
-            expect(statusHistory?.fromStatus).toBe("WAITING_DIAGNOSIS");
-            expect(statusHistory?.toStatus).toBe("IN_DIAGNOSIS");
-            expect(statusHistory?.changeSource).toBe("USER");
-            expect(statusHistory?.changedById).toBe(technician.id);
-        });
-    });
-
-    describe("GET /service-orders/diagnoses/:id", () => {
-        it("should return the diagnosis data", async () => {
-            const { user, serviceOrder, diagnosis } = await new ServiceOrderBuilder(prisma)
-                .withUser({ role: "ATTENDANT" })
-                .withCustomer()
-                .withDevice()
-                .withServiceOrder({ status: "IN_DIAGNOSIS" })
-                .withDiagnosis()
-                .build();
-
-            const accessToken = generateAccessToken(user.id, "ATTENDANT");
-
-            const res = await request(app)
-                .get(`/service-orders/diagnoses/${diagnosis!.id}`)
-                .set("Authorization", `Bearer ${accessToken}`);
-
-            expect(res.statusCode).toBe(200);
-            expect(res.body.success).toBe(true);
-            expect(res.body.data).toMatchObject({
-                id: diagnosis!.id,
-                createdById: user.id,
-                result: null,
-                completedAt: null,
-            });
-            expect(res.body.data.serviceOrderId).toBe(serviceOrder!.id);
-            expect(res.body.data.createdAt).toBeTruthy();
-        });
-    });
-
-    describe("POST /service-orders/diagnoses/:id/findings", () => {
-        it("should create a new finding successfully", async () => {
-            const { user: technician, serviceOrder, diagnosis } = await new ServiceOrderBuilder(prisma)
-                .withUser({ role: "TECHNICIAN" })
-                .withCustomer()
-                .withDevice()
-                .withServiceOrder({ status: "IN_DIAGNOSIS" })
-                .withDiagnosis()
-                .build();
-
-            const technicianAccessToken = generateAccessToken(technician.id, "TECHNICIAN");
-
-            const res = await request(app)
-                .post(`/service-orders/diagnoses/${diagnosis!.id}/findings`)
-                .set("Authorization", `Bearer ${technicianAccessToken}`)
-                .send({
-                    description: "Battery capacity below expected level.",
-                    repairable: true,
-                });
-
-            expect(res.statusCode).toBe(201);
-            expect(res.body.success).toBe(true);
-            expect(res.body.message).toBe("Finding successfully created");
-            expect(res.body.data).toBeTruthy();
-            expect(res.body.data.id).toBeTruthy();
-            expect(res.body.data.diagnosisId).toBe(diagnosis!.id);
-            expect(res.body.data.createdById).toBe(technician.id);
-            expect(res.body.data.description).toBe("Battery capacity below expected level.");
-            expect(res.body.data.repairable).toBe(true);
-
-            const finding = await prisma.finding.findUnique({
-                where: { id: res.body.data.id },
-            });
-
-            expect(finding).toBeTruthy();
-            expect(finding?.diagnosisId).toBe(diagnosis!.id);
-            expect(finding?.createdById).toBe(technician.id);
-
-            expect(serviceOrder!.id).toBeTruthy();
         });
     });
 
@@ -440,116 +550,6 @@ describe("Service Order Routes (Integration)", () => {
             expect(statusHistory?.toStatus).toBe("AWAITING_QUOTE");
             expect(statusHistory?.changeSource).toBe("USER");
             expect(statusHistory?.changedById).toBe(technician.id);
-        });
-    });
-
-    describe("GET /service-orders/diagnoses/:id/findings", () => {
-        let userId: string;
-        let diagnosisId: string;
-        let accessToken: string;
-
-        beforeEach(async () => {
-            const { user, diagnosis } = await new ServiceOrderBuilder(prisma)
-                .withUser({ role: "ATTENDANT" })
-                .withCustomer()
-                .withDevice()
-                .withServiceOrder({ status: "IN_DIAGNOSIS" })
-                .withDiagnosis()
-                .build();
-
-            userId = user.id;
-            diagnosisId = diagnosis!.id;
-            accessToken = generateAccessToken(user.id, "ATTENDANT");
-        });
-
-        it("should return the findings ordered by creation date ascending", async () => {
-            const now = new Date();
-
-            await prisma.finding.createManyAndReturn({
-                data: [
-                    {
-                        diagnosisId,
-                        createdById: userId,
-                        description: "Battery capacity below expected level",
-                        repairable: true,
-                        createdAt: new Date(now.getTime() - 60 * 60 * 1000),
-                    },
-                    {
-                        diagnosisId,
-                        createdById: userId,
-                        description: "Motherboard corrosion",
-                        repairable: false,
-                        createdAt: now,
-                    },
-                ],
-            });
-
-            const res = await request(app)
-                .get(`/service-orders/diagnoses/${diagnosisId}/findings`)
-                .set("Authorization", `Bearer ${accessToken}`);
-
-            expect(res.statusCode).toBe(200);
-            expect(res.body.success).toBe(true);
-            expect(res.body.data).toHaveLength(2);
-            expect(res.body.data[0].description).toBe("Battery capacity below expected level");
-            expect(res.body.data[0].repairable).toBe(true);
-            expect(res.body.data[1].description).toBe("Motherboard corrosion");
-            expect(res.body.data[1].repairable).toBe(false);
-        });
-
-        it("should return an empty array when the diagnosis has no findings", async () => {
-            const res = await request(app)
-                .get(`/service-orders/diagnoses/${diagnosisId}/findings`)
-                .set("Authorization", `Bearer ${accessToken}`);
-
-            expect(res.statusCode).toBe(200);
-            expect(res.body.success).toBe(true);
-            expect(res.body.data).toEqual([]);
-        });
-    });
-
-    describe("POST /service-orders/:id/quotes", () => {
-        it("should create a new quote successfully", async () => {
-            const { user, serviceOrder, diagnosis } = await new ServiceOrderBuilder(prisma)
-                .withUser({ role: "ATTENDANT" })
-                .withCustomer()
-                .withDevice()
-                .withServiceOrder({ status: "AWAITING_QUOTE" })
-                .withDiagnosis()
-                .build();
-
-            const accessToken = generateAccessToken(user.id, "ATTENDANT");
-
-            const res = await request(app)
-                .post(`/service-orders/${serviceOrder!.id}/quotes`)
-                .set("Authorization", `Bearer ${accessToken}`)
-                .send({
-                    diagnosisId: diagnosis!.id,
-                });
-
-            expect(res.statusCode).toBe(201);
-            expect(res.body.success).toBe(true);
-            expect(res.body.message).toBe("Quote successfully created");
-            expect(res.body.data).toMatchObject({
-                serviceOrderId: serviceOrder!.id,
-                diagnosisId: diagnosis!.id,
-                createdById: user.id,
-                status: "DRAFT",
-            });
-            expect(res.body.data.id).toBeTruthy();
-            expect(res.body.data.submittedAt).toBeNull();
-            expect(res.body.data.respondedAt).toBeNull();
-            expect(res.body.data.createdAt).toBeTruthy();
-
-            const quote = await prisma.quote.findUnique({
-                where: { id: res.body.data.id },
-            });
-
-            expect(quote).toBeTruthy();
-            expect(quote?.serviceOrderId).toBe(serviceOrder!.id);
-            expect(quote?.diagnosisId).toBe(diagnosis!.id);
-            expect(quote?.createdById).toBe(user.id);
-            expect(quote?.status).toBe("DRAFT");
         });
     });
 });

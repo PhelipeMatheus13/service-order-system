@@ -144,7 +144,7 @@ registry.registerPath({
 router.post("/:id/diagnoses", checkAccessToken, authorize("ADMIN", "TECHNICIAN"), serviceOrderController.startDiagnosis);
 
 registry.registerPath({
-    tags: ["Findings"],
+    tags: ["Diagnosis"],
     method: "post",
     path: "/service-orders/diagnoses/{id}/findings",
     summary: "create a new finding (requires ADMIN or TECHNICIAN role)",
@@ -359,7 +359,7 @@ registry.registerPath({
 router.get("/diagnoses/:id", checkAccessToken, serviceOrderController.getDiagnosisById);
 
 registry.registerPath({
-    tags: ["Findings"],
+    tags: ["Diagnosis"],
     method: "get",
     path: "/service-orders/diagnoses/{id}/findings",
     summary: "Get findings by diagnosis ID",
@@ -447,7 +447,7 @@ registry.registerPath({
 router.patch("/:id/cancel", checkAccessToken, authorize("ADMIN", "ATTENDANT"), validate(cancelServiceOrderSchema), serviceOrderController.cancelServiceOrder);
 
 registry.registerPath({
-    tags: ["Findings"],
+    tags: ["Diagnosis"],
     method: "patch",
     path: "/service-orders/findings/{id}",
     summary: "Update findings by ID (requires ADMIN or TECHNICIAN role)",
@@ -558,7 +558,7 @@ router.patch("/diagnoses/:id/complete", checkAccessToken, authorize("ADMIN", "TE
 
 // DELETE
 registry.registerPath({
-    tags: ["Findings"],
+    tags: ["Diagnosis"],
     method: "delete",
     path: "/service-orders/findings/{id}",
     summary: "Delete findings by ID (requires ADMIN or TECHNICIAN role)",
