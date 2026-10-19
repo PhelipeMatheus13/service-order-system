@@ -10,9 +10,9 @@ const serviceOrderSchema = registry.register(
         reportedProblem: z.string(),
         status: z.string(),
         createdBy: z.string(),
-        cancelledAt: z.string().nullable(), 
-        cancelReason: z.string().nullable(), 
-        finishedAt: z.string().nullable(), 
+        cancelledAt: z.string().nullable(),
+        cancelReason: z.string().nullable(),
+        finishedAt: z.string().nullable(),
         createdAt: z.string(),
         updatedAt: z.string().nullable(),
     })
@@ -42,6 +42,21 @@ const findingSchema = registry.register(
         createdAt: z.string(),
         updatedAt: z.string().nullable(),
         updatedById: z.string().nullable(),
+    })
+);
+
+const quoteSchema = registry.register(
+    "quoteSchema",
+    z.object({
+        id: z.string(),
+        serviceOrderId: z.string(),
+        diagnosisId: z.string(),
+        status: z.string(),
+        submittedAt: z.string().nullable(),
+        respondedAt: z.string().nullable(),
+        createdById: z.string(),
+        createdAt: z.string(),
+        updatedAt: z.string().nullable(),
     })
 );
 
@@ -142,15 +157,29 @@ const completeDiagnosisSchema = registry.register(
 
 type CompleteDiagnosisRequest = z.infer<typeof completeDiagnosisSchema>;
 
+const createQuoteSchema = registry.register(
+    "createQuoteSchema",
+    z.object({
+        diagnosisId: z
+            .string()
+            .uuid("Diagnosis ID must be a valid UUID")
+            .openapi({ example: "550e8400-e29b-41d4-a716-446655440000" }),
+    })
+);
+
+type CreateQuoteRequest = z.infer<typeof createQuoteSchema>;
+
 export {
     serviceOrderSchema,
-    createServiceOrderSchema,
-    cancelServiceOrderSchema,
     diagnosisSchema,
     findingSchema,
+    quoteSchema,
+    createServiceOrderSchema,
+    cancelServiceOrderSchema,
     createFindingSchema,
     updateFindingSchema,
     completeDiagnosisSchema,
+    createQuoteSchema,
 };
 
 export type {
@@ -158,5 +187,6 @@ export type {
     CancelServiceOrderRequest,
     CreateFindingRequest,
     UpdateFindingRequest,
-    CompleteDiagnosisRequest
+    CompleteDiagnosisRequest,
+    CreateQuoteRequest,
 };

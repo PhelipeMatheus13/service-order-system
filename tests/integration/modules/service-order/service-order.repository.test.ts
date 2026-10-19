@@ -10,7 +10,8 @@ import type {
     CreateFindingInput,
     UpdateFindingInput,
     CompleteDiagnosisInput,
-    DiagnosisRecord
+    DiagnosisRecord,
+    CreateQuoteInput
 } from "../../../../src/modules/service-order/service-order.types.js";
 // (shared / infra)
 import { PrismaClient } from "../../../../src/generated/prisma/client.js";
@@ -1098,6 +1099,159 @@ describe("Service Order Repository (Integration)", () => {
                 expect(diagnosisAfterRollback?.result).toBeNull();
                 expect(diagnosisAfterRollback?.completedById).toBeNull();
                 expect(diagnosisAfterRollback?.completedAt).toBeNull();
+            });
+        });
+
+        describe("createQuote", () => {
+            it("should insert a new quote into the database", async () => {
+                const { user, serviceOrder, diagnosis } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "ATTENDANT" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "AWAITING_QUOTE" })
+                    .withDiagnosis()
+                    .build();
+
+                const input: CreateQuoteInput = {
+                    serviceOrderId: serviceOrder!.id,
+                    diagnosisId: diagnosis!.id,
+                    createdById: user.id,
+                };
+
+                const quoteCreated = await serviceOrderRepository.createQuote(input);
+
+                expect(quoteCreated).toBeTruthy();
+                expect(quoteCreated?.id).toBeTruthy();
+                expect(quoteCreated?.serviceOrderId).toBe(serviceOrder!.id);
+                expect(quoteCreated?.diagnosisId).toBe(diagnosis!.id);
+                expect(quoteCreated?.createdById).toBe(user.id);
+                expect(quoteCreated?.status).toBe("DRAFT");
+                expect(quoteCreated?.submittedAt).toBeNull();
+                expect(quoteCreated?.respondedAt).toBeNull();
+                expect(quoteCreated?.createdAt).toBeTruthy();
+                expect(quoteCreated?.updatedAt).toBeNull();
+
+                const quoteFound = await prisma.quote.findUnique({
+                    where: { id: quoteCreated!.id },
+                });
+
+                expect(quoteFound).not.toBeNull();
+            });
+
+            it("should return null when the diagnosis does not exist", async () => {
+                const { user, serviceOrder } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "ATTENDANT" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "AWAITING_QUOTE" })
+                    .build();
+
+                const input: CreateQuoteInput = {
+                    serviceOrderId: serviceOrder!.id,
+                    diagnosisId: "0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa",
+                    createdById: user.id,
+                };
+
+                const quoteCreated = await serviceOrderRepository.createQuote(input);
+
+                expect(quoteCreated).toBeNull();
+
+                const count = await prisma.quote.count();
+                expect(count).toBe(0);
+            });
+
+            it("should return null when the diagnosis belongs to a different service order", async () => {
+                const scenarioA = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "ATTENDANT" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "AWAITING_QUOTE" })
+                    .withDiagnosis()
+                    .build();
+
+                const scenarioB = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "ATTENDANT", email: "jasondoe@example.com" }) // different email
+                    .withCustomer({email: "marysmith@example.com"})
+                    .withDevice()
+                    .withServiceOrder({ status: "AWAITING_QUOTE" })
+                    .withDiagnosis()
+                    .build();
+
+                const input: CreateQuoteInput = {
+                    serviceOrderId: scenarioA.serviceOrder!.id,
+                    diagnosisId: scenarioB.diagnosis!.id,
+                    createdById: scenarioA.user.id,
+                };
+
+                const quoteCreated = await serviceOrderRepository.createQuote(input);
+
+                expect(quoteCreated).toBeNull();
+
+                const count = await prisma.quote.count();
+                expect(count).toBe(0);
+            });
+
+            it("should return null when the service order is not AWAITING_QUOTE", async () => {
+                const { user, serviceOrder, diagnosis } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "ATTENDANT" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "AWAITING_APPROVAL" })
+                    .withDiagnosis()
+                    .build();
+
+                const input: CreateQuoteInput = {
+                    serviceOrderId: serviceOrder!.id,
+                    diagnosisId: diagnosis!.id,
+                    createdById: user.id,
+                };
+
+                const quoteCreated = await serviceOrderRepository.createQuote(input);
+
+                expect(quoteCreated).toBeNull();
+
+                const count = await prisma.quote.count();
+                expect(count).toBe(0);
+            });
+
+            it("should throw when the service order already has a current quote", async () => {
+                const { user, serviceOrder, diagnosis } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "ATTENDANT" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "AWAITING_QUOTE" })
+                    .withDiagnosis()
+                    .build();
+
+                const input: CreateQuoteInput = {
+                    serviceOrderId: serviceOrder!.id,
+                    diagnosisId: diagnosis!.id,
+                    createdById: user.id,
+                };
+
+                await serviceOrderRepository.createQuote(input);
+
+                await expect(serviceOrderRepository.createQuote(input))
+                    .rejects.toThrow();
+            });
+
+            it("should throw when the created_by user does not exist", async () => {
+                const { serviceOrder, diagnosis } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "ATTENDANT" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "AWAITING_QUOTE" })
+                    .withDiagnosis()
+                    .build();
+
+                const input: CreateQuoteInput = {
+                    serviceOrderId: serviceOrder!.id,
+                    diagnosisId: diagnosis!.id,
+                    createdById: "0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa", // not exist
+                };
+
+                await expect(serviceOrderRepository.createQuote(input))
+                    .rejects.toThrow();
             });
         });
     });

@@ -12,6 +12,8 @@ import type {
     CreateFindingInput,
     UpdateFindingInput,
     CompleteDiagnosisInput,
+    QuoteRecord,
+    CreateQuoteInput,
 } from "./service-order.types.ts";
 import { ServiceOrderStatus } from "./service-order.types.js";
 import { getPrisma } from "../../shared/config/database.js";
@@ -232,6 +234,42 @@ const completeDiagnosis = async (input: CompleteDiagnosisInput, tx?: PrismaClien
     return rows[0] ?? null;
 };
 
+const createQuote = async ( input: CreateQuoteInput, tx?: Prisma.TransactionClient): Promise<QuoteRecord | null> => {
+    const prisma: PrismaClientOrTx = tx || getPrisma();
+
+    // Atomic guard: the INSERT only succeeds if the diagnosis exists, belongs
+    // to the service order, and the service order is currently AWAITING_QUOTE.
+    // A findUnique + create would leave a window where the status could
+    // change between check and write. Same pattern as createFinding.
+    const rows = await prisma.$queryRaw<QuoteRecord[]>`
+        INSERT INTO quotes (service_order_id, diagnosis_id, created_by)
+        SELECT
+            ${input.serviceOrderId}::uuid,
+            ${input.diagnosisId}::uuid,
+            ${input.createdById}::uuid
+        WHERE EXISTS (
+            SELECT 1
+            FROM diagnoses d
+            JOIN service_orders so ON so.id = d.service_order_id
+            WHERE d.id = ${input.diagnosisId}::uuid
+              AND d.service_order_id = ${input.serviceOrderId}::uuid
+              AND so.status = 'AWAITING_QUOTE'
+        )
+        RETURNING
+            id,
+            service_order_id AS "serviceOrderId",
+            diagnosis_id     AS "diagnosisId",
+            status,
+            submitted_at     AS "submittedAt",
+            responded_at     AS "respondedAt",
+            created_by       AS "createdById",
+            created_at       AS "createdAt",
+            updated_at       AS "updatedAt"
+    `;
+
+    return rows[0] ?? null;
+};
+
 // Reader
 const findById = async (id: string): Promise<ServiceOrderRecord | null> => {
     const prisma = getPrisma();
@@ -294,6 +332,7 @@ export default {
     updateFinding,
     deleteFindingById,
     completeDiagnosis,
+    createQuote,
     // Reader
     findById,
     list,

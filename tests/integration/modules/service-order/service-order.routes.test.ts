@@ -507,4 +507,49 @@ describe("Service Order Routes (Integration)", () => {
             expect(res.body.data).toEqual([]);
         });
     });
+
+    describe("POST /service-orders/:id/quotes", () => {
+        it("should create a new quote successfully", async () => {
+            const { user, serviceOrder, diagnosis } = await new ServiceOrderBuilder(prisma)
+                .withUser({ role: "ATTENDANT" })
+                .withCustomer()
+                .withDevice()
+                .withServiceOrder({ status: "AWAITING_QUOTE" })
+                .withDiagnosis()
+                .build();
+
+            const accessToken = generateAccessToken(user.id, "ATTENDANT");
+
+            const res = await request(app)
+                .post(`/service-orders/${serviceOrder!.id}/quotes`)
+                .set("Authorization", `Bearer ${accessToken}`)
+                .send({
+                    diagnosisId: diagnosis!.id,
+                });
+
+            expect(res.statusCode).toBe(201);
+            expect(res.body.success).toBe(true);
+            expect(res.body.message).toBe("Quote successfully created");
+            expect(res.body.data).toMatchObject({
+                serviceOrderId: serviceOrder!.id,
+                diagnosisId: diagnosis!.id,
+                createdById: user.id,
+                status: "DRAFT",
+            });
+            expect(res.body.data.id).toBeTruthy();
+            expect(res.body.data.submittedAt).toBeNull();
+            expect(res.body.data.respondedAt).toBeNull();
+            expect(res.body.data.createdAt).toBeTruthy();
+
+            const quote = await prisma.quote.findUnique({
+                where: { id: res.body.data.id },
+            });
+
+            expect(quote).toBeTruthy();
+            expect(quote?.serviceOrderId).toBe(serviceOrder!.id);
+            expect(quote?.diagnosisId).toBe(diagnosis!.id);
+            expect(quote?.createdById).toBe(user.id);
+            expect(quote?.status).toBe("DRAFT");
+        });
+    });
 });

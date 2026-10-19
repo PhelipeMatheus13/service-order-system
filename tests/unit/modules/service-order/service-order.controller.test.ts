@@ -1,7 +1,7 @@
 // (Node built‑ins)
 import { beforeEach, describe, expect, it, vi } from "vitest";
 // (Types)
-import { ServiceOrderRecord, DiagnosisRecord, FindingRecord } from "../../../../src/modules/service-order/service-order.types.js";
+import { ServiceOrderRecord, DiagnosisRecord, FindingRecord, QuoteRecord } from "../../../../src/modules/service-order/service-order.types.js";
 // (local modules)
 import serviceOrderController from "../../../../src/modules/service-order/service-order.controller.js";
 import serviceOrderService from "../../../../src/modules/service-order/service-order.service.js";
@@ -669,6 +669,79 @@ describe("Service Order Controller (Unit)", () => {
             vi.mocked(serviceOrderService).listFindingsByDiagnosisId.mockRejectedValue(error);
 
             await serviceOrderController.listFindingsByDiagnosisId(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(error);
+            expect(res.status).not.toHaveBeenCalled();
+        });
+    });
+
+    describe("createQuote", () => {
+        it("should return 201 on successful quote creation", async () => {
+            req.params.id = "uuid-service-order-123";
+            req.user = { id: "uuid-user-123" };
+            req.body = {
+                diagnosisId: "uuid-diagnosis-123",
+            };
+
+            const mockQuoteRecord = {
+                id: "uuid-quote-123",
+                serviceOrderId: "uuid-service-order-123",
+                diagnosisId: "uuid-diagnosis-123",
+                status: "DRAFT",
+                submittedAt: null,
+                respondedAt: null,
+                createdById: "uuid-user-123",
+                createdAt: new Date(),
+                updatedAt: null,
+            } as QuoteRecord;
+
+            vi.mocked(serviceOrderService).createQuote.mockResolvedValue(mockQuoteRecord);
+
+            await serviceOrderController.createQuote(req, res, next);
+
+            expect(serviceOrderService.createQuote).toHaveBeenCalledWith({
+                serviceOrderId: "uuid-service-order-123",
+                diagnosisId: "uuid-diagnosis-123",
+                createdById: "uuid-user-123",
+            });
+
+            expect(res.status).toHaveBeenCalledWith(201);
+            expect(res.json).toHaveBeenCalledWith({
+                success: true,
+                data: mockQuoteRecord,
+                message: "Quote successfully created",
+            });
+            expect(next).not.toHaveBeenCalled();
+        });
+
+        it("should call next with badRequest error if id is missing", async () => {
+            req.params = {};
+            req.user = { id: "uuid-user-123" };
+            req.body = {
+                diagnosisId: "uuid-diagnosis-123",
+            };
+
+            await serviceOrderController.createQuote(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(expect.objectContaining({
+                statusCode: 400,
+                message: "Service order ID is required",
+            }));
+            expect(serviceOrderService.createQuote).not.toHaveBeenCalled();
+            expect(res.status).not.toHaveBeenCalled();
+        });
+
+        it("should propagate error when service fails", async () => {
+            req.params.id = "uuid-service-order-123";
+            req.user = { id: "uuid-user-123" };
+            req.body = {
+                diagnosisId: "uuid-diagnosis-123",
+            };
+
+            const error = new Error("Service error");
+            vi.mocked(serviceOrderService).createQuote.mockRejectedValue(error);
+
+            await serviceOrderController.createQuote(req, res, next);
 
             expect(next).toHaveBeenCalledWith(error);
             expect(res.status).not.toHaveBeenCalled();

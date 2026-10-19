@@ -5,7 +5,8 @@ import {
     ServiceOrderStatusChangeSource,
     Diagnosis,
     DiagnosisResult,
-    Finding
+    Finding,
+    Quote
 } from "../../generated/prisma/client.js";
 
 interface CreateServiceOrderInput {
@@ -72,6 +73,12 @@ interface CompleteDiagnosisInput {
     completedById: string;
 }
 
+interface CreateQuoteInput {
+    serviceOrderId: string;
+    diagnosisId: string;
+    createdById: string;
+}
+
 export {
     ServiceOrderStatus,
     ServiceOrderStatusChangeSource,
@@ -94,4 +101,6 @@ export type {
     CreateFindingInput,
     UpdateFindingInput,
     CompleteDiagnosisInput,
+    Quote as QuoteRecord,
+    CreateQuoteInput,
 };

@@ -9,7 +9,9 @@ import {
     CreateFindingInput,
     UpdateFindingInput,
     CompleteDiagnosisInput,
-    DiagnosisResult
+    DiagnosisResult, 
+    CreateQuoteInput,
+    QuoteRecord,
 } from "./service-order.types.js";
 import { ServiceOrderStatus } from "./service-order.types.js";
 import { getPrisma } from "../../shared/config/database.js";
@@ -344,6 +346,40 @@ const listFindingsByDiagnosisId = async (diagnosisId: string): Promise<FindingRe
     return serviceOrderRepository.listFindingsByDiagnosisId(diagnosisId);
 };
 
+const createQuote = async (input: CreateQuoteInput): Promise<QuoteRecord> => {
+    const diagnosis = await serviceOrderRepository.findDiagnosisById(input.diagnosisId);
+    if (!diagnosis) {
+        throw notFound({ message: "Diagnosis not found" });
+    }
+
+    if (diagnosis.serviceOrderId !== input.serviceOrderId) {
+        throw conflict({ message: "Diagnosis does not belong to this service order" });
+    }
+
+    try {
+        // Atomic guard: only succeeds if the service order is still in AWAITING_QUOTE 
+        const quote = await serviceOrderRepository.createQuote(input);
+        if (!quote) {
+            throw conflict({ message: "Service order is no longer awaiting quote" });
+        }
+
+        return quote;
+    } catch (error) {
+        if (isUniqueConstraintOn(error, "service_order_id")) {
+            throw conflict({ message: "Service order already has a current quote" });
+        }
+
+        if (isForeignKeyConstraintOn(error, "created_by")) {
+            throw unauthorized({
+                message: "Authenticated user no longer exists",
+                code: "USER_NOT_FOUND",
+            });
+        }
+
+        throw error;
+    }
+};
+
 export default {
     createServiceOrder,
     getServiceOrderById,
@@ -357,4 +393,5 @@ export default {
     completeDiagnosis,
     resolveStatusAfterDiagnosis,
     listFindingsByDiagnosisId,
+    createQuote,
 };

@@ -45,7 +45,7 @@ const cancelServiceOrder = asyncHandler(async (req, res) => {
     if (!id) throw badRequest({ message: "service order ID is required" });
 
     const input = serviceOrderDTO.cancelServiceOrderDTO(req.body, String(id), String(req.user?.id));
-    
+
     await serviceOrderService.cancelServiceOrder(input);
 
     res.status(200).json({
@@ -59,7 +59,7 @@ const startDiagnosis = asyncHandler(async (req, res) => {
     if (!id) throw badRequest({ message: "service order ID is required" });
 
     const input = serviceOrderDTO.createDiagnosisDTO(String(id), String(req.user?.id));
-    
+
     const diagnosis = await serviceOrderService.startDiagnosis(input);
 
     res.status(201).json({
@@ -102,7 +102,7 @@ const updateFinding = asyncHandler(async (req, res) => {
     const finding = await serviceOrderService.updateFinding(input);
     res.status(200).json({
         success: true,
-        data: finding,  
+        data: finding,
         message: "Finding successfully updated",
     });
 });
@@ -126,7 +126,7 @@ const completeDiagnosis = asyncHandler(async (req, res) => {
     const diagnosis = await serviceOrderService.completeDiagnosis(input);
     res.status(200).json({
         success: true,
-        data: diagnosis,  
+        data: diagnosis,
         message: "Diagnosis successfully completed",
     });
 });
@@ -138,6 +138,18 @@ const listFindingsByDiagnosisId = asyncHandler(async (req, res) => {
     res.status(200).json({
         success: true,
         data: findings,
+    });
+});
+
+const createQuote = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (!id) throw badRequest({ message: "Service order ID is required" });
+    const input = serviceOrderDTO.createQuoteDTO(req.body, String(id), String(req.user?.id))
+    const quote = await serviceOrderService.createQuote(input);
+    res.status(201).json({
+        success: true,
+        data: quote,
+        message: "Quote successfully created",
     });
 });
 
@@ -153,4 +165,5 @@ export default {
     deleteFinding,
     completeDiagnosis,
     listFindingsByDiagnosisId,
+    createQuote,
 };

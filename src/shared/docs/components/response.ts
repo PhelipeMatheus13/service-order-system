@@ -397,6 +397,47 @@ const completeDiagnosisConflictError = registry.registerComponent("responses", "
     },
 });
 
+const createQuoteConflictError = registry.registerComponent("responses", "createQuoteConflictError", {
+    description: "Quote cannot be created",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            examples: {
+                diagnosisDoesNotBelongToServiceOrder: {
+                    summary: "Diagnosis belongs to a different service order",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Diagnosis does not belong to this service order",
+                        },
+                    },
+                },
+                serviceOrderNoLongerAwaitingQuote: {
+                    summary: "Service order status changed during the request (race condition)",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Service order is no longer awaiting quote",
+                        },
+                    },
+                },
+                currentQuoteAlreadyExists: {
+                    summary: "Service order already has a current (non-superseded) quote",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Service order already has a current quote",
+                        },
+                    },
+                },
+            },
+        },
+    },
+});
+
 // VALIDATION ERRORS (422)
 const registerValidationError = registry.registerComponent("responses", "registerValidationError", {
     description: "Register validation error",
@@ -730,6 +771,25 @@ const completeDiagnosisValidationError = registry.registerComponent("responses",
     },
 });
 
+const createQuoteValidationError = registry.registerComponent("responses", "createQuoteValidationError", {
+    description: "create quote validation error",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/ValidationError" },
+            example: {
+                success: false,
+                error: {
+                    code: "VALIDATION_ERROR",
+                    message: "Validation failed",
+                    details: [
+                        {  field: "diagnosisId", message: "Diagnosis ID must be a valid UUID",},
+                    ],
+                },
+            },
+        },
+    },
+});
+
 
 // 500
 const internalError = registry.registerComponent("responses", "internalError", {
@@ -785,6 +845,7 @@ export {
     createFindingValidationError,
     updateFindingValidationError,
     completeDiagnosisValidationError,
+    createQuoteValidationError,
     // 500
     internalError,
 };

@@ -12,6 +12,8 @@ import {
     FindingRecord,
     UpdateFindingInput,
     CompleteDiagnosisInput,
+    QuoteRecord,
+    CreateQuoteInput,
 } from "../../../../src/modules/service-order/service-order.types.js";
 // (shared)
 import { getPrisma } from "../../../../src/shared/config/database.js";
@@ -1244,6 +1246,144 @@ describe("Service Order Service (Unit)", () => {
             const result = await serviceOrderService.listFindingsByDiagnosisId(diagnosisId);
 
             expect(result).toEqual([]);
+        });
+    });
+
+    describe("createQuote", () => {
+        const validInput: CreateQuoteInput = {
+            serviceOrderId: "uuid-service-order-123",
+            diagnosisId: "uuid-diagnosis-123",
+            createdById: "uuid-user-123",
+        };
+
+        const mockDiagnosisRecord = {
+            id: validInput.diagnosisId,
+            serviceOrderId: validInput.serviceOrderId,
+            result: "FAULT_FOUND",
+            createdById: "uuid-user-456",
+            createdAt: new Date(),
+            completedById: "uuid-user-456",
+            completedAt: new Date(),
+        } as DiagnosisRecord;
+
+        const mockQuoteRecord = {
+            id: "uuid-quote-123",
+            serviceOrderId: validInput.serviceOrderId,
+            diagnosisId: validInput.diagnosisId,
+            status: "DRAFT",
+            submittedAt: null,
+            respondedAt: null,
+            createdById: validInput.createdById,
+            createdAt: new Date(),
+            updatedAt: null,
+        } as QuoteRecord;
+
+        const setupCreateQuoteMocks = () => {
+            vi.mocked(serviceOrderRepository.findDiagnosisById).mockResolvedValue(mockDiagnosisRecord);
+            vi.mocked(serviceOrderRepository.createQuote).mockResolvedValue(mockQuoteRecord);
+        };
+
+        it("should throw if serviceOrderRepository.findDiagnosisById fails", async () => {
+            const error = new Error("fake error");
+            vi.mocked(serviceOrderRepository.findDiagnosisById).mockRejectedValue(error);
+
+            await expect(serviceOrderService.createQuote(validInput))
+                .rejects.toThrow(error);
+        });
+
+        it("should throw NOT_FOUND if diagnosis does not exist", async () => {
+            vi.mocked(serviceOrderRepository.findDiagnosisById).mockResolvedValue(null);
+
+            await expect(serviceOrderService.createQuote(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 404,
+                    message: "Diagnosis not found",
+                });
+
+            expect(serviceOrderRepository.createQuote).not.toHaveBeenCalled();
+        });
+
+        it("should throw CONFLICT if diagnosis does not belong to the service order", async () => {
+            vi.mocked(serviceOrderRepository.findDiagnosisById).mockResolvedValue({
+                ...mockDiagnosisRecord,
+                serviceOrderId: "uuid-other-service-order",
+            });
+
+            await expect(serviceOrderService.createQuote(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 409,
+                    message: "Diagnosis does not belong to this service order",
+                });
+
+            expect(serviceOrderRepository.createQuote).not.toHaveBeenCalled();
+        });
+
+        it("should throw CONFLICT if repository returns null (race condition)", async () => {
+            setupCreateQuoteMocks();
+            vi.mocked(serviceOrderRepository.createQuote).mockResolvedValue(null);
+
+            await expect(serviceOrderService.createQuote(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 409,
+                    message: "Service order is no longer awaiting quote",
+                });
+        });
+
+        it("should throw CONFLICT if a current quote already exists for the service order", async () => {
+            const dbError = new Error("Unique constraint failed");
+            setupCreateQuoteMocks();
+            vi.mocked(serviceOrderRepository.createQuote).mockRejectedValue(dbError);
+            vi.mocked(isUniqueConstraintOn).mockImplementation(
+                (_error, field) => field === "service_order_id",
+            );
+
+            await expect(serviceOrderService.createQuote(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 409,
+                    message: "Service order already has a current quote",
+                });
+
+            expect(isUniqueConstraintOn).toHaveBeenCalledWith(dbError, "service_order_id");
+        });
+
+        it("should throw UNAUTHORIZED if created_by foreign key is violated", async () => {
+            const dbError = new Error("Foreign key constraint failed");
+            setupCreateQuoteMocks();
+            vi.mocked(serviceOrderRepository.createQuote).mockRejectedValue(dbError);
+            vi.mocked(isUniqueConstraintOn).mockReturnValue(false);
+            vi.mocked(isForeignKeyConstraintOn).mockImplementation(
+                (_error, field) => field === "created_by",
+            );
+
+            await expect(serviceOrderService.createQuote(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 401,
+                    message: "Authenticated user no longer exists",
+                    code: "USER_NOT_FOUND",
+                });
+
+            expect(isForeignKeyConstraintOn).toHaveBeenCalledWith(dbError, "created_by");
+        });
+
+        it("should propagate error if it is not a known constraint violation", async () => {
+            const error = new Error("fake error");
+            setupCreateQuoteMocks();
+            vi.mocked(serviceOrderRepository.createQuote).mockRejectedValue(error);
+            vi.mocked(isUniqueConstraintOn).mockReturnValue(false);
+            vi.mocked(isForeignKeyConstraintOn).mockReturnValue(false);
+
+            await expect(serviceOrderService.createQuote(validInput))
+                .rejects.toThrow(error);
+        });
+
+        it("should create quote successfully", async () => {
+            setupCreateQuoteMocks();
+
+            const result = await serviceOrderService.createQuote(validInput);
+
+            expect(serviceOrderRepository.findDiagnosisById).toHaveBeenCalledWith(validInput.diagnosisId);
+            expect(serviceOrderRepository.createQuote).toHaveBeenCalledWith(validInput);
+            expect(result).toBe(mockQuoteRecord);
         });
     });
 });

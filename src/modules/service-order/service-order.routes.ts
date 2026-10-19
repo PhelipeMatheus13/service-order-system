@@ -16,6 +16,8 @@ import {
     createFindingSchema,
     updateFindingSchema,
     completeDiagnosisSchema,
+    createQuoteSchema,
+    quoteSchema,
 } from "./service-order.schemas.js";
 import serviceOrderController from "./service-order.controller.js";
 
@@ -188,6 +190,54 @@ registry.registerPath({
     }
 });
 router.post("/diagnoses/:id/findings", checkAccessToken, authorize("ADMIN", "TECHNICIAN"), serviceOrderController.createFinding);
+
+registry.registerPath({
+    tags: ["Quote"],
+    method: "post",
+    path: "/service-orders/{id}/quotes",
+    summary: "create a new quote (requires ADMIN or ATTENDANT role)",
+    security: [{ bearerAuth: [] }],
+    request: {
+        params: z.object({ id: z.string() }),
+        body: {
+            content: { "application/json": { schema: createQuoteSchema } },
+        },
+    },
+    responses: {
+        201: {
+            description: "Quote successfully created",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        success: z.boolean().openapi({ example: true }),
+                        data: quoteSchema,
+                        message: z.string().openapi({ example: "Quote successfully created" }),
+                    }),
+                },
+            },
+        },
+        400: { $ref: "#/components/responses/missingServiceOrderIdError" },
+        401: {
+            description: "Authentication failed or because the authenticated user no longer exists",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
+                        invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
+                        accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
+                        authenticatedUserNoLongerExists: { $ref: "#/components/examples/authenticatedUserNoLongerExists" },
+                    },
+                },
+            },
+        },
+        409: { $ref: "#/components/responses/createQuoteConflictError" },
+        404: { $ref: "#/components/responses/diagnosisNotFoundError" },
+        422: { $ref: "#/components/responses/createQuoteValidationError" },
+        500: { $ref: "#/components/responses/internalError" },
+    }
+});
+router.post("/:id/quotes", checkAccessToken, authorize("ADMIN", "ATTENDANT"), validate(createQuoteSchema), serviceOrderController.createQuote);
 
 // GET 
 registry.registerPath({
