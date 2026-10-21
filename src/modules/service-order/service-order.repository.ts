@@ -14,6 +14,8 @@ import type {
     CompleteDiagnosisInput,
     QuoteRecord,
     CreateQuoteInput,
+    QuoteItemRecord,
+    CreateQuoteItemInput
 } from "./service-order.types.ts";
 import { ServiceOrderStatus } from "./service-order.types.js";
 import { getPrisma } from "../../shared/config/database.js";
@@ -270,6 +272,29 @@ const createQuote = async ( input: CreateQuoteInput, tx?: Prisma.TransactionClie
     return rows[0] ?? null;
 };
 
+
+const createQuoteItem = async (input: CreateQuoteItemInput): Promise<QuoteItemRecord> => {
+    const prisma = getPrisma();
+    return prisma.quoteItem.create({
+        data: {
+            quoteId: input.quoteId,
+            findingId: input.findingId,
+            description: input.description,
+            quoteItemComponents: {
+                create: input.components.map((component) => ({
+                    type: component.type,
+                    description: component.description,
+                    quantity: component.quantity,
+                    unitPrice: component.unitPrice,
+                })),
+            },
+        },
+        include: {
+            quoteItemComponents: true,
+        },
+    });
+};
+
 // Reader
 const findById = async (id: string): Promise<ServiceOrderRecord | null> => {
     const prisma = getPrisma();
@@ -333,6 +358,7 @@ export default {
     deleteFindingById,
     completeDiagnosis,
     createQuote,
+    createQuoteItem,
     // Reader
     findById,
     list,

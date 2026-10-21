@@ -6,7 +6,9 @@ import {
     Diagnosis,
     DiagnosisResult,
     Finding,
-    Quote
+    Quote,
+    QuoteItem,
+    QuoteItemComponentType,
 } from "../../generated/prisma/client.js";
 
 interface CreateServiceOrderInput {
@@ -79,6 +81,20 @@ interface CreateQuoteInput {
     createdById: string;
 }
 
+interface CreateQuoteItemInput {
+    quoteId: string;
+    findingId: string;
+    description: string;
+    components: QuoteItemComponentInput[];
+}
+
+interface QuoteItemComponentInput {
+    type: QuoteItemComponentType;
+    description: string;
+    quantity: number;
+    unitPrice: number;
+}
+
 export {
     ServiceOrderStatus,
     ServiceOrderStatusChangeSource,
@@ -103,4 +119,6 @@ export type {
     CompleteDiagnosisInput,
     Quote as QuoteRecord,
     CreateQuoteInput,
+    QuoteItem as QuoteItemRecord,
+    CreateQuoteItemInput,
 };
