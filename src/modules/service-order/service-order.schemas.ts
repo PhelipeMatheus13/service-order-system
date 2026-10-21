@@ -19,7 +19,7 @@ const serviceOrderSchema = registry.register(
 );
 
 const diagnosisSchema = registry.register(
-    "DiagnosisSchema",
+    "diagnosisSchema",
     z.object({
         id: z.string(),
         serviceOrderId: z.string(),
@@ -32,7 +32,7 @@ const diagnosisSchema = registry.register(
 );
 
 const findingSchema = registry.register(
-    "FindingSchema",
+    "findingSchema",
     z.object({
         id: z.string(),
         diagnosisId: z.string(),
@@ -46,7 +46,7 @@ const findingSchema = registry.register(
 );
 
 const quoteSchema = registry.register(
-    "QuoteSchema",
+    "quoteSchema",
     z.object({
         id: z.string(),
         serviceOrderId: z.string(),
@@ -98,7 +98,7 @@ const cancelServiceOrderSchema = registry.register(
 type CancelServiceOrderRequest = z.infer<typeof cancelServiceOrderSchema>;
 
 const createFindingSchema = registry.register(
-    "CreateFindingSchema",
+    "createFindingSchema",
     z.object({
         description: z
             .string()
@@ -121,7 +121,7 @@ const createFindingSchema = registry.register(
 type CreateFindingRequest = z.infer<typeof createFindingSchema>;
 
 const updateFindingSchema = registry.register(
-    "UpdateFindingSchema",
+    "updateFindingSchema",
     z.object({
         description: z
             .string()
@@ -144,7 +144,7 @@ const updateFindingSchema = registry.register(
 type UpdateFindingRequest = z.infer<typeof updateFindingSchema>;
 
 const completeDiagnosisSchema = registry.register(
-    "CompleteDiagnosisSchema",
+    "completeDiagnosisSchema",
     z.object({
         result: z
             .enum(["FAULT_FOUND", "NO_FAULT_FOUND", "INCONCLUSIVE"])
@@ -158,7 +158,7 @@ const completeDiagnosisSchema = registry.register(
 type CompleteDiagnosisRequest = z.infer<typeof completeDiagnosisSchema>;
 
 const createQuoteSchema = registry.register(
-    "CreateQuoteSchema",
+    "createQuoteSchema",
     z.object({
         diagnosisId: z
             .string()
@@ -168,65 +168,6 @@ const createQuoteSchema = registry.register(
 );
 
 type CreateQuoteRequest = z.infer<typeof createQuoteSchema>;
-
-const quoteItemComponentSchema = registry.register(
-    "QuoteItemComponentInput",
-    z.object({
-        type: z
-            .enum(["PART", "LABOR", "OTHER"])
-            .openapi({
-                example: "PART",
-                description: "Type of the cost component",
-            }),
-        description: z
-            .string()
-            .trim()
-            .min(1, "Component description is required")
-            .max(255, "Component description must be at most 255 characters")
-            .openapi({ example: "Battery" }),
-
-        quantity: z
-            .number()
-            .int("Quantity must be an integer")
-            .positive("Quantity must be greater than zero")
-            .openapi({ example: 1 }),
-
-        unitPrice: z
-            .number()
-            .positive("Unit price must be greater than zero")
-            .refine(
-                (n) => /^\d+(\.\d{1,2})?$/.test(n.toString()),
-                "Unit price must have at most 2 decimal places",
-            )
-            .openapi({ example: 80.00 }),
-    }),
-);
-
-const createQuoteItemSchema = registry.register(
-    "CreateQuoteItemSchema",
-    z.object({
-        findingId: z
-            .string()
-            .uuid("Finding ID must be a valid UUID")
-            .openapi({ example: "550e8400-e29b-41d4-a716-446655440000" }),
-
-        description: z
-            .string()
-            .trim()
-            .min(1, "Description is required")
-            .max(255, "Description must be at most 255 characters")
-            .openapi({ example: "Battery replacement" }),
-            
-        components: z
-            .array(quoteItemComponentSchema)
-            .min(1, "At least one component is required")
-            .openapi({
-                description: "Cost breakdown for this quote item. At least one component is required.",
-            }),
-    }),
-);
-
-type CreateQuoteItemRequest = z.infer<typeof createQuoteItemSchema>;
 
 export {
     serviceOrderSchema,
@@ -239,7 +180,6 @@ export {
     updateFindingSchema,
     completeDiagnosisSchema,
     createQuoteSchema,
-    createQuoteItemSchema
 };
 
 export type {
@@ -249,5 +189,4 @@ export type {
     UpdateFindingRequest,
     CompleteDiagnosisRequest,
     CreateQuoteRequest,
-    CreateQuoteItemRequest,
 };
