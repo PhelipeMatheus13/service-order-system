@@ -97,6 +97,22 @@ const missingFindingIdError = registry.registerComponent("responses", "missingFi
     },
 });
 
+const missingQuoteIdError = registry.registerComponent("responses", "missingQuoteIdError", {
+    description: "Invalid request, missing Quote id",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            example: {
+                success: false,
+                error: {
+                    code: "BAD_REQUEST",
+                    message: "Quote ID is required",
+                },
+            },
+        },
+    },
+});
+
 // 404
 const userNotFoundError = registry.registerComponent("responses", "userNotFoundError", {
     description: "User not found or does not exist",
@@ -193,6 +209,38 @@ const findingNotFoundError = registry.registerComponent("responses", "findingNot
         },
     },
 });
+
+const quoteOrFindingNotFoundError = registry.registerComponent("responses", "quoteOrFindingNotFoundError", {
+    description: "Finding not found or does not exist",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            examples: {
+                quoteNotFound: {
+                    summary: "Quote not found",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "NOT_FOUND",
+                            message: "Quote not found",
+                        },
+                    },
+                },
+                findingNotFound: {
+                    summary: "Finding not found",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "NOT_FOUND",
+                            message: "Finding not found",
+                        },
+                    },
+                },
+            },
+        },
+    },
+});
+
 // 409
 const emailAlreadyExistsError = registry.registerComponent("responses", "emailAlreadyExistsError", {
     description: "Email already in use",
@@ -430,6 +478,57 @@ const createQuoteConflictError = registry.registerComponent("responses", "create
                         error: {
                             code: "CONFLICT",
                             message: "Service order already has a current quote",
+                        },
+                    },
+                },
+            },
+        },
+    },
+});
+
+const createQuoteItemConflictError = registry.registerComponent("responses", "createQuoteItemConflictError", {
+    description: "Quote item cannot be created",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            examples: {
+                quoteNotDraft: {
+                    summary: "Quote is not in DRAFT status",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Quote is not in DRAFT status",
+                        },
+                    },
+                },
+                findingDoesNotBelongToDiagnosis: {
+                    summary: "Finding does not belong to the quote's diagnosis",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Finding does not belong to this quote's diagnosis",
+                        },
+                    },
+                },
+                findingNotRepairable: {
+                    summary: "Finding is not repairable",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Finding is not repairable",
+                        },
+                    },
+                },
+                quoteNoLongerDraft: {
+                    summary: "Quote status changed during the request (race condition)",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Quote is no longer in DRAFT status",
                         },
                     },
                 },
@@ -760,8 +859,8 @@ const completeDiagnosisValidationError = registry.registerComponent("responses",
                     code: "VALIDATION_ERROR",
                     message: "Validation failed",
                     details: [
-                        { 
-                            field: "result", 
+                        {
+                            field: "result",
                             message: "Invalid enum value. Expected 'FAULT_FOUND' | 'NO_FAULT_FOUND' | 'INCONCLUSIVE', received 'DONE'",
                         },
                     ],
@@ -782,7 +881,7 @@ const createQuoteValidationError = registry.registerComponent("responses", "crea
                     code: "VALIDATION_ERROR",
                     message: "Validation failed",
                     details: [
-                        {  field: "diagnosisId", message: "Diagnosis ID must be a valid UUID",},
+                        { field: "diagnosisId", message: "Diagnosis ID must be a valid UUID", },
                     ],
                 },
             },
@@ -790,6 +889,29 @@ const createQuoteValidationError = registry.registerComponent("responses", "crea
     },
 });
 
+
+const createQuoteItemValidationError = registry.registerComponent("responses", "createQuoteItemValidationError", {
+    description: "create quote item validation error",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/ValidationError" },
+            example: {
+                success: false,
+                error: {
+                    code: "VALIDATION_ERROR",
+                    message: "Validation failed",
+                    details: [
+                        { field: "findingId", message: "Finding ID must be a valid UUID" },
+                        { field: "description", message: "Description is required" },
+                        { field: "components.0.type", message: "Invalid option: expected one of \"PART\"|\"LABOR\"|\"OTHER\"" },
+                        { field: "components.0.quantity", message: "Quantity must be greater than zero" },
+                        { field: "components.0.unitPrice", message: "Unit price must have at most 2 decimal places" },
+                    ],
+                },
+            },
+        },
+    },
+});
 
 // 500
 const internalError = registry.registerComponent("responses", "internalError", {
@@ -816,6 +938,7 @@ export {
     missingServiceOrderIdError,
     missingDiagnosisIdError,
     missingFindingIdError,
+    missingQuoteIdError,
     // 404
     userNotFoundError,
     customerNotFoundError,
@@ -823,6 +946,7 @@ export {
     serviceOrderNotFoundError,
     diagnosisNotFoundError,
     findingNotFoundError,
+    quoteOrFindingNotFoundError,
     // 409
     emailAlreadyExistsError,
     deviceUniqueConstraintError,
@@ -830,6 +954,8 @@ export {
     startDiagnosisConflictError,
     createFindingConflictError,
     completeDiagnosisConflictError,
+    createQuoteConflictError,
+    createQuoteItemConflictError,
     // 422
     registerValidationError,
     confirmEmailValidationError,

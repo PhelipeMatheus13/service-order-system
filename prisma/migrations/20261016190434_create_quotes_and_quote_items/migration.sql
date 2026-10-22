@@ -42,7 +42,9 @@ CREATE TABLE "quote_items" (
     "finding_id" UUID,
     "description" TEXT NOT NULL,
     "decision" "quote_item_decision_enum" NOT NULL DEFAULT 'PENDING',
+    "created_by" UUID NOT NULL,
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_by" UUID,
     "updated_at" TIMESTAMPTZ,
 
     CONSTRAINT "quote_items_pkey" PRIMARY KEY ("id")
@@ -68,6 +70,8 @@ CREATE INDEX "quotes_diagnosis_id_idx" ON "quotes"("diagnosis_id");
 CREATE INDEX "quotes_created_by_idx" ON "quotes"("created_by");
 CREATE INDEX "quote_items_quote_id_idx" ON "quote_items"("quote_id");
 CREATE INDEX "quote_items_finding_id_idx" ON "quote_items"("finding_id");
+CREATE INDEX "quote_items_created_by_idx" ON "quote_items"("created_by");
+CREATE INDEX "quote_items_updated_by_idx" ON "quote_items"("updated_by");
 CREATE INDEX "quote_item_components_quote_item_id_idx" ON "quote_item_components"("quote_item_id");
 
 -- CreateIndex (partial unique: at most one non-superseded quote per service order)
@@ -114,6 +118,22 @@ ADD CONSTRAINT "quote_items_finding_id_fkey"
 FOREIGN KEY ("finding_id") 
 REFERENCES "findings"("id") 
 ON DELETE CASCADE 
+ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "quote_items" 
+ADD CONSTRAINT "quote_items_created_by_fkey" 
+FOREIGN KEY ("created_by") 
+REFERENCES "users"("id") 
+ON DELETE RESTRICT 
+ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "quote_items" 
+ADD CONSTRAINT "quote_items_updated_by_fkey" 
+FOREIGN KEY ("updated_by") 
+REFERENCES "users"("id") 
+ON DELETE RESTRICT 
 ON UPDATE CASCADE;
 
 -- AddForeignKey

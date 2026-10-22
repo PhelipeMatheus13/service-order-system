@@ -9,9 +9,11 @@ import {
     CreateFindingInput,
     UpdateFindingInput,
     CompleteDiagnosisInput,
-    DiagnosisResult, 
+    DiagnosisResult,
     CreateQuoteInput,
     QuoteRecord,
+    CreateQuoteItemInput,
+    QuoteItemWithComponents,
 } from "./service-order.types.js";
 import { ServiceOrderStatus } from "./service-order.types.js";
 import { getPrisma } from "../../shared/config/database.js";
@@ -380,6 +382,55 @@ const createQuote = async (input: CreateQuoteInput): Promise<QuoteRecord> => {
     }
 };
 
+const createQuoteItem = async (input: CreateQuoteItemInput): Promise<QuoteItemWithComponents> => {
+    const quote = await serviceOrderRepository.findQuoteById(input.quoteId);
+    if (!quote) {
+        throw notFound({ message: "Quote not found" });
+    }
+
+    if (quote.status !== "DRAFT") {
+        throw conflict({ message: "Quote is not in DRAFT status" });
+    }
+
+    const finding = await serviceOrderRepository.findFindingById(input.findingId);
+    if (!finding) {
+        throw notFound({ message: "Finding not found" });
+    }
+
+    if (finding.diagnosisId !== quote.diagnosisId) {
+        throw conflict({ message: "Finding does not belong to this quote's diagnosis" });
+    }
+
+    if (!finding.repairable) {
+        throw conflict({ message: "Finding is not repairable" });
+    }
+
+    try {
+        return await getPrisma().$transaction(async (tx) => {
+            const locked = await serviceOrderRepository.lockQuoteIfDraft(input.quoteId, tx);
+            if (!locked) {
+                throw conflict({ message: "Quote is no longer in DRAFT status" });
+            }
+
+            return await serviceOrderRepository.createQuoteItem(input, tx);
+        });
+    } catch (error) {
+        if (isForeignKeyConstraintOn(error, "created_by")) {
+            throw unauthorized({
+                message: "Authenticated user no longer exists",
+                code: "USER_NOT_FOUND",
+            });
+        }
+
+        // Defensive: unreachable through the API flow, covered for out-of-band deletes.
+        if (isForeignKeyConstraintOn(error, "finding_id")) {
+            throw notFound({ message: "Finding not found" });
+        }
+
+        throw error;
+    }
+};
+
 export default {
     createServiceOrder,
     getServiceOrderById,
@@ -394,4 +445,5 @@ export default {
     resolveStatusAfterDiagnosis,
     listFindingsByDiagnosisId,
     createQuote,
+    createQuoteItem,
 };

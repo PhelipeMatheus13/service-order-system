@@ -196,6 +196,78 @@ describe("Service Order Routes (Integration)", () => {
         });
     });
 
+    describe("POST /service-orders/quotes/:id/items", () => {
+        it("should create a quote item with components successfully", async () => {
+            const { user, findings, quote } = await new ServiceOrderBuilder(prisma)
+                .withUser({ role: "ATTENDANT" })
+                .withCustomer()
+                .withDevice()
+                .withServiceOrder({ status: "AWAITING_QUOTE" })
+                .withDiagnosis()
+                .withFinding({ repairable: true })
+                .withQuote()
+                .build();
+
+            const accessToken = generateAccessToken(user.id, "ATTENDANT");
+
+            const res = await request(app)
+                .post(`/service-orders/quotes/${quote!.id}/items`)
+                .set("Authorization", `Bearer ${accessToken}`)
+                .send({
+                    findingId: findings[0].id,
+                    description: "Battery replacement",
+                    components: [
+                        {
+                            type: "PART",
+                            description: "Battery",
+                            quantity: 1,
+                            unitPrice: 80.0,
+                        },
+                        {
+                            type: "LABOR",
+                            description: "Battery replacement labor",
+                            quantity: 1,
+                            unitPrice: 20.0,
+                        },
+                    ],
+                });
+
+            expect(res.statusCode).toBe(201);
+            expect(res.body.success).toBe(true);
+            expect(res.body.message).toBe("Quote item successfully created");
+
+            expect(res.body.data).toMatchObject({
+                quoteId: quote!.id,
+                findingId: findings[0].id,
+                description: "Battery replacement",
+                decision: "PENDING",
+                createdById: user.id,
+            });
+            expect(res.body.data.id).toBeTruthy();
+            expect(res.body.data.quoteItemComponents).toHaveLength(2);
+
+            const partComponent = res.body.data.quoteItemComponents.find(
+                (c: any) => c.type === "PART"
+            );
+            expect(partComponent.unitPrice).toBe("80");
+
+            const laborComponent = res.body.data.quoteItemComponents.find(
+                (c: any) => c.type === "LABOR"
+            );
+            expect(laborComponent.unitPrice).toBe("20");
+
+            // Verify persistence in the database
+            const quoteItemFound = await prisma.quoteItem.findUnique({
+                where: { id: res.body.data.id },
+                include: { quoteItemComponents: true },
+            });
+
+            expect(quoteItemFound).toBeTruthy();
+            expect(quoteItemFound?.quoteId).toBe(quote!.id);
+            expect(quoteItemFound?.quoteItemComponents).toHaveLength(2);
+        });
+    });
+
     describe("GET /service-orders/:id", () => {
         it("should return the service order data", async () => {
             const { user, customer, device, serviceOrder } = await new ServiceOrderBuilder(prisma)

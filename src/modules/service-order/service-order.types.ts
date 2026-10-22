@@ -1,12 +1,15 @@
-import { 
-    ServiceOrder, 
+import {
+    ServiceOrder,
     ServiceOrderStatus,
-    ServiceOrderStatusHistory, 
+    ServiceOrderStatusHistory,
     ServiceOrderStatusChangeSource,
     Diagnosis,
     DiagnosisResult,
     Finding,
-    Quote
+    Quote,
+    QuoteItem,
+    QuoteItemComponent,
+    QuoteItemComponentType,
 } from "../../generated/prisma/client.js";
 
 interface CreateServiceOrderInput {
@@ -21,7 +24,7 @@ interface ListServiceOrdersOptions {
 
 interface ListServiceOrdersInput {
     options: ListServiceOrdersOptions;
-} 
+}
 
 interface CreateServiceOrderStatusHistoryData {
     serviceOrderId: string;
@@ -79,6 +82,25 @@ interface CreateQuoteInput {
     createdById: string;
 }
 
+interface CreateQuoteItemInput {
+    quoteId: string;
+    findingId: string;
+    description: string;
+    createdById: string;
+    components: QuoteItemComponentInput[];
+}
+
+interface QuoteItemComponentInput {
+    type: QuoteItemComponentType;
+    description: string;
+    quantity: number;
+    unitPrice: number;
+}
+
+type QuoteItemWithComponents = QuoteItem & {
+    quoteItemComponents: QuoteItemComponent[];
+};
+
 export {
     ServiceOrderStatus,
     ServiceOrderStatusChangeSource,
@@ -92,7 +114,7 @@ export type {
     ListServiceOrdersInput,
     ServiceOrderStatusHistory as ServiceOrderStatusHistoryRecord,
     CreateServiceOrderStatusHistoryData,
-    CancelServiceOrderInput, 
+    CancelServiceOrderInput,
     CancelServiceOrderData,
     Diagnosis as DiagnosisRecord,
     StartDiagnosisInput,
@@ -103,4 +125,6 @@ export type {
     CompleteDiagnosisInput,
     Quote as QuoteRecord,
     CreateQuoteInput,
+    QuoteItemWithComponents,
+    CreateQuoteItemInput,
 };

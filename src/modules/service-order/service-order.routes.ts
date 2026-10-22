@@ -18,6 +18,8 @@ import {
     completeDiagnosisSchema,
     createQuoteSchema,
     quoteSchema,
+    createQuoteItemSchema,
+    quoteItemWithComponentsSchema,
 } from "./service-order.schemas.js";
 import serviceOrderController from "./service-order.controller.js";
 
@@ -136,8 +138,8 @@ registry.registerPath({
                 },
             },
         },
-        409: { $ref: "#/components/responses/startDiagnosisConflictError" },
         404: { $ref: "#/components/responses/serviceOrderNotFoundError" },
+        409: { $ref: "#/components/responses/startDiagnosisConflictError" },
         500: { $ref: "#/components/responses/internalError" },
     }
 });
@@ -183,8 +185,8 @@ registry.registerPath({
                 },
             },
         },
-        409: { $ref: "#/components/responses/createFindingConflictError" },
         404: { $ref: "#/components/responses/diagnosisNotFoundError" },
+        409: { $ref: "#/components/responses/createFindingConflictError" },
         422: { $ref: "#/components/responses/createFindingValidationError" },
         500: { $ref: "#/components/responses/internalError" },
     }
@@ -231,13 +233,61 @@ registry.registerPath({
                 },
             },
         },
-        409: { $ref: "#/components/responses/createQuoteConflictError" },
         404: { $ref: "#/components/responses/diagnosisNotFoundError" },
+        409: { $ref: "#/components/responses/createQuoteConflictError" },
         422: { $ref: "#/components/responses/createQuoteValidationError" },
         500: { $ref: "#/components/responses/internalError" },
     }
 });
 router.post("/:id/quotes", checkAccessToken, authorize("ADMIN", "ATTENDANT"), validate(createQuoteSchema), serviceOrderController.createQuote);
+
+registry.registerPath({
+    tags: ["Quote"],
+    method: "post",
+    path: "/service-orders/quotes/{id}/items",
+    summary: "create a new quote item with components(requires ADMIN or ATTENDANT role)",
+    security: [{ bearerAuth: [] }],
+    request: {
+        params: z.object({ id: z.string() }),
+        body: {
+            content: { "application/json": { schema: createQuoteItemSchema } },
+        },
+    },
+    responses: {
+        201: {
+            description: "Quote item successfully created",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        success: z.boolean().openapi({ example: true }),
+                        data: quoteItemWithComponentsSchema,
+                        message: z.string().openapi({ example: "Quote item successfully created" }),
+                    }),
+                },
+            },
+        },
+        400: { $ref: "#/components/responses/missingQuoteIdError" },
+        401: {
+            description: "Authentication failed or because the authenticated user no longer exists",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
+                        invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
+                        accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
+                        authenticatedUserNoLongerExists: { $ref: "#/components/examples/authenticatedUserNoLongerExists" },
+                    },
+                },
+            },
+        },
+        404: { $ref: "#/components/responses/quoteOrFindingNotFoundError" },
+        409: { $ref: "#/components/responses/createQuoteItemConflictError" },
+        422: { $ref: "#/components/responses/createQuoteItemValidationError" },
+        500: { $ref: "#/components/responses/internalError" },
+    }
+});
+router.post("/quotes/:id/items", checkAccessToken, authorize("ADMIN", "ATTENDANT"), validate(createQuoteItemSchema), serviceOrderController.createQuoteItem)
 
 // GET 
 registry.registerPath({

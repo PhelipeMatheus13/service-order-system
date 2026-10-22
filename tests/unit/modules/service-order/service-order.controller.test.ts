@@ -1,10 +1,11 @@
 // (Node built‑ins)
 import { beforeEach, describe, expect, it, vi } from "vitest";
 // (Types)
-import { ServiceOrderRecord, DiagnosisRecord, FindingRecord, QuoteRecord } from "../../../../src/modules/service-order/service-order.types.js";
+import { ServiceOrderRecord, DiagnosisRecord, FindingRecord, QuoteRecord, QuoteItemWithComponents } from "../../../../src/modules/service-order/service-order.types.js";
 // (local modules)
 import serviceOrderController from "../../../../src/modules/service-order/service-order.controller.js";
 import serviceOrderService from "../../../../src/modules/service-order/service-order.service.js";
+import { Prisma } from "../../../../src/generated/prisma/client.js";
 
 vi.mock("../../../../src/modules/service-order/service-order.service.js");
 
@@ -742,6 +743,149 @@ describe("Service Order Controller (Unit)", () => {
             vi.mocked(serviceOrderService).createQuote.mockRejectedValue(error);
 
             await serviceOrderController.createQuote(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(error);
+            expect(res.status).not.toHaveBeenCalled();
+        });
+    });
+
+    describe("createQuoteItem", () => {
+        it("should return 201 on successful quote item creation", async () => {
+            req.params.id = "uuid-quote-123";
+            req.user = { id: "uuid-user-123" };
+            req.body = {
+                findingId: "uuid-finding-123",
+                description: "Battery replacement",
+                components: [
+                    {
+                        type: "PART",
+                        description: "Battery",
+                        quantity: 1,
+                        unitPrice: 80.0,
+                    },
+                    {
+                        type: "LABOR",
+                        description: "Battery replacement labor",
+                        quantity: 1,
+                        unitPrice: 20.0,
+                    },
+                ],
+            };
+
+            const mockQuoteItem = {
+                id: "uuid-quote-item-123",
+                quoteId: "uuid-quote-123",
+                findingId: "uuid-finding-123",
+                description: "Battery replacement",
+                decision: "PENDING",
+                createdById: "uuid-user-123",
+                createdAt: new Date(),
+                updatedById: null,
+                updatedAt: null,
+                quoteItemComponents: [
+                    {
+                        id: "uuid-component-1",
+                        quoteItemId: "uuid-quote-item-123",
+                        type: "PART",
+                        description: "Battery",
+                        quantity: 1,
+                        unitPrice: new Prisma.Decimal(80),
+                        createdAt: new Date(),
+                        updatedAt: null,
+                    },
+                    {
+                        id: "uuid-component-2",
+                        quoteItemId: "uuid-quote-item-123",
+                        type: "LABOR",
+                        description: "Battery replacement labor",
+                        quantity: 1,
+                        unitPrice: new Prisma.Decimal(20),
+                        createdAt: new Date(),
+                        updatedAt: null,
+                    },
+                ],
+            } as QuoteItemWithComponents;
+
+            vi.mocked(serviceOrderService).createQuoteItem.mockResolvedValue(mockQuoteItem);
+
+            await serviceOrderController.createQuoteItem(req, res, next);
+
+            expect(serviceOrderService.createQuoteItem).toHaveBeenCalledWith({
+                quoteId: "uuid-quote-123",
+                findingId: "uuid-finding-123",
+                description: "Battery replacement",
+                createdById: "uuid-user-123",
+                components: [
+                    {
+                        type: "PART",
+                        description: "Battery",
+                        quantity: 1,
+                        unitPrice: 80.0,
+                    },
+                    {
+                        type: "LABOR",
+                        description: "Battery replacement labor",
+                        quantity: 1,
+                        unitPrice: 20.0,
+                    },
+                ],
+            });
+
+            expect(res.status).toHaveBeenCalledWith(201);
+            expect(res.json).toHaveBeenCalledWith({
+                success: true,
+                data: mockQuoteItem,
+                message: "Quote item successfully created",
+            });
+            expect(next).not.toHaveBeenCalled();
+        });
+
+        it("should call next with badRequest error if id is missing", async () => {
+            req.params = {};
+            req.user = { id: "uuid-user-123" };
+            req.body = {
+                findingId: "uuid-finding-123",
+                description: "Battery replacement",
+                components: [
+                    {
+                        type: "PART",
+                        description: "Battery",
+                        quantity: 1,
+                        unitPrice: 80.0,
+                    },
+                ],
+            };
+
+            await serviceOrderController.createQuoteItem(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(expect.objectContaining({
+                statusCode: 400,
+                message: "Quote ID is required",
+            }));
+            expect(serviceOrderService.createQuoteItem).not.toHaveBeenCalled();
+            expect(res.status).not.toHaveBeenCalled();
+        });
+
+        it("should propagate error when service fails", async () => {
+            req.params.id = "uuid-quote-123";
+            req.user = { id: "uuid-user-123" };
+            req.body = {
+                findingId: "uuid-finding-123",
+                description: "Battery replacement",
+                components: [
+                    {
+                        type: "PART",
+                        description: "Battery",
+                        quantity: 1,
+                        unitPrice: 80.0,
+                    },
+                ],
+            };
+
+            const error = new Error("Service error");
+            vi.mocked(serviceOrderService).createQuoteItem.mockRejectedValue(error);
+
+            await serviceOrderController.createQuoteItem(req, res, next);
 
             expect(next).toHaveBeenCalledWith(error);
             expect(res.status).not.toHaveBeenCalled();

@@ -105,6 +105,8 @@ model User {
   findingsCreated             Finding[]                   @relation("FindingCreatedBy")
   findingsUpdated             Finding[]                   @relation("FindingUpdatedBy")
   quotes                      Quote[]
+  quoteItemsCreated           QuoteItem[]                 @relation("QuoteItemCreatedBy")
+  quoteItemsUpdated           QuoteItem[]                 @relation("QuoteItemUpdatedBy")
 
   @@index([createdAt(sort: Desc)])
   @@map("users")
@@ -312,24 +314,30 @@ model QuoteItem {
   findingId   String?           @map("finding_id") @db.Uuid
   description String            @db.Text
   decision    QuoteItemDecision @default(PENDING)
+  createdById String            @map("created_by") @db.Uuid
   createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamptz()
+  updatedById String?           @map("updated_by") @db.Uuid
   updatedAt   DateTime?         @map("updated_at") @db.Timestamptz()
 
   quote               Quote                @relation(fields: [quoteId], references: [id], onDelete: Cascade)
   finding             Finding?             @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  createdBy           User                 @relation("QuoteItemCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy           User?                @relation("QuoteItemUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
   quoteItemComponents QuoteItemComponent[]
 
   @@index([quoteId])
   @@index([findingId])
+  @@index([createdById])
+  @@index([updatedById])
   @@map("quote_items")
 }
 
 model QuoteItemComponent {
   id          String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   quoteItemId String                 @map("quote_item_id") @db.Uuid
-  type        QuoteItemComponentType 
+  type        QuoteItemComponentType
   description String                 @db.Text
-  quantity    Int                    
+  quantity    Int
   unitPrice   Decimal                @map("unit_price") @db.Decimal(10, 2)
   createdAt   DateTime               @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt   DateTime?              @map("updated_at") @db.Timestamptz()

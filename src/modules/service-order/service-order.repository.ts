@@ -14,6 +14,8 @@ import type {
     CompleteDiagnosisInput,
     QuoteRecord,
     CreateQuoteInput,
+    QuoteItemWithComponents,
+    CreateQuoteItemInput
 } from "./service-order.types.ts";
 import { ServiceOrderStatus } from "./service-order.types.js";
 import { getPrisma } from "../../shared/config/database.js";
@@ -234,7 +236,7 @@ const completeDiagnosis = async (input: CompleteDiagnosisInput, tx?: PrismaClien
     return rows[0] ?? null;
 };
 
-const createQuote = async ( input: CreateQuoteInput, tx?: Prisma.TransactionClient): Promise<QuoteRecord | null> => {
+const createQuote = async (input: CreateQuoteInput, tx?: Prisma.TransactionClient): Promise<QuoteRecord | null> => {
     const prisma: PrismaClientOrTx = tx || getPrisma();
 
     // Atomic guard: the INSERT only succeeds if the diagnosis exists, belongs
@@ -268,6 +270,41 @@ const createQuote = async ( input: CreateQuoteInput, tx?: Prisma.TransactionClie
     `;
 
     return rows[0] ?? null;
+};
+
+const lockQuoteIfDraft = async (quoteId: string, tx: Prisma.TransactionClient): Promise<boolean> => {
+    // UPDATE acquires a row lock. Any concurrent write on this row (e.g.
+    // submitQuote) will block until this transaction commits/rolls back.
+    // The updatedAt bump is a side effect; the lock is the goal.
+    const result = await tx.quote.updateMany({
+        where: { id: quoteId, status: "DRAFT" },
+        data: { updatedAt: new Date() },
+    });
+
+    return result.count > 0;
+};
+
+const createQuoteItem = async (input: CreateQuoteItemInput, tx?: Prisma.TransactionClient): Promise<QuoteItemWithComponents> => {
+    const prisma: PrismaClientOrTx = tx || getPrisma();
+    return prisma.quoteItem.create({
+        data: {
+            quoteId: input.quoteId,
+            findingId: input.findingId,
+            description: input.description,
+            createdById: input.createdById,
+            quoteItemComponents: {
+                create: input.components.map((component) => ({
+                    type: component.type,
+                    description: component.description,
+                    quantity: component.quantity,
+                    unitPrice: component.unitPrice,
+                })),
+            },
+        },
+        include: {
+            quoteItemComponents: true,
+        },
+    });
 };
 
 // Reader
@@ -321,6 +358,11 @@ const listFindingsByDiagnosisId = async (diagnosisId: string): Promise<FindingRe
     });
 };
 
+const findQuoteById = async (id: string): Promise<QuoteRecord | null> => {
+    const prisma = getPrisma();
+    return prisma.quote.findUnique({ where: { id } });
+};
+
 export default {
     // Writer
     create,
@@ -333,6 +375,8 @@ export default {
     deleteFindingById,
     completeDiagnosis,
     createQuote,
+    lockQuoteIfDraft,
+    createQuoteItem,
     // Reader
     findById,
     list,
@@ -340,4 +384,5 @@ export default {
     findFindingById,
     countRepairableFindings,
     listFindingsByDiagnosisId,
+    findQuoteById,
 };

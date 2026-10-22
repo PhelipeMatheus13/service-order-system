@@ -4,7 +4,8 @@ import {
     CreateFindingRequest,
     UpdateFindingRequest,
     CompleteDiagnosisRequest,
-    CreateQuoteRequest
+    CreateQuoteRequest,
+    CreateQuoteItemRequest
 } from "./service-order.schemas.js";
 import {
     CreateServiceOrderInput,
@@ -13,7 +14,8 @@ import {
     CreateFindingInput,
     UpdateFindingInput,
     CompleteDiagnosisInput,
-    CreateQuoteInput
+    CreateQuoteInput,
+    CreateQuoteItemInput
 } from "./service-order.types.js";
 
 const createServiceOrderDTO = (body: CreateServiceOrderRequest, createdById: string): CreateServiceOrderInput => ({
@@ -59,6 +61,15 @@ const createQuoteDTO = (body: CreateQuoteRequest, serviceOrderId: string, create
     createdById,
 });
 
+const createQuoteItemDTO = (body: CreateQuoteItemRequest, quoteId: string, createdById: string): CreateQuoteItemInput => ({
+    quoteId,
+    findingId: body.findingId,
+    description: body.description,
+    createdById,
+    components: body.components
+});
+
+
 export default {
     createServiceOrderDTO,
     cancelServiceOrderDTO,
@@ -67,4 +78,5 @@ export default {
     updateFindingDTO,
     completeDiagnosisDTO,
     createQuoteDTO,
+    createQuoteItemDTO,
 };

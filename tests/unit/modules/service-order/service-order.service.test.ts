@@ -14,6 +14,8 @@ import {
     CompleteDiagnosisInput,
     QuoteRecord,
     CreateQuoteInput,
+    CreateQuoteItemInput,
+    QuoteItemWithComponents
 } from "../../../../src/modules/service-order/service-order.types.js";
 // (shared)
 import { getPrisma } from "../../../../src/shared/config/database.js";
@@ -21,6 +23,7 @@ import { isForeignKeyConstraintOn, isUniqueConstraintOn } from "../../../../src/
 // (local modules)
 import serviceOrderService from "../../../../src/modules/service-order/service-order.service.js";
 import serviceOrderRepository from "../../../../src/modules/service-order/service-order.repository.js";
+import { Prisma } from "../../../../src/generated/prisma/client.js";
 
 vi.mock("../../../../src/shared/config/database.js");
 vi.mock("../../../../src/shared/utils/prisma-error.js");
@@ -1384,6 +1387,244 @@ describe("Service Order Service (Unit)", () => {
             expect(serviceOrderRepository.findDiagnosisById).toHaveBeenCalledWith(validInput.diagnosisId);
             expect(serviceOrderRepository.createQuote).toHaveBeenCalledWith(validInput);
             expect(result).toBe(mockQuoteRecord);
+        });
+    });
+
+    describe("createQuoteItem", () => {
+        const validInput: CreateQuoteItemInput = {
+            quoteId: "uuid-quote-123",
+            findingId: "uuid-finding-123",
+            description: "Battery replacement",
+            createdById: "uuid-user-123",
+            components: [
+                {
+                    type: "PART",
+                    description: "Battery",
+                    quantity: 1,
+                    unitPrice: 80.0,
+                },
+            ],
+        };
+
+        const mockQuoteRecord = {
+            id: validInput.quoteId,
+            serviceOrderId: "uuid-service-order-123",
+            diagnosisId: "uuid-diagnosis-123",
+            status: "DRAFT",
+            submittedAt: null,
+            respondedAt: null,
+            createdById: "uuid-user-456",
+            createdAt: new Date(),
+            updatedAt: null,
+        } as QuoteRecord;
+
+        const mockFindingRecord = {
+            id: validInput.findingId,
+            diagnosisId: "uuid-diagnosis-123",
+            description: "Battery capacity below expected level",
+            repairable: true,
+            createdById: "uuid-user-456",
+            createdAt: new Date(),
+            updatedById: null,
+            updatedAt: null,
+        } as FindingRecord;
+
+        const mockQuoteItemRecord = {
+            id: "uuid-quote-item-123",
+            quoteId: validInput.quoteId,
+            findingId: validInput.findingId,
+            description: validInput.description,
+            decision: "PENDING",
+            createdById: validInput.createdById,
+            createdAt: new Date(),
+            updatedById: null,
+            updatedAt: null,
+            quoteItemComponents: [
+                {
+                    id: "uuid-component-123",
+                    quoteItemId: "uuid-quote-item-123",
+                    type: "PART",
+                    description: "Battery",
+                    quantity: 1,
+                    unitPrice: new Prisma.Decimal(80),
+                    createdAt: new Date(),
+                    updatedAt: null,
+                },
+            ],
+        } as QuoteItemWithComponents;
+
+        const setupCreateQuoteItemMocks = () => {
+            const tx = {} as any;
+
+            vi.mocked(serviceOrderRepository.findQuoteById).mockResolvedValue(mockQuoteRecord);
+            vi.mocked(serviceOrderRepository.findFindingById).mockResolvedValue(mockFindingRecord);
+            vi.mocked(getPrisma).mockReturnValue({
+                $transaction: vi.fn(async (callback) => callback(tx)),
+            } as any);
+            vi.mocked(serviceOrderRepository.lockQuoteIfDraft).mockResolvedValue(true);
+            vi.mocked(serviceOrderRepository.createQuoteItem).mockResolvedValue(mockQuoteItemRecord);
+
+            return { tx };
+        };
+
+        it("should throw if serviceOrderRepository.findQuoteById fails", async () => {
+            const error = new Error("fake error");
+            vi.mocked(serviceOrderRepository.findQuoteById).mockRejectedValue(error);
+
+            await expect(serviceOrderService.createQuoteItem(validInput))
+                .rejects.toThrow(error);
+        });
+
+        it("should throw NOT_FOUND if quote does not exist", async () => {
+            vi.mocked(serviceOrderRepository.findQuoteById).mockResolvedValue(null);
+
+            await expect(serviceOrderService.createQuoteItem(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 404,
+                    message: "Quote not found",
+                });
+
+            expect(serviceOrderRepository.findFindingById).not.toHaveBeenCalled();
+        });
+
+        it("should throw CONFLICT if quote is not DRAFT", async () => {
+            vi.mocked(serviceOrderRepository.findQuoteById).mockResolvedValue({
+                ...mockQuoteRecord,
+                status: "SENT",
+            });
+
+            await expect(serviceOrderService.createQuoteItem(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 409,
+                    message: "Quote is not in DRAFT status",
+                });
+
+            expect(serviceOrderRepository.findFindingById).not.toHaveBeenCalled();
+        });
+
+        it("should throw if serviceOrderRepository.findFindingById fails", async () => {
+            const error = new Error("fake error");
+            vi.mocked(serviceOrderRepository.findQuoteById).mockResolvedValue(mockQuoteRecord);
+            vi.mocked(serviceOrderRepository.findFindingById).mockRejectedValue(error);
+
+            await expect(serviceOrderService.createQuoteItem(validInput))
+                .rejects.toThrow(error);
+        });
+
+        it("should throw NOT_FOUND if finding does not exist", async () => {
+            vi.mocked(serviceOrderRepository.findQuoteById).mockResolvedValue(mockQuoteRecord);
+            vi.mocked(serviceOrderRepository.findFindingById).mockResolvedValue(null);
+
+            await expect(serviceOrderService.createQuoteItem(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 404,
+                    message: "Finding not found",
+                });
+
+            expect(getPrisma).not.toHaveBeenCalled();
+        });
+
+        it("should throw CONFLICT if finding does not belong to quote's diagnosis", async () => {
+            vi.mocked(serviceOrderRepository.findQuoteById).mockResolvedValue(mockQuoteRecord);
+            vi.mocked(serviceOrderRepository.findFindingById).mockResolvedValue({
+                ...mockFindingRecord,
+                diagnosisId: "uuid-other-diagnosis",
+            });
+
+            await expect(serviceOrderService.createQuoteItem(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 409,
+                    message: "Finding does not belong to this quote's diagnosis",
+                });
+
+            expect(getPrisma).not.toHaveBeenCalled();
+        });
+
+        it("should throw CONFLICT if finding is not repairable", async () => {
+            vi.mocked(serviceOrderRepository.findQuoteById).mockResolvedValue(mockQuoteRecord);
+            vi.mocked(serviceOrderRepository.findFindingById).mockResolvedValue({
+                ...mockFindingRecord,
+                repairable: false,
+            });
+
+            await expect(serviceOrderService.createQuoteItem(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 409,
+                    message: "Finding is not repairable",
+                });
+
+            expect(getPrisma).not.toHaveBeenCalled();
+        });
+
+        it("should throw CONFLICT if quote is no longer DRAFT (race condition)", async () => {
+            const { tx } = setupCreateQuoteItemMocks();
+            vi.mocked(serviceOrderRepository.lockQuoteIfDraft).mockResolvedValue(false);
+
+            await expect(serviceOrderService.createQuoteItem(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 409,
+                    message: "Quote is no longer in DRAFT status",
+                });
+
+            expect(serviceOrderRepository.lockQuoteIfDraft).toHaveBeenCalledWith(validInput.quoteId, tx);
+            expect(serviceOrderRepository.createQuoteItem).not.toHaveBeenCalled();
+        });
+
+        it("should throw UNAUTHORIZED if created_by foreign key is violated", async () => {
+            const dbError = new Error("Foreign key constraint failed");
+            setupCreateQuoteItemMocks();
+            vi.mocked(serviceOrderRepository.createQuoteItem).mockRejectedValue(dbError);
+            vi.mocked(isForeignKeyConstraintOn).mockImplementation(
+                (_error, field) => field === "created_by",
+            );
+
+            await expect(serviceOrderService.createQuoteItem(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 401,
+                    message: "Authenticated user no longer exists",
+                    code: "USER_NOT_FOUND",
+                });
+
+            expect(isForeignKeyConstraintOn).toHaveBeenCalledWith(dbError, "created_by");
+        });
+
+        it("should throw NOT_FOUND if finding_id foreign key is violated (out-of-band delete)", async () => {
+            const dbError = new Error("Foreign key constraint failed");
+            setupCreateQuoteItemMocks();
+            vi.mocked(serviceOrderRepository.createQuoteItem).mockRejectedValue(dbError);
+            vi.mocked(isForeignKeyConstraintOn).mockImplementation(
+                (_error, field) => field === "finding_id",
+            );
+
+            await expect(serviceOrderService.createQuoteItem(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 404,
+                    message: "Finding not found",
+                });
+
+            expect(isForeignKeyConstraintOn).toHaveBeenCalledWith(dbError, "finding_id");
+        });
+
+        it("should propagate error if it is not a known constraint violation", async () => {
+            const error = new Error("fake error");
+            setupCreateQuoteItemMocks();
+            vi.mocked(serviceOrderRepository.createQuoteItem).mockRejectedValue(error);
+            vi.mocked(isForeignKeyConstraintOn).mockReturnValue(false);
+
+            await expect(serviceOrderService.createQuoteItem(validInput))
+                .rejects.toThrow(error);
+        });
+
+        it("should create quote item successfully", async () => {
+            const { tx } = setupCreateQuoteItemMocks();
+
+            const result = await serviceOrderService.createQuoteItem(validInput);
+
+            expect(serviceOrderRepository.findQuoteById).toHaveBeenCalledWith(validInput.quoteId);
+            expect(serviceOrderRepository.findFindingById).toHaveBeenCalledWith(validInput.findingId);
+            expect(serviceOrderRepository.lockQuoteIfDraft).toHaveBeenCalledWith(validInput.quoteId, tx);
+            expect(serviceOrderRepository.createQuoteItem).toHaveBeenCalledWith(validInput, tx);
+            expect(result).toBe(mockQuoteItemRecord);
         });
     });
 });

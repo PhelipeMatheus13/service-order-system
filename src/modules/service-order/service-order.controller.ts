@@ -153,6 +153,18 @@ const createQuote = asyncHandler(async (req, res) => {
     });
 });
 
+const createQuoteItem = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (!id) throw badRequest({ message: "Quote ID is required" });
+    const input = serviceOrderDTO.createQuoteItemDTO(req.body, String(id), String(req.user?.id))
+    const QuoteItemWithComponents = await serviceOrderService.createQuoteItem(input);
+    res.status(201).json({
+        success: true,
+        data: QuoteItemWithComponents,
+        message: "Quote item successfully created",
+    });
+});
+
 export default {
     createServiceOrder,
     getServiceOrderById,
@@ -166,4 +178,5 @@ export default {
     completeDiagnosis,
     listFindingsByDiagnosisId,
     createQuote,
+    createQuoteItem,
 };
