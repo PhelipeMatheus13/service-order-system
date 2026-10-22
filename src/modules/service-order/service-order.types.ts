@@ -76,6 +76,10 @@ interface CompleteDiagnosisInput {
     completedById: string;
 }
 
+interface ListFidingsByDiagnosisId {
+    diagnosisId: string;
+};
+
 interface CreateQuoteInput {
     serviceOrderId: string;
     diagnosisId: string;
@@ -101,6 +105,10 @@ type QuoteItemWithComponents = QuoteItem & {
     quoteItemComponents: QuoteItemComponent[];
 };
 
+interface ListQuotesByServiceOrderIdInput {
+    serviceOrderId: string;
+};
+
 export {
     ServiceOrderStatus,
     ServiceOrderStatusChangeSource,
@@ -123,8 +131,10 @@ export type {
     CreateFindingInput,
     UpdateFindingInput,
     CompleteDiagnosisInput,
+    ListFidingsByDiagnosisId,
     Quote as QuoteRecord,
     CreateQuoteInput,
     QuoteItemWithComponents,
     CreateQuoteItemInput,
+    ListQuotesByServiceOrderIdInput
 };

@@ -1821,7 +1821,9 @@ describe("Service Order Repository (Integration)", () => {
                 const olderFinding = findings.find((f) => f.description === "Motherboard corrosion")!;
                 const newerFinding = findings.find((f) => f.description === "Battery capacity below expected level")!;
 
-                const result = await serviceOrderRepository.listFindingsByDiagnosisId(diagnosis!.id);
+                const result = await serviceOrderRepository.listFindingsByDiagnosisId({
+                    diagnosisId: diagnosis!.id
+                });
 
                 expect(result).toHaveLength(2);
                 expect(result[0].id).toBe(olderFinding.id);
@@ -1831,7 +1833,9 @@ describe("Service Order Repository (Integration)", () => {
             });
 
             it("should return an empty array when the diagnosis has no findings", async () => {
-                const findings = await serviceOrderRepository.listFindingsByDiagnosisId("0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa");
+                const findings = await serviceOrderRepository.listFindingsByDiagnosisId({
+                    diagnosisId: "0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa"
+                });
 
                 expect(findings).toEqual([]);
             });
@@ -1866,6 +1870,75 @@ describe("Service Order Repository (Integration)", () => {
                 const quote = await serviceOrderRepository.findQuoteById("0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa");
 
                 expect(quote).toBeNull();
+            });
+        });
+
+        describe("listQuotesByServiceOrderId", () => {
+            it("should return quotes ordered by creation date ascending", async () => {
+                const { user, serviceOrder, diagnosis } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "ATTENDANT" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "AWAITING_QUOTE" })
+                    .withDiagnosis()
+                    .build();
+
+                const now = new Date();
+
+                const quotes = await prisma.quote.createManyAndReturn({
+                    data: [
+                        {
+                            serviceOrderId: serviceOrder!.id,
+                            diagnosisId: diagnosis!.id,
+                            createdById: user.id,
+                            status: "SUPERSEDED",
+                            createdAt: new Date(now.getTime() - 60 * 60 * 1000),
+                        },
+                        {
+                            serviceOrderId: serviceOrder!.id,
+                            diagnosisId: diagnosis!.id,
+                            createdById: user.id,
+                            status: "DRAFT",
+                            createdAt: now,
+                        },
+                    ],
+                });
+
+                const olderQuote = quotes.find((q) => q.status === "SUPERSEDED")!;
+                const newerQuote = quotes.find((q) => q.status === "DRAFT")!;
+
+                const result = await serviceOrderRepository.listQuotesByServiceOrderId({
+                    serviceOrderId: serviceOrder!.id,
+                });
+
+                expect(result).toHaveLength(2);
+                expect(result[0].id).toBe(olderQuote.id);
+                expect(result[0].status).toBe("SUPERSEDED");
+                expect(result[1].id).toBe(newerQuote.id);
+                expect(result[1].status).toBe("DRAFT");
+            });
+
+            it("should return an empty array when the service order has no quotes", async () => {
+                const { serviceOrder } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "ATTENDANT" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "AWAITING_QUOTE" })
+                    .build();
+
+                const result = await serviceOrderRepository.listQuotesByServiceOrderId({
+                    serviceOrderId: serviceOrder!.id,
+                });
+
+                expect(result).toEqual([]);
+            });
+
+            it("should return an empty array when the service order does not exist", async () => {
+                const result = await serviceOrderRepository.listQuotesByServiceOrderId({
+                    serviceOrderId: "0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa",
+                });
+
+                expect(result).toEqual([]);
             });
         });
     });

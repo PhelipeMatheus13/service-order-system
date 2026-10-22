@@ -449,6 +449,88 @@ registry.registerPath({
 });
 router.get("/diagnoses/:id/findings", checkAccessToken, serviceOrderController.listFindingsByDiagnosisId);
 
+registry.registerPath({
+    tags: ["Quote"],
+    method: "get",
+    path: "/service-orders/{id}/quotes",
+    summary: "List quotes by service order ID",
+    security: [{ bearerAuth: [] }],
+    request: {
+        params: z.object({ id: z.string() }),
+    },
+    responses: {
+        200: {
+            description: "Quotes retrieved successfully",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        success: z.boolean().openapi({ example: true }),
+                        data: z.array(quoteSchema),
+                    }),
+                },
+            },
+        },
+        400: { $ref: "#/components/responses/missingServiceOrderIdError" },
+        401: {
+            description: "Missing, invalid or expired access token",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
+                        invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
+                        accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
+                    },
+                },
+            },
+        },
+        404: { $ref: "#/components/responses/serviceOrderNotFoundError" },
+        500: { $ref: "#/components/responses/internalError" },
+    }
+});
+router.get("/:id/quotes", checkAccessToken, serviceOrderController.listQuotesByServiceOrderId);
+
+registry.registerPath({
+    tags: ["Quote"],
+    method: "get",
+    path: "/service-orders/quotes/{id}",
+    summary: "Get quote by ID",
+    security: [{ bearerAuth: [] }],
+    request: {
+        params: z.object({ id: z.string() }),
+    },
+    responses: {
+        200: {
+            description: "Quote retrieved successfully",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        success: z.boolean().openapi({ example: true }),
+                        data: quoteSchema,
+                    }),
+                },
+            },
+        },
+        400: { $ref: "#/components/responses/missingQuoteIdError" },
+        401: {
+            description: "Missing, invalid or expired access token",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
+                        invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
+                        accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
+                    },
+                },
+            },
+        },
+        404: { $ref: "#/components/responses/quoteNotFoundError" },
+        500: { $ref: "#/components/responses/internalError" },
+    }
+});
+router.get("/quotes/:id", checkAccessToken, serviceOrderController.getQuoteById);
+
 // PATCH
 registry.registerPath({
     tags: ["Service-order"],

@@ -210,6 +210,22 @@ const findingNotFoundError = registry.registerComponent("responses", "findingNot
     },
 });
 
+const quoteNotFoundError = registry.registerComponent("responses", "quoteNotFoundError", {
+    description: "Quote not found or does not exist",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            example: {
+                success: false,
+                error: {
+                    code: "NOT_FOUND",
+                    message: "Quote not found",
+                },
+            },
+        },
+    },
+});
+
 const quoteOrFindingNotFoundError = registry.registerComponent("responses", "quoteOrFindingNotFoundError", {
     description: "Finding not found or does not exist",
     content: {
@@ -946,6 +962,7 @@ export {
     serviceOrderNotFoundError,
     diagnosisNotFoundError,
     findingNotFoundError,
+    quoteNotFoundError,
     quoteOrFindingNotFoundError,
     // 409
     emailAlreadyExistsError,

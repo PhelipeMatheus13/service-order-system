@@ -446,6 +446,108 @@ describe("Service Order Routes (Integration)", () => {
         });
     });
 
+    describe("GET /service-orders/quotes/:id", () => {
+        it("should return the quote data", async () => {
+            const { user, quote } = await new ServiceOrderBuilder(prisma)
+                .withUser({ role: "ATTENDANT" })
+                .withCustomer()
+                .withDevice()
+                .withServiceOrder({ status: "AWAITING_QUOTE" })
+                .withDiagnosis()
+                .withQuote()
+                .build();
+
+            const accessToken = generateAccessToken(user.id, "ATTENDANT");
+
+            const res = await request(app)
+                .get(`/service-orders/quotes/${quote!.id}`)
+                .set("Authorization", `Bearer ${accessToken}`);
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(res.body.data).toMatchObject({
+                id: quote!.id,
+                serviceOrderId: quote!.serviceOrderId,
+                diagnosisId: quote!.diagnosisId,
+                status: "DRAFT",
+                createdById: user.id,
+            });
+            expect(res.body.data.createdAt).toBeTruthy();
+            expect(res.body.data.submittedAt).toBeNull();
+            expect(res.body.data.respondedAt).toBeNull();
+            expect(res.body.data.updatedAt).toBeNull();
+        });
+    });
+
+    describe("GET /service-orders/:id/quotes", () => {
+        it("should return the quotes ordered by creation date ascending", async () => {
+            const { user, serviceOrder, diagnosis } = await new ServiceOrderBuilder(prisma)
+                .withUser({ role: "ATTENDANT" })
+                .withCustomer()
+                .withDevice()
+                .withServiceOrder({ status: "AWAITING_QUOTE" })
+                .withDiagnosis()
+                .build();
+
+            const accessToken = generateAccessToken(user.id, "ATTENDANT");
+
+            const now = new Date();
+
+            const quotes = await prisma.quote.createManyAndReturn({
+                data: [
+                    {
+                        serviceOrderId: serviceOrder!.id,
+                        diagnosisId: diagnosis!.id,
+                        createdById: user.id,
+                        status: "SUPERSEDED",
+                        createdAt: new Date(now.getTime() - 60 * 60 * 1000),
+                    },
+                    {
+                        serviceOrderId: serviceOrder!.id,
+                        diagnosisId: diagnosis!.id,
+                        createdById: user.id,
+                        status: "DRAFT",
+                        createdAt: now,
+                    },
+                ],
+            });
+
+            const olderQuote = quotes.find((q) => q.status === "SUPERSEDED")!;
+            const newerQuote = quotes.find((q) => q.status === "DRAFT")!;
+
+            const res = await request(app)
+                .get(`/service-orders/${serviceOrder!.id}/quotes`)
+                .set("Authorization", `Bearer ${accessToken}`);
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(res.body.data).toHaveLength(2);
+            expect(res.body.data[0].id).toBe(olderQuote.id);
+            expect(res.body.data[0].status).toBe("SUPERSEDED");
+            expect(res.body.data[1].id).toBe(newerQuote.id);
+            expect(res.body.data[1].status).toBe("DRAFT");
+        });
+
+        it("should return an empty array when the service order has no quotes", async () => {
+            const { user, serviceOrder } = await new ServiceOrderBuilder(prisma)
+                .withUser({ role: "ATTENDANT" })
+                .withCustomer()
+                .withDevice()
+                .withServiceOrder({ status: "AWAITING_QUOTE" })
+                .build();
+
+            const accessToken = generateAccessToken(user.id, "ATTENDANT");
+
+            const res = await request(app)
+                .get(`/service-orders/${serviceOrder!.id}/quotes`)
+                .set("Authorization", `Bearer ${accessToken}`);
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(res.body.data).toEqual([]);
+        });
+    });
+
     describe("PATCH /service-orders/:id/cancel", () => {
         it("should cancel the service order successfully", async () => {
             const { user, serviceOrder } = await new ServiceOrderBuilder(prisma)

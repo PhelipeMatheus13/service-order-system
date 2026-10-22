@@ -10,10 +10,12 @@ import {
     UpdateFindingInput,
     CompleteDiagnosisInput,
     DiagnosisResult,
+    ListFidingsByDiagnosisId,
     CreateQuoteInput,
     QuoteRecord,
     CreateQuoteItemInput,
     QuoteItemWithComponents,
+    ListQuotesByServiceOrderIdInput,
 } from "./service-order.types.js";
 import { ServiceOrderStatus } from "./service-order.types.js";
 import { getPrisma } from "../../shared/config/database.js";
@@ -339,13 +341,13 @@ const completeDiagnosis = async (input: CompleteDiagnosisInput): Promise<Diagnos
     }
 };
 
-const listFindingsByDiagnosisId = async (diagnosisId: string): Promise<FindingRecord[]> => {
-    const diagnosis = await serviceOrderRepository.findDiagnosisById(diagnosisId);
+const listFindingsByDiagnosisId = async (input: ListFidingsByDiagnosisId): Promise<FindingRecord[]> => {
+    const diagnosis = await serviceOrderRepository.findDiagnosisById(input.diagnosisId);
     if (!diagnosis) {
         throw notFound({ message: "Diagnosis not found" });
     }
 
-    return serviceOrderRepository.listFindingsByDiagnosisId(diagnosisId);
+    return serviceOrderRepository.listFindingsByDiagnosisId(input);
 };
 
 const createQuote = async (input: CreateQuoteInput): Promise<QuoteRecord> => {
@@ -431,6 +433,21 @@ const createQuoteItem = async (input: CreateQuoteItemInput): Promise<QuoteItemWi
     }
 };
 
+const getQuoteById = async (id: string): Promise<QuoteRecord> => {
+    const quote = await serviceOrderRepository.findQuoteById(id);
+    if (!quote) throw notFound({ message: "Quote not found" });
+    return quote;
+};
+
+const listQuotesByServiceOrderId = async(input: ListQuotesByServiceOrderIdInput): Promise<QuoteRecord[]> => {
+    const serviceOrder = await serviceOrderRepository.findById(input.serviceOrderId);
+    if (!serviceOrder) {
+        throw notFound({ message: "Service order not found" });
+    }
+
+    return serviceOrderRepository.listQuotesByServiceOrderId(input);
+};
+
 export default {
     createServiceOrder,
     getServiceOrderById,
@@ -446,4 +463,6 @@ export default {
     listFindingsByDiagnosisId,
     createQuote,
     createQuoteItem,
+    getQuoteById,
+    listQuotesByServiceOrderId,
 };

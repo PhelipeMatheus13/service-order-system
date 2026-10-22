@@ -134,7 +134,9 @@ const completeDiagnosis = asyncHandler(async (req, res) => {
 const listFindingsByDiagnosisId = asyncHandler(async (req, res) => {
     const { id } = req.params;
     if (!id) throw badRequest({ message: "Diagnosis ID is required" });
-    const findings = await serviceOrderService.listFindingsByDiagnosisId(String(id));
+    const findings = await serviceOrderService.listFindingsByDiagnosisId({
+        diagnosisId: String(id),
+    });
     res.status(200).json({
         success: true,
         data: findings,
@@ -148,7 +150,7 @@ const createQuote = asyncHandler(async (req, res) => {
     const quote = await serviceOrderService.createQuote(input);
     res.status(201).json({
         success: true,
-        data: quote,
+        data: quote, // quote does not possess any sensitive data, so we can return directly
         message: "Quote successfully created",
     });
 });
@@ -160,8 +162,30 @@ const createQuoteItem = asyncHandler(async (req, res) => {
     const QuoteItemWithComponents = await serviceOrderService.createQuoteItem(input);
     res.status(201).json({
         success: true,
-        data: QuoteItemWithComponents,
+        data: QuoteItemWithComponents, // quote item does not possess any sensitive data, so we can return directly
         message: "Quote item successfully created",
+    });
+});
+
+const getQuoteById = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (!id) throw badRequest({ message: "Quote ID is required" });
+    const quote = await serviceOrderService.getQuoteById(String(id));
+    res.status(200).json({
+        success: true,
+        data: quote, 
+    });
+});
+
+const listQuotesByServiceOrderId = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (!id) throw badRequest({ message: "Service order ID is required" });
+    const quotes = await serviceOrderService.listQuotesByServiceOrderId({
+        serviceOrderId: String(id),
+    });
+    res.status(200).json({
+        success: true,
+        data: quotes, 
     });
 });
 
@@ -179,4 +203,6 @@ export default {
     listFindingsByDiagnosisId,
     createQuote,
     createQuoteItem,
+    getQuoteById,
+    listQuotesByServiceOrderId,
 };

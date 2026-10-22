@@ -15,7 +15,9 @@ import type {
     QuoteRecord,
     CreateQuoteInput,
     QuoteItemWithComponents,
-    CreateQuoteItemInput
+    CreateQuoteItemInput,
+    ListQuotesByServiceOrderIdInput,
+    ListFidingsByDiagnosisId
 } from "./service-order.types.ts";
 import { ServiceOrderStatus } from "./service-order.types.js";
 import { getPrisma } from "../../shared/config/database.js";
@@ -346,11 +348,11 @@ const countRepairableFindings = async (diagnosisId: string, tx?: PrismaClientOrT
     });
 };
 
-const listFindingsByDiagnosisId = async (diagnosisId: string): Promise<FindingRecord[]> => {
-    const prisma: PrismaClientOrTx = getPrisma();
+const listFindingsByDiagnosisId = async (input: ListFidingsByDiagnosisId): Promise<FindingRecord[]> => {
+    const prisma = getPrisma();
     return prisma.finding.findMany({
         where: {
-            diagnosisId,
+            diagnosisId: input.diagnosisId,
         },
         orderBy: {
             createdAt: "asc",
@@ -361,6 +363,18 @@ const listFindingsByDiagnosisId = async (diagnosisId: string): Promise<FindingRe
 const findQuoteById = async (id: string): Promise<QuoteRecord | null> => {
     const prisma = getPrisma();
     return prisma.quote.findUnique({ where: { id } });
+};
+
+const listQuotesByServiceOrderId = async (input: ListQuotesByServiceOrderIdInput): Promise<QuoteRecord[]> => {
+    const prisma: PrismaClientOrTx = getPrisma();
+    return prisma.quote.findMany({
+        where: {
+            serviceOrderId: input.serviceOrderId,
+        },
+        orderBy: {
+            createdAt: "asc",
+        },
+    });
 };
 
 export default {
@@ -385,4 +399,5 @@ export default {
     countRepairableFindings,
     listFindingsByDiagnosisId,
     findQuoteById,
+    listQuotesByServiceOrderId,
 };

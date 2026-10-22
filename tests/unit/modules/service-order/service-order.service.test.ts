@@ -15,7 +15,9 @@ import {
     QuoteRecord,
     CreateQuoteInput,
     CreateQuoteItemInput,
-    QuoteItemWithComponents
+    QuoteItemWithComponents,
+    ListFidingsByDiagnosisId,
+    ListQuotesByServiceOrderIdInput
 } from "../../../../src/modules/service-order/service-order.types.js";
 // (shared)
 import { getPrisma } from "../../../../src/shared/config/database.js";
@@ -1167,10 +1169,12 @@ describe("Service Order Service (Unit)", () => {
     });
 
     describe("listFindingsByDiagnosisId", () => {
-        const diagnosisId = "uuid-diagnosis-123";
+        const validInput: ListFidingsByDiagnosisId = {
+            diagnosisId: "uuid-diagnosis-123"
+        };
 
         const mockDiagnosisRecord = {
-            id: diagnosisId,
+            id: validInput.diagnosisId,
             serviceOrderId: "uuid-service-order-123",
             createdById: "uuid-user-456",
             completedById: null,
@@ -1182,7 +1186,7 @@ describe("Service Order Service (Unit)", () => {
         const mockFindings = [
             {
                 id: "uuid-finding-1",
-                diagnosisId,
+                diagnosisId: validInput.diagnosisId,
                 createdById: "uuid-user-456",
                 description: "Battery capacity below expected level",
                 repairable: true,
@@ -1192,7 +1196,7 @@ describe("Service Order Service (Unit)", () => {
             },
             {
                 id: "uuid-finding-2",
-                diagnosisId,
+                diagnosisId: validInput.diagnosisId,
                 createdById: "uuid-user-456",
                 description: "Motherboard corrosion",
                 repairable: false,
@@ -1206,14 +1210,14 @@ describe("Service Order Service (Unit)", () => {
             const error = new Error("fake error");
             vi.mocked(serviceOrderRepository.findDiagnosisById).mockRejectedValue(error);
 
-            await expect(serviceOrderService.listFindingsByDiagnosisId(diagnosisId))
+            await expect(serviceOrderService.listFindingsByDiagnosisId(validInput))
                 .rejects.toThrow(error);
         });
 
         it("should throw NOT_FOUND if diagnosis does not exist", async () => {
             vi.mocked(serviceOrderRepository.findDiagnosisById).mockResolvedValue(null);
 
-            await expect(serviceOrderService.listFindingsByDiagnosisId(diagnosisId))
+            await expect(serviceOrderService.listFindingsByDiagnosisId(validInput))
                 .rejects.toMatchObject({
                     statusCode: 404,
                     message: "Diagnosis not found",
@@ -1227,7 +1231,7 @@ describe("Service Order Service (Unit)", () => {
             vi.mocked(serviceOrderRepository.findDiagnosisById).mockResolvedValue(mockDiagnosisRecord);
             vi.mocked(serviceOrderRepository.listFindingsByDiagnosisId).mockRejectedValue(error);
 
-            await expect(serviceOrderService.listFindingsByDiagnosisId(diagnosisId))
+            await expect(serviceOrderService.listFindingsByDiagnosisId(validInput))
                 .rejects.toThrow(error);
         });
 
@@ -1235,10 +1239,10 @@ describe("Service Order Service (Unit)", () => {
             vi.mocked(serviceOrderRepository.findDiagnosisById).mockResolvedValue(mockDiagnosisRecord);
             vi.mocked(serviceOrderRepository.listFindingsByDiagnosisId).mockResolvedValue(mockFindings);
 
-            const result = await serviceOrderService.listFindingsByDiagnosisId(diagnosisId);
+            const result = await serviceOrderService.listFindingsByDiagnosisId(validInput);
 
-            expect(serviceOrderRepository.findDiagnosisById).toHaveBeenCalledWith(diagnosisId);
-            expect(serviceOrderRepository.listFindingsByDiagnosisId).toHaveBeenCalledWith(diagnosisId);
+            expect(serviceOrderRepository.findDiagnosisById).toHaveBeenCalledWith(validInput.diagnosisId);
+            expect(serviceOrderRepository.listFindingsByDiagnosisId).toHaveBeenCalledWith(validInput);
             expect(result).toBe(mockFindings);
         });
 
@@ -1246,7 +1250,7 @@ describe("Service Order Service (Unit)", () => {
             vi.mocked(serviceOrderRepository.findDiagnosisById).mockResolvedValue(mockDiagnosisRecord);
             vi.mocked(serviceOrderRepository.listFindingsByDiagnosisId).mockResolvedValue([]);
 
-            const result = await serviceOrderService.listFindingsByDiagnosisId(diagnosisId);
+            const result = await serviceOrderService.listFindingsByDiagnosisId(validInput);
 
             expect(result).toEqual([]);
         });
@@ -1625,6 +1629,143 @@ describe("Service Order Service (Unit)", () => {
             expect(serviceOrderRepository.lockQuoteIfDraft).toHaveBeenCalledWith(validInput.quoteId, tx);
             expect(serviceOrderRepository.createQuoteItem).toHaveBeenCalledWith(validInput, tx);
             expect(result).toBe(mockQuoteItemRecord);
+        });
+    });
+
+    describe("getQuoteById", () => {
+        const quoteId = "uuid-quote-123";
+
+        it("should throw if serviceOrderRepository.findQuoteById fails", async () => {
+            const error = new Error("fake error");
+            vi.mocked(serviceOrderRepository.findQuoteById).mockRejectedValue(error);
+
+            await expect(serviceOrderService.getQuoteById(quoteId))
+                .rejects.toThrow(error);
+        });
+
+        it("should throw NOT_FOUND if quote does not exist", async () => {
+            vi.mocked(serviceOrderRepository.findQuoteById).mockResolvedValue(null);
+
+            await expect(serviceOrderService.getQuoteById(quoteId))
+                .rejects.toMatchObject({
+                    statusCode: 404,
+                    message: "Quote not found",
+                });
+        });
+
+        it("should return quote", async () => {
+            const mockQuoteRecord = {
+                id: quoteId,
+                serviceOrderId: "uuid-service-order-123",
+                diagnosisId: "uuid-diagnosis-123",
+                status: "DRAFT",
+                submittedAt: null,
+                respondedAt: null,
+                createdById: "uuid-user-123",
+                createdAt: new Date(),
+                updatedAt: null,
+            } as QuoteRecord;
+
+            vi.mocked(serviceOrderRepository.findQuoteById).mockResolvedValue(mockQuoteRecord);
+
+            const result = await serviceOrderService.getQuoteById(quoteId);
+
+            expect(serviceOrderRepository.findQuoteById).toHaveBeenCalledWith(quoteId);
+            expect(result).toBe(mockQuoteRecord);
+        });
+    });
+
+    describe("listQuotesByServiceOrderId", () => {
+        const validInput: ListQuotesByServiceOrderIdInput = {
+            serviceOrderId: "uuid-service-order-123",
+        };
+
+        const mockServiceOrderRecord = {
+            id: validInput.serviceOrderId,
+            customerId: "uuid-customer-123",
+            deviceId: "uuid-device-123",
+            reportedProblem: "Screen is cracked and touch is not responding.",
+            status: "AWAITING_QUOTE",
+            createdById: "uuid-user-456",
+            cancelledAt: null,
+            cancelReason: null,
+            finishedAt: null,
+            createdAt: new Date(),
+            updatedAt: null,
+        } as ServiceOrderRecord;
+
+        const mockQuotes = [
+            {
+                id: "uuid-quote-1",
+                serviceOrderId: validInput.serviceOrderId,
+                diagnosisId: "uuid-diagnosis-123",
+                status: "SUPERSEDED",
+                submittedAt: new Date(),
+                respondedAt: null,
+                createdById: "uuid-user-456",
+                createdAt: new Date("2026-10-01T10:00:00Z"),
+                updatedAt: null,
+            },
+            {
+                id: "uuid-quote-2",
+                serviceOrderId: validInput.serviceOrderId,
+                diagnosisId: "uuid-diagnosis-123",
+                status: "DRAFT",
+                submittedAt: null,
+                respondedAt: null,
+                createdById: "uuid-user-456",
+                createdAt: new Date("2026-10-15T10:00:00Z"),
+                updatedAt: null,
+            },
+        ] as QuoteRecord[];
+
+        it("should throw if serviceOrderRepository.findById fails", async () => {
+            const error = new Error("fake error");
+            vi.mocked(serviceOrderRepository.findById).mockRejectedValue(error);
+
+            await expect(serviceOrderService.listQuotesByServiceOrderId(validInput))
+                .rejects.toThrow(error);
+        });
+
+        it("should throw NOT_FOUND if service order does not exist", async () => {
+            vi.mocked(serviceOrderRepository.findById).mockResolvedValue(null);
+
+            await expect(serviceOrderService.listQuotesByServiceOrderId(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 404,
+                    message: "Service order not found",
+                });
+
+            expect(serviceOrderRepository.listQuotesByServiceOrderId).not.toHaveBeenCalled();
+        });
+
+        it("should throw if serviceOrderRepository.listQuotesByServiceOrderId fails", async () => {
+            const error = new Error("fake error");
+            vi.mocked(serviceOrderRepository.findById).mockResolvedValue(mockServiceOrderRecord);
+            vi.mocked(serviceOrderRepository.listQuotesByServiceOrderId).mockRejectedValue(error);
+
+            await expect(serviceOrderService.listQuotesByServiceOrderId(validInput))
+                .rejects.toThrow(error);
+        });
+
+        it("should return quotes", async () => {
+            vi.mocked(serviceOrderRepository.findById).mockResolvedValue(mockServiceOrderRecord);
+            vi.mocked(serviceOrderRepository.listQuotesByServiceOrderId).mockResolvedValue(mockQuotes);
+
+            const result = await serviceOrderService.listQuotesByServiceOrderId(validInput);
+
+            expect(serviceOrderRepository.findById).toHaveBeenCalledWith(validInput.serviceOrderId);
+            expect(serviceOrderRepository.listQuotesByServiceOrderId).toHaveBeenCalledWith(validInput);
+            expect(result).toBe(mockQuotes);
+        });
+
+        it("should return an empty array when the service order has no quotes", async () => {
+            vi.mocked(serviceOrderRepository.findById).mockResolvedValue(mockServiceOrderRecord);
+            vi.mocked(serviceOrderRepository.listQuotesByServiceOrderId).mockResolvedValue([]);
+
+            const result = await serviceOrderService.listQuotesByServiceOrderId(validInput);
+
+            expect(result).toEqual([]);
         });
     });
 });

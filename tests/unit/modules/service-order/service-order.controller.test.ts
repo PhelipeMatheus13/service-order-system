@@ -625,7 +625,9 @@ describe("Service Order Controller (Unit)", () => {
 
             await serviceOrderController.listFindingsByDiagnosisId(req, res, next);
 
-            expect(serviceOrderService.listFindingsByDiagnosisId).toHaveBeenCalledWith("uuid-diagnosis-123");
+            expect(serviceOrderService.listFindingsByDiagnosisId).toHaveBeenCalledWith({
+                diagnosisId: "uuid-diagnosis-123",
+            });
 
             expect(res.status).toHaveBeenCalledWith(200);
             expect(res.json).toHaveBeenCalledWith({
@@ -886,6 +888,131 @@ describe("Service Order Controller (Unit)", () => {
             vi.mocked(serviceOrderService).createQuoteItem.mockRejectedValue(error);
 
             await serviceOrderController.createQuoteItem(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(error);
+            expect(res.status).not.toHaveBeenCalled();
+        });
+    });
+
+    describe("getQuoteById", () => {
+        it("should return 200 with quote data", async () => {
+            req.params.id = "uuid-quote-123";
+
+            const mockQuoteRecord = {
+                id: "uuid-quote-123",
+                serviceOrderId: "uuid-service-order-123",
+                diagnosisId: "uuid-diagnosis-123",
+                status: "DRAFT",
+                submittedAt: null,
+                respondedAt: null,
+                createdById: "uuid-user-123",
+                createdAt: new Date(),
+                updatedAt: null,
+            } as QuoteRecord;
+
+            vi.mocked(serviceOrderService).getQuoteById.mockResolvedValue(mockQuoteRecord);
+
+            await serviceOrderController.getQuoteById(req, res, next);
+
+            expect(serviceOrderService.getQuoteById).toHaveBeenCalledWith("uuid-quote-123");
+            expect(res.status).toHaveBeenCalledWith(200);
+            expect(res.json).toHaveBeenCalledWith({
+                success: true,
+                data: mockQuoteRecord,
+            });
+            expect(next).not.toHaveBeenCalled();
+        });
+
+        it("should call next with badRequest error if id is missing", async () => {
+            req.params = {};
+
+            await serviceOrderController.getQuoteById(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(expect.objectContaining({
+                statusCode: 400,
+                message: "Quote ID is required",
+            }));
+            expect(serviceOrderService.getQuoteById).not.toHaveBeenCalled();
+            expect(res.status).not.toHaveBeenCalled();
+        });
+
+        it("should propagate error when service fails", async () => {
+            req.params.id = "uuid-quote-123";
+
+            const error = new Error("Service error");
+            vi.mocked(serviceOrderService).getQuoteById.mockRejectedValue(error);
+
+            await serviceOrderController.getQuoteById(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(error);
+            expect(res.status).not.toHaveBeenCalled();
+        });
+    });
+
+    describe("listQuotesByServiceOrderId", () => {
+        it("should return 200 with quotes data", async () => {
+            req.params.id = "uuid-service-order-123";
+
+            const mockQuotes = [
+                {
+                    id: "uuid-quote-1",
+                    serviceOrderId: "uuid-service-order-123",
+                    diagnosisId: "uuid-diagnosis-123",
+                    status: "SUPERSEDED",
+                    submittedAt: new Date(),
+                    respondedAt: null,
+                    createdById: "uuid-user-123",
+                    createdAt: new Date(),
+                    updatedAt: null,
+                },
+                {
+                    id: "uuid-quote-2",
+                    serviceOrderId: "uuid-service-order-123",
+                    diagnosisId: "uuid-diagnosis-123",
+                    status: "DRAFT",
+                    submittedAt: null,
+                    respondedAt: null,
+                    createdById: "uuid-user-123",
+                    createdAt: new Date(),
+                    updatedAt: null,
+                },
+            ] as QuoteRecord[];
+
+            vi.mocked(serviceOrderService).listQuotesByServiceOrderId.mockResolvedValue(mockQuotes);
+
+            await serviceOrderController.listQuotesByServiceOrderId(req, res, next);
+
+            expect(serviceOrderService.listQuotesByServiceOrderId).toHaveBeenCalledWith({
+                serviceOrderId: "uuid-service-order-123",
+            });
+            expect(res.status).toHaveBeenCalledWith(200);
+            expect(res.json).toHaveBeenCalledWith({
+                success: true,
+                data: mockQuotes,
+            });
+            expect(next).not.toHaveBeenCalled();
+        });
+
+        it("should call next with badRequest error if id is missing", async () => {
+            req.params = {};
+
+            await serviceOrderController.listQuotesByServiceOrderId(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(expect.objectContaining({
+                statusCode: 400,
+                message: "Service order ID is required",
+            }));
+            expect(serviceOrderService.listQuotesByServiceOrderId).not.toHaveBeenCalled();
+            expect(res.status).not.toHaveBeenCalled();
+        });
+
+        it("should propagate error when service fails", async () => {
+            req.params.id = "uuid-service-order-123";
+
+            const error = new Error("Service error");
+            vi.mocked(serviceOrderService).listQuotesByServiceOrderId.mockRejectedValue(error);
+
+            await serviceOrderController.listQuotesByServiceOrderId(req, res, next);
 
             expect(next).toHaveBeenCalledWith(error);
             expect(res.status).not.toHaveBeenCalled();
