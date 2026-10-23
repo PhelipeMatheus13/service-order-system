@@ -1258,7 +1258,7 @@ describe("Service Order Repository (Integration)", () => {
 
         describe("lockQuoteIfDraft", () => {
             it("should return true and lock the row when the quote is DRAFT", async () => {
-                const { quote } = await new ServiceOrderBuilder(prisma)
+                const { quotes } = await new ServiceOrderBuilder(prisma)
                     .withUser({ role: "ATTENDANT" })
                     .withCustomer()
                     .withDevice()
@@ -1267,21 +1267,23 @@ describe("Service Order Repository (Integration)", () => {
                     .withQuote({ status: "DRAFT" })
                     .build();
 
+                const quoteId = quotes[0]!.id;
+
                 await prisma.$transaction(async (tx) => {
-                    const locked = await serviceOrderRepository.lockQuoteIfDraft(quote!.id, tx);
+                    const locked = await serviceOrderRepository.lockQuoteIfDraft(quoteId, tx);
 
                     expect(locked).toBe(true);
                 });
 
                 const quoteFound = await prisma.quote.findUnique({
-                    where: { id: quote!.id },
+                    where: { id: quoteId },
                 });
 
                 expect(quoteFound?.updatedAt).toBeTruthy();
             });
 
             it("should return false when the quote is not DRAFT", async () => {
-                const { quote } = await new ServiceOrderBuilder(prisma)
+                const { quotes } = await new ServiceOrderBuilder(prisma)
                     .withUser({ role: "ATTENDANT" })
                     .withCustomer()
                     .withDevice()
@@ -1290,14 +1292,16 @@ describe("Service Order Repository (Integration)", () => {
                     .withQuote({ status: "SENT", submittedAt: new Date() })
                     .build();
 
+                const quoteId = quotes[0]!.id;
+
                 await prisma.$transaction(async (tx) => {
-                    const locked = await serviceOrderRepository.lockQuoteIfDraft(quote!.id, tx);
+                    const locked = await serviceOrderRepository.lockQuoteIfDraft(quoteId, tx);
 
                     expect(locked).toBe(false);
                 });
 
                 const quoteFound = await prisma.quote.findUnique({
-                    where: { id: quote!.id },
+                    where: { id: quoteId },
                 });
 
                 expect(quoteFound?.updatedAt).toBeNull();
@@ -1317,7 +1321,7 @@ describe("Service Order Repository (Integration)", () => {
 
         describe("createQuoteItem", () => {
             it("should insert a quote item with its components into the database", async () => {
-                const { user, findings, quote } = await new ServiceOrderBuilder(prisma)
+                const { user, findings, quotes } = await new ServiceOrderBuilder(prisma)
                     .withUser({ role: "ATTENDANT" })
                     .withCustomer()
                     .withDevice()
@@ -1327,8 +1331,10 @@ describe("Service Order Repository (Integration)", () => {
                     .withQuote()
                     .build();
 
+                const quoteId = quotes[0].id;
+
                 const input: CreateQuoteItemInput = {
-                    quoteId: quote!.id,
+                    quoteId: quoteId,
                     findingId: findings[0].id,
                     description: "Battery replacement",
                     createdById: user.id,
@@ -1352,7 +1358,7 @@ describe("Service Order Repository (Integration)", () => {
 
                 expect(quoteItemCreated).toBeTruthy();
                 expect(quoteItemCreated.id).toBeTruthy();
-                expect(quoteItemCreated.quoteId).toBe(quote!.id);
+                expect(quoteItemCreated.quoteId).toBe(quoteId);
                 expect(quoteItemCreated.findingId).toBe(findings[0].id);
                 expect(quoteItemCreated.description).toBe("Battery replacement");
                 expect(quoteItemCreated.decision).toBe("PENDING");
@@ -1388,7 +1394,7 @@ describe("Service Order Repository (Integration)", () => {
             });
 
             it("should insert a quote item when called with a transaction client", async () => {
-                const { user, findings, quote } = await new ServiceOrderBuilder(prisma)
+                const { user, findings, quotes } = await new ServiceOrderBuilder(prisma)
                     .withUser({ role: "ATTENDANT" })
                     .withCustomer()
                     .withDevice()
@@ -1398,8 +1404,9 @@ describe("Service Order Repository (Integration)", () => {
                     .withQuote()
                     .build();
 
+
                 const input: CreateQuoteItemInput = {
-                    quoteId: quote!.id,
+                    quoteId: quotes[0].id,
                     findingId: findings[0].id,
                     description: "Screen replacement",
                     createdById: user.id,
@@ -1429,7 +1436,7 @@ describe("Service Order Repository (Integration)", () => {
             });
 
             it("should rollback the quote item when the transaction throws", async () => {
-                const { user, findings, quote } = await new ServiceOrderBuilder(prisma)
+                const { user, findings, quotes } = await new ServiceOrderBuilder(prisma)
                     .withUser({ role: "ATTENDANT" })
                     .withCustomer()
                     .withDevice()
@@ -1439,8 +1446,9 @@ describe("Service Order Repository (Integration)", () => {
                     .withQuote()
                     .build();
 
+
                 const input: CreateQuoteItemInput = {
-                    quoteId: quote!.id,
+                    quoteId: quotes[0].id,
                     findingId: findings[0].id,
                     description: "Battery replacement",
                     createdById: user.id,
@@ -1502,7 +1510,7 @@ describe("Service Order Repository (Integration)", () => {
             });
 
             it("should throw when the finding does not exist", async () => {
-                const { user, quote } = await new ServiceOrderBuilder(prisma)
+                const { user, quotes } = await new ServiceOrderBuilder(prisma)
                     .withUser({ role: "ATTENDANT" })
                     .withCustomer()
                     .withDevice()
@@ -1511,8 +1519,9 @@ describe("Service Order Repository (Integration)", () => {
                     .withQuote()
                     .build();
 
+
                 const input: CreateQuoteItemInput = {
-                    quoteId: quote!.id,
+                    quoteId: quotes[0].id,
                     findingId: "0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa",
                     description: "Battery replacement",
                     createdById: user.id,
@@ -1843,7 +1852,7 @@ describe("Service Order Repository (Integration)", () => {
 
         describe("findQuoteById", () => {
             it("should return the quote if a quote with the given ID exists", async () => {
-                const { user, serviceOrder, diagnosis, quote } = await new ServiceOrderBuilder(prisma)
+                const { user, serviceOrder, diagnosis, quotes } = await new ServiceOrderBuilder(prisma)
                     .withUser({ role: "ATTENDANT" })
                     .withCustomer()
                     .withDevice()
@@ -1852,10 +1861,12 @@ describe("Service Order Repository (Integration)", () => {
                     .withQuote()
                     .build();
 
-                const foundQuote = await serviceOrderRepository.findQuoteById(quote!.id);
+                const quoteId = quotes[0]!.id;
+
+                const foundQuote = await serviceOrderRepository.findQuoteById(quoteId);
 
                 expect(foundQuote).toBeTruthy();
-                expect(foundQuote?.id).toBe(quote!.id);
+                expect(foundQuote?.id).toBe(quoteId);
                 expect(foundQuote?.serviceOrderId).toBe(serviceOrder!.id);
                 expect(foundQuote?.diagnosisId).toBe(diagnosis!.id);
                 expect(foundQuote?.createdById).toBe(user.id);
@@ -1875,46 +1886,24 @@ describe("Service Order Repository (Integration)", () => {
 
         describe("listQuotesByServiceOrderId", () => {
             it("should return quotes ordered by creation date ascending", async () => {
-                const { user, serviceOrder, diagnosis } = await new ServiceOrderBuilder(prisma)
+                const { serviceOrder, quotes } = await new ServiceOrderBuilder(prisma)
                     .withUser({ role: "ATTENDANT" })
                     .withCustomer()
                     .withDevice()
                     .withServiceOrder({ status: "AWAITING_QUOTE" })
                     .withDiagnosis()
+                    .withQuote({ status: "SUPERSEDED" })
+                    .withQuote({ status: "DRAFT" })
                     .build();
-
-                const now = new Date();
-
-                const quotes = await prisma.quote.createManyAndReturn({
-                    data: [
-                        {
-                            serviceOrderId: serviceOrder!.id,
-                            diagnosisId: diagnosis!.id,
-                            createdById: user.id,
-                            status: "SUPERSEDED",
-                            createdAt: new Date(now.getTime() - 60 * 60 * 1000),
-                        },
-                        {
-                            serviceOrderId: serviceOrder!.id,
-                            diagnosisId: diagnosis!.id,
-                            createdById: user.id,
-                            status: "DRAFT",
-                            createdAt: now,
-                        },
-                    ],
-                });
-
-                const olderQuote = quotes.find((q) => q.status === "SUPERSEDED")!;
-                const newerQuote = quotes.find((q) => q.status === "DRAFT")!;
 
                 const result = await serviceOrderRepository.listQuotesByServiceOrderId({
                     serviceOrderId: serviceOrder!.id,
                 });
 
                 expect(result).toHaveLength(2);
-                expect(result[0].id).toBe(olderQuote.id);
+                expect(result[0].id).toBe(quotes[0]!.id);
                 expect(result[0].status).toBe("SUPERSEDED");
-                expect(result[1].id).toBe(newerQuote.id);
+                expect(result[1].id).toBe(quotes[1]!.id);
                 expect(result[1].status).toBe("DRAFT");
             });
 

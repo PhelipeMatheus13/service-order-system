@@ -62,8 +62,9 @@ type QuoteOptions = {
 
 /**
  * Result of a build. `user`, `customer` and `device` are always present
- * (the domain floor). `serviceOrder`, `diagnosis` and `quote` are optional
- * because they only exist when explicitly requested (directly or via cascade).
+ * (the domain floor). `serviceOrder` and `diagnosis` are optional because
+ * they only exist when explicitly requested (directly or via cascade).
+ * `findings` and `quotes` are always arrays (possibly empty).
  */
 export type ServiceOrderScenario = {
     user: User;
@@ -72,7 +73,7 @@ export type ServiceOrderScenario = {
     serviceOrder?: ServiceOrder;
     diagnosis?: Diagnosis;
     findings: Finding[];
-    quote?: Quote;
+    quotes: Quote[];
 };
 
 /**
@@ -83,8 +84,9 @@ export type ServiceOrderScenario = {
  * - `serviceOrder` is created when requested OR when any downstream entity requires it.
  * - `diagnosis` is created when requested OR when a finding requires it.
  * - `finding` can be created N times; all share the same diagnosis and user.
- * - `quote` is created when requested. It is linked to the diagnosis only when one exists.
- * - Each `withX()` (except `withFinding`) can be called at most once — fail-fast.
+ * - `quote` can be created N times. All quotes link to the diagnosis when one exists.
+ *   Only one non-SUPERSEDED quote is allowed per service order (partial unique index).
+ * - Each `withX()` (except `withFinding` and `withQuote`) can be called at most once — fail-fast.
  * - Call order is irrelevant. Each `ensureX()` resolves its own FKs recursively,
  *   so dependencies are always materialized in FK-safe order.
  */
@@ -94,7 +96,7 @@ export class ServiceOrderBuilder {
     private deviceOptions: DeviceOptions | null = null;
     private serviceOrderOptions: ServiceOrderOptions | null = null;
     private diagnosisOptions: DiagnosisOptions | null = null;
-    private quoteOptions: QuoteOptions | null = null;
+    private readonly quoteOptions: QuoteOptions[] = [];
     private readonly findingOptions: FindingOptions[] = [];
 
     private user: User | null = null;
@@ -102,7 +104,7 @@ export class ServiceOrderBuilder {
     private device: Device | null = null;
     private serviceOrder: ServiceOrder | null = null;
     private diagnosis: Diagnosis | null = null;
-    private quote: Quote | null = null;
+    private readonly quotes: Quote[] = [];
     private readonly findings: Finding[] = [];
 
     constructor(private readonly prisma: PrismaClient) { }
@@ -173,13 +175,31 @@ export class ServiceOrderBuilder {
     }
 
     /**
-     * Requests a Quote.
-     * Linked to the diagnosis when one exists in the scenario; otherwise `diagnosis_id` stays null (direct flow).
-     * Throws if called more than once.
+     * Adds a Quote.
+     * Each quote links to the diagnosis when one exists in the scenario; otherwise `diagnosis_id` stays null (direct flow).
+     * Only one non-SUPERSEDED quote is allowed per service order (partial unique index
+     * `quotes_one_current_per_service_order_key`); pass `status: QuoteStatus.SUPERSEDED`
+     * for historical quotes.
+     * Can be called any number of times.
      */
     withQuote(options: QuoteOptions = {}): this {
-        this.assertSingle("withQuote", this.quoteOptions);
-        this.quoteOptions = options;
+        const newStatus = options.status ?? QuoteStatus.DRAFT;
+        const willBeCurrent = newStatus !== QuoteStatus.SUPERSEDED;
+
+        if (willBeCurrent) {
+            const hasCurrent = this.quoteOptions.some(
+                (q) => (q.status ?? QuoteStatus.DRAFT) !== QuoteStatus.SUPERSEDED,
+            );
+            if (hasCurrent) {
+                throw new Error(
+                    "withQuote() can only create one non-SUPERSEDED quote per service order " +
+                    "(partial unique index `quotes_one_current_per_service_order_key`). " +
+                    "Pass `status: QuoteStatus.SUPERSEDED` for historical quotes.",
+                );
+            }
+        }
+
+        this.quoteOptions.push(options);
         return this;
     }
 
@@ -189,10 +209,10 @@ export class ServiceOrderBuilder {
         const customer = await this.ensureCustomer();
         const device = await this.ensureDevice();
 
-        // Dispatch to the deepest entity that was requested. 
+        // Dispatch to the deepest entity that was requested.
         // Each `if` is independent; ensureX resolves dependencies recursively.
-        if (this.quoteOptions !== null) {
-            await this.ensureQuote();
+        if (this.quoteOptions.length > 0) {
+            await this.ensureQuotes();
             if (this.findingOptions.length > 0) {
                 await this.ensureFindings();
             }
@@ -228,7 +248,7 @@ export class ServiceOrderBuilder {
             serviceOrder: this.serviceOrder ?? undefined,
             diagnosis: this.diagnosis ?? undefined,
             findings: this.findings,
-            quote: this.quote ?? undefined,
+            quotes: this.quotes,
         };
     }
 
@@ -299,24 +319,29 @@ export class ServiceOrderBuilder {
         return this.findings;
     }
 
-    private async ensureQuote(): Promise<Quote> {
-        if (this.quote !== null) return this.quote;
+    private async ensureQuotes(): Promise<Quote[]> {
+        if (this.quotes.length > 0) return this.quotes;
+        if (this.quoteOptions.length === 0) return this.quotes;
+
         const serviceOrder = await this.ensureServiceOrder();
         const user = await this.ensureUser();
 
+        // All quotes in the same scenario share the same diagnosis link.
         let diagnosisId: string | undefined;
         if (this.diagnosisOptions !== null || this.findingOptions.length > 0) {
             const diagnosis = await this.ensureDiagnosis();
             diagnosisId = diagnosis.id;
         }
 
-        this.quote = await this.createQuote(
-            serviceOrder.id,
-            diagnosisId,
-            user.id,
-            this.quoteOptions ?? {},
-        );
-        return this.quote;
+        for (const options of this.quoteOptions) {
+            this.quotes.push(await this.createQuote(
+                serviceOrder.id,
+                diagnosisId,
+                user.id,
+                options,
+            ));
+        }
+        return this.quotes;
     }
 
     // --- Row creation (single Prisma call, no recursion) ---
