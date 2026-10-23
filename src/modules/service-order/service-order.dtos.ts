@@ -5,7 +5,8 @@ import {
     UpdateFindingRequest,
     CompleteDiagnosisRequest,
     CreateQuoteRequest,
-    CreateQuoteItemRequest
+    CreateQuoteItemAndComponentsRequest,
+    UpdateQuoteItemAndComponentsRequest,
 } from "./service-order.schemas.js";
 import {
     CreateServiceOrderInput,
@@ -15,7 +16,8 @@ import {
     UpdateFindingInput,
     CompleteDiagnosisInput,
     CreateQuoteInput,
-    CreateQuoteItemInput
+    CreateQuoteItemAndComponentsInput,
+    UpdateQuoteItemAndComponentsInput
 } from "./service-order.types.js";
 
 const createServiceOrderDTO = (body: CreateServiceOrderRequest, createdById: string): CreateServiceOrderInput => ({
@@ -61,11 +63,18 @@ const createQuoteDTO = (body: CreateQuoteRequest, serviceOrderId: string, create
     createdById,
 });
 
-const createQuoteItemDTO = (body: CreateQuoteItemRequest, quoteId: string, createdById: string): CreateQuoteItemInput => ({
+const createQuoteItemAndComponentsDTO = (body: CreateQuoteItemAndComponentsRequest, quoteId: string, createdById: string): CreateQuoteItemAndComponentsInput => ({
     quoteId,
     findingId: body.findingId,
     description: body.description,
     createdById,
+    components: body.components
+});
+
+const UpdateQuoteItemAndComponentsDTO = (body: UpdateQuoteItemAndComponentsRequest, quoteItemId: string, updatedById: string): UpdateQuoteItemAndComponentsInput => ({
+    quoteItemId,
+    description: body.description,
+    updatedById,
     components: body.components
 });
 
@@ -78,5 +87,6 @@ export default {
     updateFindingDTO,
     completeDiagnosisDTO,
     createQuoteDTO,
-    createQuoteItemDTO,
+    createQuoteItemAndComponentsDTO,
+    UpdateQuoteItemAndComponentsDTO,
 };

@@ -289,6 +289,47 @@ const quoteItemNotFoundError  = registry.registerComponent("responses", "quoteIt
     },
 });
 
+const updateQuoteItemAndComponentsNotFoundError = registry.registerComponent("responses", "updateQuoteItemAndComponentsNotFoundError", {
+    description: "Quote item or component not found",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            examples: {
+                quoteItemNotFound: {
+                    summary: "Quote item not found",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "NOT_FOUND",
+                            message: "Quote item not found",
+                        },
+                    },
+                },
+                quoteNotFound: {
+                    summary: "Quote not found",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "NOT_FOUND",
+                            message: "Quote not found",
+                        },
+                    },
+                },
+                quoteItemOrComponentNotFound: {
+                    summary: "Quote item or component deleted between read and update (race condition)",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "NOT_FOUND",
+                            message: "Quote item or component not found",
+                        },
+                    },
+                },
+            },
+        },
+    },
+});
+
 // 409
 const emailAlreadyExistsError = registry.registerComponent("responses", "emailAlreadyExistsError", {
     description: "Email already in use",
@@ -534,8 +575,8 @@ const createQuoteConflictError = registry.registerComponent("responses", "create
     },
 });
 
-const createQuoteItemConflictError = registry.registerComponent("responses", "createQuoteItemConflictError", {
-    description: "Quote item cannot be created",
+const createQuoteItemAndComponentsConflictError = registry.registerComponent("responses", "createQuoteItemAndComponentsConflictError", {
+    description: "Quote item and components cannot be created",
     content: {
         "application/json": {
             schema: { $ref: "#/components/schemas/Error" },
@@ -567,6 +608,37 @@ const createQuoteItemConflictError = registry.registerComponent("responses", "cr
                         error: {
                             code: "CONFLICT",
                             message: "Finding is not repairable",
+                        },
+                    },
+                },
+                quoteNoLongerDraft: {
+                    summary: "Quote status changed during the request (race condition)",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Quote is no longer in DRAFT status",
+                        },
+                    },
+                },
+            },
+        },
+    },
+});
+
+const updateQuoteItemAndComponentsConflictError = registry.registerComponent("responses", "updateQuoteItemAndComponentsConflictError", {
+    description: "Quote item cannot be updated",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            examples: {
+                quoteNotDraft: {
+                    summary: "Quote is not in DRAFT status",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Quote is not in DRAFT status",
                         },
                     },
                 },
@@ -938,8 +1010,8 @@ const createQuoteValidationError = registry.registerComponent("responses", "crea
 });
 
 
-const createQuoteItemValidationError = registry.registerComponent("responses", "createQuoteItemValidationError", {
-    description: "create quote item validation error",
+const createQuoteItemAndComponentsValidationError = registry.registerComponent("responses", "createQuoteItemAndComponentsValidationError", {
+    description: "create quote item and components validation error",
     content: {
         "application/json": {
             schema: { $ref: "#/components/schemas/ValidationError" },
@@ -955,6 +1027,47 @@ const createQuoteItemValidationError = registry.registerComponent("responses", "
                         { field: "components.0.quantity", message: "Quantity must be greater than zero" },
                         { field: "components.0.unitPrice", message: "Unit price must have at most 2 decimal places" },
                     ],
+                },
+            },
+        },
+    },
+});
+
+const updateQuoteItemAndComponentsValidationError = registry.registerComponent("responses", "updateQuoteItemAndComponentsValidationError", {
+    description: "Update quote item validation error",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/ValidationError" },
+            examples: {
+                invalidFields: {
+                    summary: "Invalid field values",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "VALIDATION_ERROR",
+                            message: "Validation failed",
+                            details: [
+                                { field: "description", message: "Description must be at most 255 characters" },
+                                { field: "components.0.componentId", message: "Component ID must be a valid UUID" },
+                                { field: "components.0.type", message: "Invalid option: expected one of \"PART\"|\"LABOR\"|\"OTHER\"" },
+                                { field: "components.0.quantity", message: "Quantity must be greater than zero" },
+                                { field: "components.0.unitPrice", message: "Unit price must have at most 2 decimal places" },
+                            ],
+                        },
+                    },
+                },
+                noFieldsProvided: {
+                    summary: "No fields provided for update",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "VALIDATION_ERROR",
+                            message: "Validation failed",
+                            details: [
+                                { field: "body", message: "At least one field must be provided for update" },
+                            ],
+                        },
+                    },
                 },
             },
         },
@@ -998,6 +1111,7 @@ export {
     quoteNotFoundError,
     quoteOrFindingNotFoundError,
     quoteItemNotFoundError,
+    updateQuoteItemAndComponentsNotFoundError,
     // 409
     emailAlreadyExistsError,
     deviceUniqueConstraintError,
@@ -1006,7 +1120,8 @@ export {
     createFindingConflictError,
     completeDiagnosisConflictError,
     createQuoteConflictError,
-    createQuoteItemConflictError,
+    createQuoteItemAndComponentsConflictError,
+    updateQuoteItemAndComponentsConflictError,
     // 422
     registerValidationError,
     confirmEmailValidationError,
@@ -1023,6 +1138,8 @@ export {
     updateFindingValidationError,
     completeDiagnosisValidationError,
     createQuoteValidationError,
+    createQuoteItemAndComponentsValidationError,
+    updateQuoteItemAndComponentsValidationError,
     // 500
     internalError,
 };

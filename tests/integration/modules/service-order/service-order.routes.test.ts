@@ -814,4 +814,113 @@ describe("Service Order Routes (Integration)", () => {
             expect(statusHistory?.changedById).toBe(technician.id);
         });
     });
+
+    describe("PATCH /service-orders/quotes/items/:id", () => {
+        it("should update the quote item and its components successfully", async () => {
+            const { user, quoteItems } = await new ServiceOrderBuilder(prisma)
+                .withUser({ role: "ATTENDANT" })
+                .withCustomer()
+                .withDevice()
+                .withServiceOrder({ status: "AWAITING_QUOTE" })
+                .withDiagnosis()
+                .withFinding({ repairable: true })
+                .withQuote()
+                .withQuoteItem({
+                    findingIndex: 0,
+                    description: "Battery replacement",
+                    components: [
+                        { type: "PART", description: "Battery", quantity: 1, unitPrice: 80 },
+                        { type: "LABOR", description: "Battery replacement labor", quantity: 1, unitPrice: 20 },
+                    ],
+                })
+                .build();
+
+            const accessToken = generateAccessToken(user.id, "ATTENDANT");
+
+            const quoteItem = quoteItems[0];
+            const [firstComponent] = quoteItem.components;
+
+            const res = await request(app)
+                .patch(`/service-orders/quotes/items/${quoteItem.id}`)
+                .set("Authorization", `Bearer ${accessToken}`)
+                .send({
+                    description: "Battery replacement (updated)",
+                    components: [
+                        {
+                            componentId: firstComponent.id,
+                            type: null,
+                            description: null,
+                            quantity: 2,
+                            unitPrice: 90,
+                        },
+                    ],
+                });
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(res.body.data).toMatchObject({
+                id: quoteItem.id,
+                description: "Battery replacement (updated)",
+                updatedById: user.id,
+            });
+            expect(res.body.data.updatedAt).toBeTruthy();
+            expect(res.body.data.quoteItemComponents).toHaveLength(2);
+
+            const updatedPart = res.body.data.quoteItemComponents.find(
+                (c: any) => c.id === firstComponent.id,
+            );
+            expect(updatedPart.quantity).toBe(2);
+            expect(updatedPart.unitPrice).toBe("90");
+            expect(updatedPart.type).toBe("PART");
+            expect(updatedPart.description).toBe("Battery");
+
+            // Verify persistence in the database
+            const persistedItem = await prisma.quoteItem.findUnique({
+                where: { id: quoteItem.id },
+                include: { quoteItemComponents: true },
+            });
+
+            expect(persistedItem?.description).toBe("Battery replacement (updated)");
+            expect(persistedItem?.updatedById).toBe(user.id);
+            expect(persistedItem?.updatedAt).toBeTruthy();
+            expect(persistedItem?.quoteItemComponents).toHaveLength(2);
+
+            const persistedComponent = persistedItem?.quoteItemComponents.find(
+                (c) => c.id === firstComponent.id,
+            );
+            expect(persistedComponent?.quantity).toBe(2);
+            expect(persistedComponent?.unitPrice.toString()).toBe("90");
+        });
+    });
+
+    describe("DELETE /service-orders/findings/:id", () => {
+        it("should delete the finding successfully", async () => {
+            const { user, findings } = await new ServiceOrderBuilder(prisma)
+                .withUser({ role: "TECHNICIAN" })
+                .withCustomer()
+                .withDevice()
+                .withServiceOrder({ status: "IN_DIAGNOSIS" })
+                .withDiagnosis()
+                .withFinding({ repairable: true, description: "Battery capacity below expected level" })
+                .build();
+
+            const accessToken = generateAccessToken(user.id, "TECHNICIAN");
+            const findingId = findings[0].id;
+
+            const res = await request(app)
+                .delete(`/service-orders/findings/${findingId}`)
+                .set("Authorization", `Bearer ${accessToken}`);
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(res.body.message).toBe("Finding successfully deleted");
+
+            // Verify the finding was actually deleted from the database
+            const deletedFinding = await prisma.finding.findUnique({
+                where: { id: findingId },
+            });
+
+            expect(deletedFinding).toBeNull();
+        });
+    });
 });

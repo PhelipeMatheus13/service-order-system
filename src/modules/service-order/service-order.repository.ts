@@ -18,7 +18,8 @@ import type {
     CreateQuoteItemAndComponentsInput,
     ListQuotesByServiceOrderIdInput,
     ListFidingsByDiagnosisId,
-    ListQuoteItemsByQuoteIdInput
+    ListQuoteItemsByQuoteIdInput,
+    UpdateQuoteItemAndComponentsInput
 } from "./service-order.types.ts";
 import { ServiceOrderStatus } from "./service-order.types.js";
 import { getPrisma } from "../../shared/config/database.js";
@@ -287,7 +288,7 @@ const lockQuoteIfDraft = async (quoteId: string, tx: Prisma.TransactionClient): 
     return result.count > 0;
 };
 
-const createQuoteItem = async (input: CreateQuoteItemAndComponentsInput, tx?: Prisma.TransactionClient): Promise<QuoteItemWithComponents> => {
+const createQuoteItemAndComponents = async (input: CreateQuoteItemAndComponentsInput, tx?: Prisma.TransactionClient): Promise<QuoteItemWithComponents> => {
     const prisma: PrismaClientOrTx = tx || getPrisma();
     return prisma.quoteItem.create({
         data: {
@@ -307,6 +308,42 @@ const createQuoteItem = async (input: CreateQuoteItemAndComponentsInput, tx?: Pr
         include: {
             quoteItemComponents: true,
         },
+    });
+};
+
+const updateQuoteItemAndComponents = async (
+    input: UpdateQuoteItemAndComponentsInput,
+    tx: Prisma.TransactionClient
+): Promise<QuoteItemWithComponents> => {
+    // QuoteItem and QuoteItemComponent live in separate tables but are
+    // exposed to the API as a single entity. The item and its components
+    // must be updated atomically, so the caller (service) opens the
+    // transaction and passes the tx down.
+    await tx.quoteItem.update({
+        where: { id: input.quoteItemId },
+        data: {
+            ...(input.description !== null && { description: input.description }),
+            updatedById: input.updatedById,
+            updatedAt: new Date(),
+        },
+    });
+
+    for (const component of input.components) {
+        await tx.quoteItemComponent.update({
+            where: { id: component.componentId },
+            data: {
+                ...(component.type !== null && { type: component.type }),
+                ...(component.description !== null && { description: component.description }),
+                ...(component.quantity !== null && { quantity: component.quantity }),
+                ...(component.unitPrice !== null && { unitPrice: component.unitPrice }),
+                updatedAt: new Date(),
+            },
+        });
+    }
+
+    return tx.quoteItem.findUniqueOrThrow({
+        where: { id: input.quoteItemId },
+        include: { quoteItemComponents: true },
     });
 };
 
@@ -414,7 +451,8 @@ export default {
     completeDiagnosis,
     createQuote,
     lockQuoteIfDraft,
-    createQuoteItem,
+    createQuoteItemAndComponents,
+    updateQuoteItemAndComponents,
     // Reader
     findById,
     list,

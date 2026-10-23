@@ -65,8 +65,8 @@ interface CreateFindingInput {
 
 interface UpdateFindingInput {
     findingId: string;
-    description: string;
-    repairable: boolean;
+    description: string | null;
+    repairable: boolean | null;
     updatedById: string;
 }
 
@@ -78,7 +78,7 @@ interface CompleteDiagnosisInput {
 
 interface ListFidingsByDiagnosisId {
     diagnosisId: string;
-};
+}
 
 interface CreateQuoteInput {
     serviceOrderId: string;
@@ -107,12 +107,26 @@ type QuoteItemWithComponents = QuoteItem & {
 
 interface ListQuotesByServiceOrderIdInput {
     serviceOrderId: string;
-};
+}
 
 interface ListQuoteItemsByQuoteIdInput {
     quoteId: string;
-};
+}
 
+interface UpdateQuoteItemComponentInput {
+    componentId: string;
+    type: QuoteItemComponentType | null;
+    description: string | null;
+    quantity: number | null;
+    unitPrice: number | null;
+}
+
+interface UpdateQuoteItemAndComponentsInput {
+    quoteItemId: string;
+    description: string | null;
+    updatedById: string;
+    components: UpdateQuoteItemComponentInput[];
+}
 
 export {
     ServiceOrderStatus,
@@ -142,5 +156,6 @@ export type {
     QuoteItemWithComponents,
     CreateQuoteItemAndComponentsInput,
     ListQuotesByServiceOrderIdInput,
-    ListQuoteItemsByQuoteIdInput
+    ListQuoteItemsByQuoteIdInput,
+    UpdateQuoteItemAndComponentsInput,
 };

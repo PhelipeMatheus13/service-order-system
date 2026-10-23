@@ -18,8 +18,9 @@ import {
     completeDiagnosisSchema,
     createQuoteSchema,
     quoteSchema,
-    createQuoteItemSchema,
+    createQuoteItemAndComponentsSchema,
     quoteItemWithComponentsSchema,
+    updateQuoteItemAndComponentsSchema,
 } from "./service-order.schemas.js";
 import serviceOrderController from "./service-order.controller.js";
 
@@ -250,7 +251,7 @@ registry.registerPath({
     request: {
         params: z.object({ id: z.string() }),
         body: {
-            content: { "application/json": { schema: createQuoteItemSchema } },
+            content: { "application/json": { schema: createQuoteItemAndComponentsSchema } },
         },
     },
     responses: {
@@ -282,12 +283,12 @@ registry.registerPath({
             },
         },
         404: { $ref: "#/components/responses/quoteOrFindingNotFoundError" },
-        409: { $ref: "#/components/responses/createQuoteItemConflictError" },
-        422: { $ref: "#/components/responses/createQuoteItemValidationError" },
+        409: { $ref: "#/components/responses/createQuoteItemAndComponentsConflictError" },
+        422: { $ref: "#/components/responses/createQuoteItemAndComponentsValidationError" },
         500: { $ref: "#/components/responses/internalError" },
     }
 });
-router.post("/quotes/:id/items", checkAccessToken, authorize("ADMIN", "ATTENDANT"), validate(createQuoteItemSchema), serviceOrderController.createQuoteItem)
+router.post("/quotes/:id/items", checkAccessToken, authorize("ADMIN", "ATTENDANT"), validate(createQuoteItemAndComponentsSchema), serviceOrderController.createQuoteItem)
 
 // GET 
 registry.registerPath({
@@ -769,6 +770,53 @@ registry.registerPath({
     }
 });
 router.patch("/diagnoses/:id/complete", checkAccessToken, authorize("ADMIN", "TECHNICIAN"), validate(completeDiagnosisSchema), serviceOrderController.completeDiagnosis);
+
+registry.registerPath({
+    tags: ["Quote"],
+    method: "patch",
+    path: "/service-orders/quotes/items/{id}",
+    summary: "Update quote item by ID",
+    security: [{ bearerAuth: [] }],
+    request: {
+        params: z.object({ id: z.string() }),
+        body: {
+            content: { "application/json": { schema: updateQuoteItemAndComponentsSchema } },
+        },
+    },
+    responses: {
+        200: {
+            description: "Quote items updated successfully",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        success: z.boolean().openapi({ example: true }),
+                        data: quoteItemWithComponentsSchema,
+                    }),
+                },
+            },
+        },
+        400: { $ref: "#/components/responses/missingQuoteItemIdError" },
+        401: {
+            description: "Authentication failed or because the authenticated user no longer exists",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
+                        invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
+                        accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
+                        authenticatedUserNoLongerExists: { $ref: "#/components/examples/authenticatedUserNoLongerExists" },
+                    },
+                },
+            },
+        },
+        404: { $ref: "#/components/responses/updateQuoteItemAndComponentsNotFoundError" },
+        409: { $ref: "#/components/responses/updateQuoteItemAndComponentsConflictError" },
+        422: { $ref: "#/components/responses/updateQuoteItemAndComponentsValidationError" },
+        500: { $ref: "#/components/responses/internalError" },
+    }
+});
+router.patch("/quotes/items/:id", checkAccessToken, authorize("ADMIN", "ATTENDANT"), validate(updateQuoteItemAndComponentsSchema), serviceOrderController.updateQuoteItemAndComponents);
 
 // DELETE
 registry.registerPath({

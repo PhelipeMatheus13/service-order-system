@@ -1156,4 +1156,108 @@ describe("Service Order Controller (Unit)", () => {
             expect(res.status).not.toHaveBeenCalled();
         });
     });
+
+    describe("updateQuoteItemAndComponents", () => {
+        it("should return 200 on successful update", async () => {
+            req.params.id = "uuid-quote-item-123";
+            req.user = { id: "uuid-user-123" };
+            req.body = {
+                description: "Battery replacement (updated)",
+                components: [
+                    {
+                        componentId: "uuid-component-1",
+                        type: null,
+                        description: null,
+                        quantity: 2,
+                        unitPrice: null,
+                    },
+                ],
+            };
+
+            const mockUpdatedQuoteItem = {
+                id: "uuid-quote-item-123",
+                quoteId: "uuid-quote-123",
+                findingId: "uuid-finding-123",
+                description: "Battery replacement (updated)",
+                decision: "PENDING",
+                createdById: "uuid-user-456",
+                createdAt: new Date(),
+                updatedById: "uuid-user-123",
+                updatedAt: new Date(),
+                quoteItemComponents: [
+                    {
+                        id: "uuid-component-1",
+                        quoteItemId: "uuid-quote-item-123",
+                        type: "PART",
+                        description: "Battery",
+                        quantity: 2,
+                        unitPrice: new Prisma.Decimal(80),
+                        createdAt: new Date(),
+                        updatedAt: new Date(),
+                    },
+                ],
+            } as QuoteItemWithComponents;
+
+            vi.mocked(serviceOrderService).updateQuoteItemAndComponents.mockResolvedValue(mockUpdatedQuoteItem);
+
+            await serviceOrderController.updateQuoteItemAndComponents(req, res, next);
+
+            expect(serviceOrderService.updateQuoteItemAndComponents).toHaveBeenCalledWith({
+                quoteItemId: "uuid-quote-item-123",
+                description: "Battery replacement (updated)",
+                updatedById: "uuid-user-123",
+                components: [
+                    {
+                        componentId: "uuid-component-1",
+                        type: null,
+                        description: null,
+                        quantity: 2,
+                        unitPrice: null,
+                    },
+                ],
+            });
+
+            expect(res.status).toHaveBeenCalledWith(200);
+            expect(res.json).toHaveBeenCalledWith({
+                success: true,
+                data: mockUpdatedQuoteItem,
+            });
+            expect(next).not.toHaveBeenCalled();
+        });
+
+        it("should call next with badRequest error if id is missing", async () => {
+            req.params = {};
+            req.user = { id: "uuid-user-123" };
+            req.body = {
+                description: null,
+                components: [],
+            };
+
+            await serviceOrderController.updateQuoteItemAndComponents(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(expect.objectContaining({
+                statusCode: 400,
+                message: "Quote item ID is required",
+            }));
+            expect(serviceOrderService.updateQuoteItemAndComponents).not.toHaveBeenCalled();
+            expect(res.status).not.toHaveBeenCalled();
+        });
+
+        it("should propagate error when service fails", async () => {
+            req.params.id = "uuid-quote-item-123";
+            req.user = { id: "uuid-user-123" };
+            req.body = {
+                description: null,
+                components: [],
+            };
+
+            const error = new Error("Service error");
+            vi.mocked(serviceOrderService).updateQuoteItemAndComponents.mockRejectedValue(error);
+
+            await serviceOrderController.updateQuoteItemAndComponents(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(error);
+            expect(res.status).not.toHaveBeenCalled();
+        });
+    });
 });

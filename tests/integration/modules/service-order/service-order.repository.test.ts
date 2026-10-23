@@ -13,6 +13,7 @@ import type {
     DiagnosisRecord,
     CreateQuoteInput,
     CreateQuoteItemAndComponentsInput,
+    UpdateQuoteItemAndComponentsInput,
 } from "../../../../src/modules/service-order/service-order.types.js";
 // (shared / infra)
 import { PrismaClient } from "../../../../src/generated/prisma/client.js";
@@ -1354,7 +1355,7 @@ describe("Service Order Repository (Integration)", () => {
                     ],
                 };
 
-                const quoteItemCreated = await serviceOrderRepository.createQuoteItem(input);
+                const quoteItemCreated = await serviceOrderRepository.createQuoteItemAndComponents(input);
 
                 expect(quoteItemCreated).toBeTruthy();
                 expect(quoteItemCreated.id).toBeTruthy();
@@ -1421,7 +1422,7 @@ describe("Service Order Repository (Integration)", () => {
                 };
 
                 const quoteItemCreated = await prisma.$transaction((tx) =>
-                    serviceOrderRepository.createQuoteItem(input, tx),
+                    serviceOrderRepository.createQuoteItemAndComponents(input, tx),
                 );
 
                 expect(quoteItemCreated.id).toBeTruthy();
@@ -1464,7 +1465,7 @@ describe("Service Order Repository (Integration)", () => {
 
                 await expect(
                     prisma.$transaction(async (tx) => {
-                        await serviceOrderRepository.createQuoteItem(input, tx);
+                        await serviceOrderRepository.createQuoteItemAndComponents(input, tx);
 
                         throw new Error("rollback");
                     }),
@@ -1502,7 +1503,7 @@ describe("Service Order Repository (Integration)", () => {
                     ],
                 };
 
-                await expect(serviceOrderRepository.createQuoteItem(input))
+                await expect(serviceOrderRepository.createQuoteItemAndComponents(input))
                     .rejects.toThrow();
 
                 const count = await prisma.quoteItem.count();
@@ -1535,11 +1536,236 @@ describe("Service Order Repository (Integration)", () => {
                     ],
                 };
 
-                await expect(serviceOrderRepository.createQuoteItem(input))
+                await expect(serviceOrderRepository.createQuoteItemAndComponents(input))
                     .rejects.toThrow();
 
                 const count = await prisma.quoteItem.count();
                 expect(count).toBe(0);
+            });
+        });
+
+        describe("updateQuoteItemAndComponents", () => {
+            const createFixture = async () => {
+                return new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "ATTENDANT" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "AWAITING_QUOTE" })
+                    .withDiagnosis()
+                    .withFinding({ repairable: true })
+                    .withQuote()
+                    .withQuoteItem({
+                        findingIndex: 0,
+                        description: "Battery replacement",
+                        components: [
+                            { type: "PART", description: "Battery", quantity: 1, unitPrice: 80 },
+                            { type: "LABOR", description: "Battery replacement labor", quantity: 1, unitPrice: 20 },
+                        ],
+                    })
+                    .build();
+            };
+
+            it("should update all provided fields of the item and its components", async () => {
+                const { user, quoteItems } = await createFixture();
+                const quoteItem = quoteItems[0];
+                const [firstComponent, secondComponent] = quoteItem.components;
+
+                const input: UpdateQuoteItemAndComponentsInput = {
+                    quoteItemId: quoteItem.id,
+                    description: "Battery replacement (updated)",
+                    updatedById: user.id,
+                    components: [
+                        {
+                            componentId: firstComponent.id,
+                            type: "PART",
+                            description: "Battery (updated)",
+                            quantity: 2,
+                            unitPrice: 90,
+                        },
+                        {
+                            componentId: secondComponent.id,
+                            type: "LABOR",
+                            description: "Labor (updated)",
+                            quantity: 2,
+                            unitPrice: 25,
+                        },
+                    ],
+                };
+
+                const updated = await prisma.$transaction((tx) =>
+                    serviceOrderRepository.updateQuoteItemAndComponents(input, tx),
+                );
+
+                expect(updated.id).toBe(quoteItem.id);
+                expect(updated.description).toBe("Battery replacement (updated)");
+                expect(updated.updatedById).toBe(user.id);
+                expect(updated.updatedAt).toBeTruthy();
+                expect(updated.quoteItemComponents).toHaveLength(2);
+
+                const updatedPart = updated.quoteItemComponents.find((c) => c.id === firstComponent.id);
+                expect(updatedPart?.type).toBe("PART");
+                expect(updatedPart?.description).toBe("Battery (updated)");
+                expect(updatedPart?.quantity).toBe(2);
+                expect(updatedPart?.unitPrice.toString()).toBe("90");
+                expect(updatedPart?.updatedAt).toBeTruthy();
+
+                const updatedLabor = updated.quoteItemComponents.find((c) => c.id === secondComponent.id);
+                expect(updatedLabor?.description).toBe("Labor (updated)");
+                expect(updatedLabor?.unitPrice.toString()).toBe("25");
+
+                const found = await prisma.quoteItem.findUnique({
+                    where: { id: quoteItem.id },
+                    include: { quoteItemComponents: true },
+                });
+                expect(found?.description).toBe("Battery replacement (updated)");
+                expect(found?.quoteItemComponents).toHaveLength(2);
+            });
+
+            it("should update only the provided fields (partial update)", async () => {
+                const { user, quoteItems } = await createFixture();
+                const quoteItem = quoteItems[0];
+                const [firstComponent] = quoteItem.components;
+
+                const input: UpdateQuoteItemAndComponentsInput = {
+                    quoteItemId: quoteItem.id,
+                    description: null,
+                    updatedById: user.id,
+                    components: [
+                        {
+                            componentId: firstComponent.id,
+                            type: null,
+                            description: null,
+                            quantity: 3,
+                            unitPrice: null,
+                        },
+                    ],
+                };
+
+                const updated = await prisma.$transaction((tx) =>
+                    serviceOrderRepository.updateQuoteItemAndComponents(input, tx),
+                );
+
+                expect(updated.description).toBe(quoteItem.description);
+
+                const updatedComponent = updated.quoteItemComponents.find((c) => c.id === firstComponent.id);
+                expect(updatedComponent?.quantity).toBe(3);
+                expect(updatedComponent?.type).toBe(firstComponent.type);
+                expect(updatedComponent?.description).toBe(firstComponent.description);
+                expect(updatedComponent?.unitPrice.toString()).toBe(firstComponent.unitPrice.toString());
+            });
+
+            it("should update the item without touching components when components array is empty", async () => {
+                const { user, quoteItems } = await createFixture();
+                const quoteItem = quoteItems[0];
+
+                const input: UpdateQuoteItemAndComponentsInput = {
+                    quoteItemId: quoteItem.id,
+                    description: "Only the item description changed",
+                    updatedById: user.id,
+                    components: [],
+                };
+
+                const updated = await prisma.$transaction((tx) =>
+                    serviceOrderRepository.updateQuoteItemAndComponents(input, tx),
+                );
+
+                expect(updated.description).toBe("Only the item description changed");
+                expect(updated.quoteItemComponents).toHaveLength(2);
+
+                const found = await prisma.quoteItemComponent.findMany({
+                    where: { quoteItemId: quoteItem.id },
+                });
+                for (const comp of found) {
+                    expect(comp.updatedAt).toBeNull();
+                }
+            });
+
+            it("should throw when the quote item does not exist", async () => {
+                const { user } = await createFixture();
+
+                const input: UpdateQuoteItemAndComponentsInput = {
+                    quoteItemId: "0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa",
+                    description: null,
+                    updatedById: user.id,
+                    components: [],
+                };
+
+                await expect(
+                    prisma.$transaction((tx) =>
+                        serviceOrderRepository.updateQuoteItemAndComponents(input, tx),
+                    ),
+                ).rejects.toThrow();
+            });
+
+            it("should throw when a component does not exist", async () => {
+                const { user, quoteItems } = await createFixture();
+                const quoteItem = quoteItems[0];
+
+                const input: UpdateQuoteItemAndComponentsInput = {
+                    quoteItemId: quoteItem.id,
+                    description: null,
+                    updatedById: user.id,
+                    components: [
+                        {
+                            componentId: "0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa",
+                            type: null,
+                            description: null,
+                            quantity: 3,
+                            unitPrice: null,
+                        },
+                    ],
+                };
+
+                await expect(
+                    prisma.$transaction((tx) =>
+                        serviceOrderRepository.updateQuoteItemAndComponents(input, tx),
+                    ),
+                ).rejects.toThrow();
+            });
+
+            it("should rollback the item update when a component update fails", async () => {
+                const { user, quoteItems } = await createFixture();
+                const quoteItem = quoteItems[0];
+                const [firstComponent] = quoteItem.components;
+
+                const input: UpdateQuoteItemAndComponentsInput = {
+                    quoteItemId: quoteItem.id,
+                    description: "Battery replacement (updated)",
+                    updatedById: user.id,
+                    components: [
+                        {
+                            componentId: firstComponent.id,
+                            type: null,
+                            description: null,
+                            quantity: 3,
+                            unitPrice: null,
+                        },
+                        {
+                            componentId: "0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa",
+                            type: null,
+                            description: null,
+                            quantity: 99,
+                            unitPrice: null,
+                        },
+                    ],
+                };
+
+                await expect(
+                    prisma.$transaction((tx) =>
+                        serviceOrderRepository.updateQuoteItemAndComponents(input, tx),
+                    ),
+                ).rejects.toThrow();
+
+                const foundItem = await prisma.quoteItem.findUnique({
+                    where: { id: quoteItem.id },
+                });
+                expect(foundItem?.description).toBe(quoteItem.description);
+                expect(foundItem?.updatedById).toBeNull();
+
+                const foundFirstComponent = await prisma.quoteItemComponent.findUnique({
+                    where: { id: firstComponent.id },
+                });
+                expect(foundFirstComponent?.quantity).toBe(firstComponent.quantity);
             });
         });
     });
@@ -2017,7 +2243,7 @@ describe("Service Order Repository (Integration)", () => {
 
                 const quoteId = quotes[0].id;
 
-                const result = await serviceOrderRepository.listQuoteItemsByQuoteId({quoteId});
+                const result = await serviceOrderRepository.listQuoteItemsByQuoteId({ quoteId });
 
                 expect(result).toHaveLength(2);
 

@@ -1,5 +1,7 @@
 import { z } from "zod";
 import registry from "../../shared/docs/registry.js";
+import { emptyToNull } from "../../shared/utils/empty-to-null.js";
+
 
 const serviceOrderSchema = registry.register(
     "ServiceOrderSchema",
@@ -151,22 +153,33 @@ type CreateFindingRequest = z.infer<typeof createFindingSchema>;
 const updateFindingSchema = registry.register(
     "UpdateFindingSchema",
     z.object({
-        description: z
-            .string()
-            .trim()
-            .min(5, "Description must be at least 5 characters long")
-            .max(2000, "Description must contain at most 2000 characters")
-            .openapi({
-                example: "Battery capacity below expected level.",
-            }),
+        description: z.preprocess(
+            emptyToNull,
+            z.union([
+                z.null(),
+                z.string()
+                    .min(5, "Description must be at least 5 characters long")
+                    .max(2000, "Description must contain at most 2000 characters"),
+            ])
+        ).openapi({
+            example: "Battery capacity below expected level.",
+        }),
 
-        repairable: z
-            .boolean()
-            .openapi({
-                example: true,
-                description: "Whether this finding can be repaired.",
-            }),
+        repairable: z.preprocess(
+            emptyToNull,
+            z.union([
+                z.null(),
+                z.boolean(),
+            ])
+        ).openapi({
+            example: true,
+            description: "Whether this finding can be repaired.",
+        }),
     })
+    .refine(
+        (data) => data.description !== null || data.repairable !== null,
+        { path: ["body"], message: "At least one field must be provided for update" }
+    )
 );
 
 type UpdateFindingRequest = z.infer<typeof updateFindingSchema>;
@@ -197,7 +210,7 @@ const createQuoteSchema = registry.register(
 
 type CreateQuoteRequest = z.infer<typeof createQuoteSchema>;
 
-const quoteItemComponentSchema = registry.register(
+const createQuoteItemComponentSchema = registry.register(
     "QuoteItemComponentInput",
     z.object({
         type: z
@@ -230,7 +243,7 @@ const quoteItemComponentSchema = registry.register(
     }),
 );
 
-const createQuoteItemSchema = registry.register(
+const createQuoteItemAndComponentsSchema = registry.register(
     "CreateQuoteItemSchema",
     z.object({
         findingId: z
@@ -246,7 +259,7 @@ const createQuoteItemSchema = registry.register(
             .openapi({ example: "Battery replacement" }),
 
         components: z
-            .array(quoteItemComponentSchema)
+            .array(createQuoteItemComponentSchema)
             .min(1, "At least one component is required")
             .openapi({
                 description: "Cost breakdown for this quote item. At least one component is required.",
@@ -254,7 +267,96 @@ const createQuoteItemSchema = registry.register(
     }),
 );
 
-type CreateQuoteItemRequest = z.infer<typeof createQuoteItemSchema>;
+type CreateQuoteItemAndComponentsRequest = z.infer<typeof createQuoteItemAndComponentsSchema>;
+
+const updateQuoteItemComponentSchema = registry.register(
+    "UpdateQuoteItemComponentInput",
+    z.object({
+        componentId: z
+            .string()
+            .uuid("Component ID must be a valid UUID")
+            .openapi({ example: "550e8400-e29b-41d4-a716-446655440000" }),
+
+        type: z.preprocess(
+            emptyToNull,
+            z.union([
+                z.null(),
+                z.enum(["PART", "LABOR", "OTHER"]),
+            ])
+        ).openapi({
+            example: "PART",
+            description: "Type of the cost component",
+        }),
+
+        description: z.preprocess(
+            emptyToNull,
+            z.union([
+                z.null(),
+                z.string()
+                    .min(1, "Component description must be at least 1 character")
+                    .max(255, "Component description must be at most 255 characters"),
+            ])
+        ).openapi({ example: "Battery" }),
+
+        quantity: z.preprocess(
+            emptyToNull,
+            z.union([
+                z.null(),
+                z.number()
+                    .int("Quantity must be an integer")
+                    .positive("Quantity must be greater than zero"),
+            ])
+        ).openapi({ example: 1 }),
+
+        unitPrice: z.preprocess(
+            emptyToNull,
+            z.union([
+                z.null(),
+                z.number()
+                    .positive("Unit price must be greater than zero")
+                    .refine(
+                        (n) => /^\d+(\.\d{1,2})?$/.test(n.toString()),
+                        "Unit price must have at most 2 decimal places",
+                    ),
+            ])
+        ).openapi({ example: 80.00 }),
+    }),
+);
+
+const updateQuoteItemAndComponentsSchema = registry.register(
+    "UpdateQuoteItemSchema",
+    z.object({
+        description: z.preprocess(
+            emptyToNull,
+            z.union([
+                z.null(),
+                z.string()
+                    .min(1, "Description must be at least 1 character")
+                    .max(255, "Description must be at most 255 characters"),
+            ])
+        ).openapi({ example: "Battery replacement (updated)" }),
+
+        components: z
+            .array(updateQuoteItemComponentSchema)
+            .openapi({
+                description: "Components to update. Send an empty array to leave components untouched.",
+            }),
+    })
+    .refine(
+        (data) =>
+            data.description !== null ||
+            data.components.some(
+                (c) =>
+                    c.type !== null ||
+                    c.description !== null ||
+                    c.quantity !== null ||
+                    c.unitPrice !== null,
+            ),
+        { path: ["body"], message: "At least one field must be provided for update" },
+    ),
+);
+
+type UpdateQuoteItemAndComponentsRequest = z.infer<typeof updateQuoteItemAndComponentsSchema>;
 
 export {
     serviceOrderSchema,
@@ -267,8 +369,9 @@ export {
     updateFindingSchema,
     completeDiagnosisSchema,
     createQuoteSchema,
-    createQuoteItemSchema,
     quoteItemWithComponentsSchema,
+    createQuoteItemAndComponentsSchema,
+    updateQuoteItemAndComponentsSchema,
 };
 
 export type {
@@ -278,5 +381,6 @@ export type {
     UpdateFindingRequest,
     CompleteDiagnosisRequest,
     CreateQuoteRequest,
-    CreateQuoteItemRequest,
+    CreateQuoteItemAndComponentsRequest,
+    UpdateQuoteItemAndComponentsRequest,
 };

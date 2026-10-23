@@ -17,11 +17,12 @@ import {
     QuoteItemWithComponents,
     ListQuotesByServiceOrderIdInput,
     ListQuoteItemsByQuoteIdInput,
+    UpdateQuoteItemAndComponentsInput,
 } from "./service-order.types.js";
 import { ServiceOrderStatus } from "./service-order.types.js";
 import { getPrisma } from "../../shared/config/database.js";
 import { notFound, unauthorized, conflict } from "../../shared/errors/errors.js";
-import { isForeignKeyConstraintOn, isUniqueConstraintOn } from "../../shared/utils/prisma-error.js";
+import { isForeignKeyConstraintOn, isUniqueConstraintOn, isNotFoundError } from "../../shared/utils/prisma-error.js";
 import serviceOrderRepository from "./service-order.repository.js";
 
 const createServiceOrder = async (input: CreateServiceOrderInput): Promise<ServiceOrderRecord> => {
@@ -415,7 +416,7 @@ const createQuoteItemAndComponents = async (input: CreateQuoteItemAndComponentsI
                 throw conflict({ message: "Quote is no longer in DRAFT status" });
             }
 
-            return await serviceOrderRepository.createQuoteItem(input, tx);
+            return await serviceOrderRepository.createQuoteItemAndComponents(input, tx);
         });
     } catch (error) {
         if (isForeignKeyConstraintOn(error, "created_by")) {
@@ -458,6 +459,47 @@ const listQuoteItemsByQuoteId = async(input: ListQuoteItemsByQuoteIdInput): Prom
     return serviceOrderRepository.listQuoteItemsByQuoteId(input);
 };
 
+const updateQuoteItemAndComponents = async (input: UpdateQuoteItemAndComponentsInput): Promise<QuoteItemWithComponents> => {
+    const quoteItem = await serviceOrderRepository.findQuoteItemById(input.quoteItemId);
+    if (!quoteItem) {
+        throw notFound({ message: "Quote item not found" });
+    }
+
+    const quote = await serviceOrderRepository.findQuoteById(quoteItem.quoteId);
+    if (!quote) {
+        throw notFound({ message: "Quote not found" });
+    }
+
+    if (quote.status !== "DRAFT") {
+        throw conflict({ message: "Quote is not in DRAFT status" });
+    }
+
+    try {
+        return await getPrisma().$transaction(async (tx) => {
+            const locked = await serviceOrderRepository.lockQuoteIfDraft(quote.id, tx);
+            if (!locked) {
+                throw conflict({ message: "Quote is no longer in DRAFT status" });
+            }
+
+            return await serviceOrderRepository.updateQuoteItemAndComponents(input, tx);
+        });
+    } catch (error) {
+        if (isForeignKeyConstraintOn(error, "updated_by")) {
+            throw unauthorized({
+                message: "Authenticated user no longer exists",
+                code: "USER_NOT_FOUND",
+            });
+        }
+
+        if (isNotFoundError(error)) {
+            // Component or item deleted between the read and the update.
+            throw notFound({ message: "Quote item or component not found" });
+        }
+
+        throw error;
+    }
+};
+
 export default {
     createServiceOrder,
     getServiceOrderById,
@@ -477,4 +519,5 @@ export default {
     listQuotesByServiceOrderId,
     getQuoteItemById,
     listQuoteItemsByQuoteId,
+    updateQuoteItemAndComponents,
 };
