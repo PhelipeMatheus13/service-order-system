@@ -12,7 +12,7 @@ import type {
     CompleteDiagnosisInput,
     DiagnosisRecord,
     CreateQuoteInput,
-    CreateQuoteItemInput,
+    CreateQuoteItemAndComponentsInput,
 } from "../../../../src/modules/service-order/service-order.types.js";
 // (shared / infra)
 import { PrismaClient } from "../../../../src/generated/prisma/client.js";
@@ -1319,7 +1319,7 @@ describe("Service Order Repository (Integration)", () => {
             });
         });
 
-        describe("createQuoteItem", () => {
+        describe("createQuoteItemAndComponents", () => {
             it("should insert a quote item with its components into the database", async () => {
                 const { user, findings, quotes } = await new ServiceOrderBuilder(prisma)
                     .withUser({ role: "ATTENDANT" })
@@ -1333,7 +1333,7 @@ describe("Service Order Repository (Integration)", () => {
 
                 const quoteId = quotes[0].id;
 
-                const input: CreateQuoteItemInput = {
+                const input: CreateQuoteItemAndComponentsInput = {
                     quoteId: quoteId,
                     findingId: findings[0].id,
                     description: "Battery replacement",
@@ -1405,7 +1405,7 @@ describe("Service Order Repository (Integration)", () => {
                     .build();
 
 
-                const input: CreateQuoteItemInput = {
+                const input: CreateQuoteItemAndComponentsInput = {
                     quoteId: quotes[0].id,
                     findingId: findings[0].id,
                     description: "Screen replacement",
@@ -1447,7 +1447,7 @@ describe("Service Order Repository (Integration)", () => {
                     .build();
 
 
-                const input: CreateQuoteItemInput = {
+                const input: CreateQuoteItemAndComponentsInput = {
                     quoteId: quotes[0].id,
                     findingId: findings[0].id,
                     description: "Battery replacement",
@@ -1487,7 +1487,7 @@ describe("Service Order Repository (Integration)", () => {
                     .withFinding({ repairable: true })
                     .build();
 
-                const input: CreateQuoteItemInput = {
+                const input: CreateQuoteItemAndComponentsInput = {
                     quoteId: "0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa",
                     findingId: findings[0].id,
                     description: "Battery replacement",
@@ -1520,7 +1520,7 @@ describe("Service Order Repository (Integration)", () => {
                     .build();
 
 
-                const input: CreateQuoteItemInput = {
+                const input: CreateQuoteItemAndComponentsInput = {
                     quoteId: quotes[0].id,
                     findingId: "0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa",
                     description: "Battery replacement",

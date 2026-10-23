@@ -86,7 +86,7 @@ interface CreateQuoteInput {
     createdById: string;
 }
 
-interface CreateQuoteItemInput {
+interface CreateQuoteItemAndComponentsInput {
     quoteId: string;
     findingId: string;
     description: string;
@@ -112,6 +112,7 @@ interface ListQuotesByServiceOrderIdInput {
 interface ListQuoteItemsByQuoteIdInput {
     quoteId: string;
 };
+
 
 export {
     ServiceOrderStatus,
@@ -139,7 +140,7 @@ export type {
     Quote as QuoteRecord,
     CreateQuoteInput,
     QuoteItemWithComponents,
-    CreateQuoteItemInput,
+    CreateQuoteItemAndComponentsInput,
     ListQuotesByServiceOrderIdInput,
     ListQuoteItemsByQuoteIdInput
 };

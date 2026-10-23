@@ -13,7 +13,7 @@ import {
     ListFidingsByDiagnosisId,
     CreateQuoteInput,
     QuoteRecord,
-    CreateQuoteItemInput,
+    CreateQuoteItemAndComponentsInput,
     QuoteItemWithComponents,
     ListQuotesByServiceOrderIdInput,
     ListQuoteItemsByQuoteIdInput,
@@ -385,7 +385,7 @@ const createQuote = async (input: CreateQuoteInput): Promise<QuoteRecord> => {
     }
 };
 
-const createQuoteItem = async (input: CreateQuoteItemInput): Promise<QuoteItemWithComponents> => {
+const createQuoteItemAndComponents = async (input: CreateQuoteItemAndComponentsInput): Promise<QuoteItemWithComponents> => {
     const quote = await serviceOrderRepository.findQuoteById(input.quoteId);
     if (!quote) {
         throw notFound({ message: "Quote not found" });
@@ -472,7 +472,7 @@ export default {
     resolveStatusAfterDiagnosis,
     listFindingsByDiagnosisId,
     createQuote,
-    createQuoteItem,
+    createQuoteItemAndComponents,
     getQuoteById,
     listQuotesByServiceOrderId,
     getQuoteItemById,

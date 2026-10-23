@@ -751,7 +751,7 @@ describe("Service Order Controller (Unit)", () => {
         });
     });
 
-    describe("createQuoteItem", () => {
+    describe("createQuoteItemAndComponents", () => {
         it("should return 201 on successful quote item creation", async () => {
             req.params.id = "uuid-quote-123";
             req.user = { id: "uuid-user-123" };
@@ -808,11 +808,11 @@ describe("Service Order Controller (Unit)", () => {
                 ],
             } as QuoteItemWithComponents;
 
-            vi.mocked(serviceOrderService).createQuoteItem.mockResolvedValue(mockQuoteItem);
+            vi.mocked(serviceOrderService).createQuoteItemAndComponents.mockResolvedValue(mockQuoteItem);
 
             await serviceOrderController.createQuoteItem(req, res, next);
 
-            expect(serviceOrderService.createQuoteItem).toHaveBeenCalledWith({
+            expect(serviceOrderService.createQuoteItemAndComponents).toHaveBeenCalledWith({
                 quoteId: "uuid-quote-123",
                 findingId: "uuid-finding-123",
                 description: "Battery replacement",
@@ -864,7 +864,7 @@ describe("Service Order Controller (Unit)", () => {
                 statusCode: 400,
                 message: "Quote ID is required",
             }));
-            expect(serviceOrderService.createQuoteItem).not.toHaveBeenCalled();
+            expect(serviceOrderService.createQuoteItemAndComponents).not.toHaveBeenCalled();
             expect(res.status).not.toHaveBeenCalled();
         });
 
@@ -885,7 +885,7 @@ describe("Service Order Controller (Unit)", () => {
             };
 
             const error = new Error("Service error");
-            vi.mocked(serviceOrderService).createQuoteItem.mockRejectedValue(error);
+            vi.mocked(serviceOrderService).createQuoteItemAndComponents.mockRejectedValue(error);
 
             await serviceOrderController.createQuoteItem(req, res, next);
 

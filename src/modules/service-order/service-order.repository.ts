@@ -15,7 +15,7 @@ import type {
     QuoteRecord,
     CreateQuoteInput,
     QuoteItemWithComponents,
-    CreateQuoteItemInput,
+    CreateQuoteItemAndComponentsInput,
     ListQuotesByServiceOrderIdInput,
     ListFidingsByDiagnosisId,
     ListQuoteItemsByQuoteIdInput
@@ -287,7 +287,7 @@ const lockQuoteIfDraft = async (quoteId: string, tx: Prisma.TransactionClient): 
     return result.count > 0;
 };
 
-const createQuoteItem = async (input: CreateQuoteItemInput, tx?: Prisma.TransactionClient): Promise<QuoteItemWithComponents> => {
+const createQuoteItem = async (input: CreateQuoteItemAndComponentsInput, tx?: Prisma.TransactionClient): Promise<QuoteItemWithComponents> => {
     const prisma: PrismaClientOrTx = tx || getPrisma();
     return prisma.quoteItem.create({
         data: {

@@ -159,7 +159,7 @@ const createQuoteItem = asyncHandler(async (req, res) => {
     const { id } = req.params;
     if (!id) throw badRequest({ message: "Quote ID is required" });
     const input = serviceOrderDTO.createQuoteItemDTO(req.body, String(id), String(req.user?.id))
-    const quoteItemWithComponents = await serviceOrderService.createQuoteItem(input);
+    const quoteItemWithComponents = await serviceOrderService.createQuoteItemAndComponents(input);
     res.status(201).json({
         success: true,
         data: quoteItemWithComponents, // quote item does not possess any sensitive data, so we can return directly

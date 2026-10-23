@@ -14,7 +14,7 @@ import {
     CompleteDiagnosisInput,
     QuoteRecord,
     CreateQuoteInput,
-    CreateQuoteItemInput,
+    CreateQuoteItemAndComponentsInput,
     QuoteItemWithComponents,
     ListFidingsByDiagnosisId,
     ListQuotesByServiceOrderIdInput,
@@ -1395,8 +1395,8 @@ describe("Service Order Service (Unit)", () => {
         });
     });
 
-    describe("createQuoteItem", () => {
-        const validInput: CreateQuoteItemInput = {
+    describe("createQuoteItemAndComponents", () => {
+        const validInput: CreateQuoteItemAndComponentsInput = {
             quoteId: "uuid-quote-123",
             findingId: "uuid-finding-123",
             description: "Battery replacement",
@@ -1476,14 +1476,14 @@ describe("Service Order Service (Unit)", () => {
             const error = new Error("fake error");
             vi.mocked(serviceOrderRepository.findQuoteById).mockRejectedValue(error);
 
-            await expect(serviceOrderService.createQuoteItem(validInput))
+            await expect(serviceOrderService.createQuoteItemAndComponents(validInput))
                 .rejects.toThrow(error);
         });
 
         it("should throw NOT_FOUND if quote does not exist", async () => {
             vi.mocked(serviceOrderRepository.findQuoteById).mockResolvedValue(null);
 
-            await expect(serviceOrderService.createQuoteItem(validInput))
+            await expect(serviceOrderService.createQuoteItemAndComponents(validInput))
                 .rejects.toMatchObject({
                     statusCode: 404,
                     message: "Quote not found",
@@ -1498,7 +1498,7 @@ describe("Service Order Service (Unit)", () => {
                 status: "SENT",
             });
 
-            await expect(serviceOrderService.createQuoteItem(validInput))
+            await expect(serviceOrderService.createQuoteItemAndComponents(validInput))
                 .rejects.toMatchObject({
                     statusCode: 409,
                     message: "Quote is not in DRAFT status",
@@ -1512,7 +1512,7 @@ describe("Service Order Service (Unit)", () => {
             vi.mocked(serviceOrderRepository.findQuoteById).mockResolvedValue(mockQuoteRecord);
             vi.mocked(serviceOrderRepository.findFindingById).mockRejectedValue(error);
 
-            await expect(serviceOrderService.createQuoteItem(validInput))
+            await expect(serviceOrderService.createQuoteItemAndComponents(validInput))
                 .rejects.toThrow(error);
         });
 
@@ -1520,7 +1520,7 @@ describe("Service Order Service (Unit)", () => {
             vi.mocked(serviceOrderRepository.findQuoteById).mockResolvedValue(mockQuoteRecord);
             vi.mocked(serviceOrderRepository.findFindingById).mockResolvedValue(null);
 
-            await expect(serviceOrderService.createQuoteItem(validInput))
+            await expect(serviceOrderService.createQuoteItemAndComponents(validInput))
                 .rejects.toMatchObject({
                     statusCode: 404,
                     message: "Finding not found",
@@ -1536,7 +1536,7 @@ describe("Service Order Service (Unit)", () => {
                 diagnosisId: "uuid-other-diagnosis",
             });
 
-            await expect(serviceOrderService.createQuoteItem(validInput))
+            await expect(serviceOrderService.createQuoteItemAndComponents(validInput))
                 .rejects.toMatchObject({
                     statusCode: 409,
                     message: "Finding does not belong to this quote's diagnosis",
@@ -1552,7 +1552,7 @@ describe("Service Order Service (Unit)", () => {
                 repairable: false,
             });
 
-            await expect(serviceOrderService.createQuoteItem(validInput))
+            await expect(serviceOrderService.createQuoteItemAndComponents(validInput))
                 .rejects.toMatchObject({
                     statusCode: 409,
                     message: "Finding is not repairable",
@@ -1565,7 +1565,7 @@ describe("Service Order Service (Unit)", () => {
             const { tx } = setupCreateQuoteItemMocks();
             vi.mocked(serviceOrderRepository.lockQuoteIfDraft).mockResolvedValue(false);
 
-            await expect(serviceOrderService.createQuoteItem(validInput))
+            await expect(serviceOrderService.createQuoteItemAndComponents(validInput))
                 .rejects.toMatchObject({
                     statusCode: 409,
                     message: "Quote is no longer in DRAFT status",
@@ -1583,7 +1583,7 @@ describe("Service Order Service (Unit)", () => {
                 (_error, field) => field === "created_by",
             );
 
-            await expect(serviceOrderService.createQuoteItem(validInput))
+            await expect(serviceOrderService.createQuoteItemAndComponents(validInput))
                 .rejects.toMatchObject({
                     statusCode: 401,
                     message: "Authenticated user no longer exists",
@@ -1601,7 +1601,7 @@ describe("Service Order Service (Unit)", () => {
                 (_error, field) => field === "finding_id",
             );
 
-            await expect(serviceOrderService.createQuoteItem(validInput))
+            await expect(serviceOrderService.createQuoteItemAndComponents(validInput))
                 .rejects.toMatchObject({
                     statusCode: 404,
                     message: "Finding not found",
@@ -1616,14 +1616,14 @@ describe("Service Order Service (Unit)", () => {
             vi.mocked(serviceOrderRepository.createQuoteItem).mockRejectedValue(error);
             vi.mocked(isForeignKeyConstraintOn).mockReturnValue(false);
 
-            await expect(serviceOrderService.createQuoteItem(validInput))
+            await expect(serviceOrderService.createQuoteItemAndComponents(validInput))
                 .rejects.toThrow(error);
         });
 
         it("should create quote item successfully", async () => {
             const { tx } = setupCreateQuoteItemMocks();
 
-            const result = await serviceOrderService.createQuoteItem(validInput);
+            const result = await serviceOrderService.createQuoteItemAndComponents(validInput);
 
             expect(serviceOrderRepository.findQuoteById).toHaveBeenCalledWith(validInput.quoteId);
             expect(serviceOrderRepository.findFindingById).toHaveBeenCalledWith(validInput.findingId);
