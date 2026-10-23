@@ -159,10 +159,10 @@ const createQuoteItem = asyncHandler(async (req, res) => {
     const { id } = req.params;
     if (!id) throw badRequest({ message: "Quote ID is required" });
     const input = serviceOrderDTO.createQuoteItemDTO(req.body, String(id), String(req.user?.id))
-    const QuoteItemWithComponents = await serviceOrderService.createQuoteItem(input);
+    const quoteItemWithComponents = await serviceOrderService.createQuoteItem(input);
     res.status(201).json({
         success: true,
-        data: QuoteItemWithComponents, // quote item does not possess any sensitive data, so we can return directly
+        data: quoteItemWithComponents, // quote item does not possess any sensitive data, so we can return directly
         message: "Quote item successfully created",
     });
 });
@@ -189,6 +189,28 @@ const listQuotesByServiceOrderId = asyncHandler(async (req, res) => {
     });
 });
 
+const getQuoteItemById = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (!id) throw badRequest({ message: "Quote item ID is required" });
+    const quoteItemWithComponents = await serviceOrderService.getQuoteItemById(String(id));
+    res.status(200).json({
+        success: true,
+        data: quoteItemWithComponents, 
+    });
+});
+
+const listQuoteItemsByQuoteId = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (!id) throw badRequest({ message: "Quote ID is required" });
+    const quoteItemsWithComponents = await serviceOrderService.listQuoteItemsByQuoteId({
+        quoteId: String(id),
+    });
+    res.status(200).json({
+        success: true,
+        data: quoteItemsWithComponents, 
+    });
+});
+
 export default {
     createServiceOrder,
     getServiceOrderById,
@@ -205,4 +227,6 @@ export default {
     createQuoteItem,
     getQuoteById,
     listQuotesByServiceOrderId,
+    getQuoteItemById,
+    listQuoteItemsByQuoteId,
 };

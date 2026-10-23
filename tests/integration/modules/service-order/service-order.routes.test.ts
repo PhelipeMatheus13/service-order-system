@@ -198,7 +198,7 @@ describe("Service Order Routes (Integration)", () => {
 
     describe("POST /service-orders/quotes/:id/items", () => {
         it("should create a quote item with components successfully", async () => {
-            const { user, findings, quote } = await new ServiceOrderBuilder(prisma)
+            const { user, findings, quotes } = await new ServiceOrderBuilder(prisma)
                 .withUser({ role: "ATTENDANT" })
                 .withCustomer()
                 .withDevice()
@@ -208,10 +208,12 @@ describe("Service Order Routes (Integration)", () => {
                 .withQuote()
                 .build();
 
+            const quoteId = quotes[0].id;
+
             const accessToken = generateAccessToken(user.id, "ATTENDANT");
 
             const res = await request(app)
-                .post(`/service-orders/quotes/${quote!.id}/items`)
+                .post(`/service-orders/quotes/${quoteId}/items`)
                 .set("Authorization", `Bearer ${accessToken}`)
                 .send({
                     findingId: findings[0].id,
@@ -237,7 +239,7 @@ describe("Service Order Routes (Integration)", () => {
             expect(res.body.message).toBe("Quote item successfully created");
 
             expect(res.body.data).toMatchObject({
-                quoteId: quote!.id,
+                quoteId: quoteId,
                 findingId: findings[0].id,
                 description: "Battery replacement",
                 decision: "PENDING",
@@ -263,7 +265,7 @@ describe("Service Order Routes (Integration)", () => {
             });
 
             expect(quoteItemFound).toBeTruthy();
-            expect(quoteItemFound?.quoteId).toBe(quote!.id);
+            expect(quoteItemFound?.quoteId).toBe(quoteId);
             expect(quoteItemFound?.quoteItemComponents).toHaveLength(2);
         });
     });
@@ -448,7 +450,7 @@ describe("Service Order Routes (Integration)", () => {
 
     describe("GET /service-orders/quotes/:id", () => {
         it("should return the quote data", async () => {
-            const { user, quote } = await new ServiceOrderBuilder(prisma)
+            const { user, quotes } = await new ServiceOrderBuilder(prisma)
                 .withUser({ role: "ATTENDANT" })
                 .withCustomer()
                 .withDevice()
@@ -457,18 +459,22 @@ describe("Service Order Routes (Integration)", () => {
                 .withQuote()
                 .build();
 
+            const quote = quotes[0];
+
+            expect(quote).toBeTruthy();
+
             const accessToken = generateAccessToken(user.id, "ATTENDANT");
 
             const res = await request(app)
-                .get(`/service-orders/quotes/${quote!.id}`)
+                .get(`/service-orders/quotes/${quote.id}`)
                 .set("Authorization", `Bearer ${accessToken}`);
 
             expect(res.statusCode).toBe(200);
             expect(res.body.success).toBe(true);
             expect(res.body.data).toMatchObject({
-                id: quote!.id,
-                serviceOrderId: quote!.serviceOrderId,
-                diagnosisId: quote!.diagnosisId,
+                id: quote.id,
+                serviceOrderId: quote.serviceOrderId,
+                diagnosisId: quote.diagnosisId,
                 status: "DRAFT",
                 createdById: user.id,
             });
@@ -481,39 +487,17 @@ describe("Service Order Routes (Integration)", () => {
 
     describe("GET /service-orders/:id/quotes", () => {
         it("should return the quotes ordered by creation date ascending", async () => {
-            const { user, serviceOrder, diagnosis } = await new ServiceOrderBuilder(prisma)
+            const { user, serviceOrder, quotes } = await new ServiceOrderBuilder(prisma)
                 .withUser({ role: "ATTENDANT" })
                 .withCustomer()
                 .withDevice()
                 .withServiceOrder({ status: "AWAITING_QUOTE" })
                 .withDiagnosis()
+                .withQuote({ status: "SUPERSEDED" })
+                .withQuote({ status: "DRAFT" })
                 .build();
 
             const accessToken = generateAccessToken(user.id, "ATTENDANT");
-
-            const now = new Date();
-
-            const quotes = await prisma.quote.createManyAndReturn({
-                data: [
-                    {
-                        serviceOrderId: serviceOrder!.id,
-                        diagnosisId: diagnosis!.id,
-                        createdById: user.id,
-                        status: "SUPERSEDED",
-                        createdAt: new Date(now.getTime() - 60 * 60 * 1000),
-                    },
-                    {
-                        serviceOrderId: serviceOrder!.id,
-                        diagnosisId: diagnosis!.id,
-                        createdById: user.id,
-                        status: "DRAFT",
-                        createdAt: now,
-                    },
-                ],
-            });
-
-            const olderQuote = quotes.find((q) => q.status === "SUPERSEDED")!;
-            const newerQuote = quotes.find((q) => q.status === "DRAFT")!;
 
             const res = await request(app)
                 .get(`/service-orders/${serviceOrder!.id}/quotes`)
@@ -522,9 +506,9 @@ describe("Service Order Routes (Integration)", () => {
             expect(res.statusCode).toBe(200);
             expect(res.body.success).toBe(true);
             expect(res.body.data).toHaveLength(2);
-            expect(res.body.data[0].id).toBe(olderQuote.id);
+            expect(res.body.data[0].id).toBe(quotes[0].id);
             expect(res.body.data[0].status).toBe("SUPERSEDED");
-            expect(res.body.data[1].id).toBe(newerQuote.id);
+            expect(res.body.data[1].id).toBe(quotes[1].id);
             expect(res.body.data[1].status).toBe("DRAFT");
         });
 
@@ -545,6 +529,110 @@ describe("Service Order Routes (Integration)", () => {
             expect(res.statusCode).toBe(200);
             expect(res.body.success).toBe(true);
             expect(res.body.data).toEqual([]);
+        });
+    });
+
+    describe("GET /service-orders/quotes/items/:id", () => {
+        it("should return the quote item with its components", async () => {
+            const { user, findings, quoteItems } = await new ServiceOrderBuilder(prisma)
+                .withUser({ role: "ATTENDANT" })
+                .withCustomer()
+                .withDevice()
+                .withServiceOrder({ status: "AWAITING_QUOTE" })
+                .withDiagnosis()
+                .withFinding({ repairable: true })
+                .withQuote()
+                .withQuoteItem({
+                    findingIndex: 0,
+                    description: "Battery replacement",
+                    components: [
+                        { type: "PART", description: "Battery", quantity: 1, unitPrice: 80 },
+                        { type: "LABOR", description: "Battery replacement labor", quantity: 1, unitPrice: 20 },
+                    ],
+                })
+                .build();
+
+            const accessToken = generateAccessToken(user.id, "ATTENDANT");
+            const quoteItemId = quoteItems[0].id;
+
+            const res = await request(app)
+                .get(`/service-orders/quotes/items/${quoteItemId}`)
+                .set("Authorization", `Bearer ${accessToken}`);
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(res.body.data).toMatchObject({
+                id: quoteItemId,
+                quoteId: quoteItems[0].quoteId,
+                findingId: findings[0].id,
+                description: "Battery replacement",
+                decision: "PENDING",
+                createdById: user.id,
+            });
+            expect(res.body.data.quoteItemComponents).toHaveLength(2);
+
+            const partComponent = res.body.data.quoteItemComponents.find(
+                (c: any) => c.type === "PART",
+            );
+            expect(partComponent.unitPrice).toBe("80");
+
+            const laborComponent = res.body.data.quoteItemComponents.find(
+                (c: any) => c.type === "LABOR",
+            );
+            expect(laborComponent.unitPrice).toBe("20");
+        });
+    });
+
+    describe("GET /service-orders/quotes/:id/items", () => {
+        it("should return the quote items ordered by creation date ascending", async () => {
+            const { user, findings, quotes, quoteItems } = await new ServiceOrderBuilder(prisma)
+                .withUser({ role: "ATTENDANT" })
+                .withCustomer()
+                .withDevice()
+                .withServiceOrder({ status: "AWAITING_QUOTE" })
+                .withDiagnosis()
+                .withFinding({ repairable: true, description: "Battery issue" })
+                .withFinding({ repairable: true, description: "Screen issue" })
+                .withQuote()
+                .withQuoteItem({
+                    findingIndex: 0,
+                    description: "Battery replacement",
+                    components: [
+                        { type: "PART", description: "Battery", quantity: 1, unitPrice: 80 },
+                    ],
+                })
+                .withQuoteItem({
+                    findingIndex: 1,
+                    description: "Screen replacement",
+                    components: [
+                        { type: "PART", description: "Screen", quantity: 1, unitPrice: 120 },
+                    ],
+                })
+                .build();
+
+            const accessToken = generateAccessToken(user.id, "ATTENDANT");
+            const quoteId = quotes[0].id;
+
+            const res = await request(app)
+                .get(`/service-orders/quotes/${quoteId}/items`)
+                .set("Authorization", `Bearer ${accessToken}`);
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(res.body.data).toHaveLength(2);
+
+            // The builder creates items in order, and the repository orders by
+            // createdAt ascending, so the first item should be "Battery replacement".
+            expect(res.body.data[0].id).toBe(quoteItems[0].id);
+            expect(res.body.data[0].description).toBe("Battery replacement");
+            expect(res.body.data[0].findingId).toBe(findings[0].id);
+            expect(res.body.data[0].quoteItemComponents).toHaveLength(1);
+            expect(res.body.data[0].quoteItemComponents[0].unitPrice).toBe("80");
+
+            expect(res.body.data[1].id).toBe(quoteItems[1].id);
+            expect(res.body.data[1].description).toBe("Screen replacement");
+            expect(res.body.data[1].findingId).toBe(findings[1].id);
+            expect(res.body.data[1].quoteItemComponents[0].unitPrice).toBe("120");
         });
     });
 

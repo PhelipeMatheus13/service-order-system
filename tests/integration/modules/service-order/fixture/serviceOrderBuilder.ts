@@ -11,6 +11,10 @@ import {
     Finding,
     Quote,
     QuoteStatus,
+    QuoteItem,
+    QuoteItemComponent,
+    QuoteItemDecision,
+    QuoteItemComponentType,
 } from "../../../../../src/generated/prisma/client.js";
 
 type UserOptions = {
@@ -60,11 +64,34 @@ type QuoteOptions = {
     respondedAt?: Date;
 };
 
+type QuoteItemComponentOptions = {
+    type?: QuoteItemComponentType;
+    description?: string;
+    quantity?: number;
+    unitPrice?: number;
+};
+
+type QuoteItemOptions = {
+    description?: string;
+    decision?: QuoteItemDecision;
+    quoteIndex?: number;
+    findingIndex?: number;
+    components?: QuoteItemComponentOptions[];
+};
+
+/**
+ * A QuoteItem together with its components, so tests can navigate the
+ * hierarchy without cross-referencing by `quoteItemId`.
+ */
+type QuoteItemWithComponents = QuoteItem & {
+    components: QuoteItemComponent[];
+};
+
 /**
  * Result of a build. `user`, `customer` and `device` are always present
  * (the domain floor). `serviceOrder` and `diagnosis` are optional because
  * they only exist when explicitly requested (directly or via cascade).
- * `findings` and `quotes` are always arrays (possibly empty).
+ * Arrays are always present (possibly empty).
  */
 export type ServiceOrderScenario = {
     user: User;
@@ -74,21 +101,31 @@ export type ServiceOrderScenario = {
     diagnosis?: Diagnosis;
     findings: Finding[];
     quotes: Quote[];
+    quoteItems: QuoteItemWithComponents[];
 };
 
 /**
  * Test data builder for a ServiceOrder scenario.
  *
- * Contract:
- * - Every `build()` always creates 1 user, 1 customer and 1 device.
- * - `serviceOrder` is created when requested OR when any downstream entity requires it.
- * - `diagnosis` is created when requested OR when a finding requires it.
- * - `finding` can be created N times; all share the same diagnosis and user.
- * - `quote` can be created N times. All quotes link to the diagnosis when one exists.
- *   Only one non-SUPERSEDED quote is allowed per service order (partial unique index).
- * - Each `withX()` (except `withFinding` and `withQuote`) can be called at most once — fail-fast.
- * - Call order is irrelevant. Each `ensureX()` resolves its own FKs recursively,
- *   so dependencies are always materialized in FK-safe order.
+ * Always created: 1 user, 1 customer, 1 device.
+ * Cascade (auto-created on demand with defaults):
+ *   serviceOrder → diagnosis → findings, and serviceOrder → quotes → quoteItems
+ * Cardinality: findings, quotes, quoteItems are N; everything else is 1.
+ *
+ * Rules:
+ * - Quotes link to the diagnosis when present; otherwise direct flow (null).
+ * - Only one non-SUPERSEDED quote per service order (partial unique index).
+ *   Use `status: SUPERSEDED` for historical quotes.
+ * - quoteItem targets the current quote by default; `quoteIndex` overrides.
+ *   Each item gets at least one component (defaults if none passed).
+ * - `withX()` throws if called more than once, except `withFinding`, `withQuote`
+ *   and `withQuoteItem` (N-methods).
+ *
+ * Design:
+ * - Call order is irrelevant — each `ensureX()` resolves its own FKs recursively.
+ * - Structural validity only: FKs, NOT NULL, unique indexes. 
+ *   Domain rules (belong to the service layer;
+ *   tests asserting rejections rely on the builder being permissive.
  */
 export class ServiceOrderBuilder {
     private userOptions: UserOptions | null = null;
@@ -96,16 +133,18 @@ export class ServiceOrderBuilder {
     private deviceOptions: DeviceOptions | null = null;
     private serviceOrderOptions: ServiceOrderOptions | null = null;
     private diagnosisOptions: DiagnosisOptions | null = null;
-    private readonly quoteOptions: QuoteOptions[] = [];
     private readonly findingOptions: FindingOptions[] = [];
+    private readonly quoteOptions: QuoteOptions[] = [];
+    private readonly quoteItemOptions: QuoteItemOptions[] = [];
 
     private user: User | null = null;
     private customer: Customer | null = null;
     private device: Device | null = null;
     private serviceOrder: ServiceOrder | null = null;
     private diagnosis: Diagnosis | null = null;
-    private readonly quotes: Quote[] = [];
     private readonly findings: Finding[] = [];
+    private readonly quotes: Quote[] = [];
+    private readonly quoteItems: QuoteItemWithComponents[] = [];
 
     constructor(private readonly prisma: PrismaClient) { }
 
@@ -155,7 +194,7 @@ export class ServiceOrderBuilder {
 
     /**
      * Requests a Diagnosis.
-     * Created when requested OR when a finding requires it (defaults satisfy the FK).
+     * Created when requested OR when a finding/quote requires it (defaults satisfy the FK).
      * Throws if called more than once.
      */
     withDiagnosis(options: DiagnosisOptions = {}): this {
@@ -203,6 +242,19 @@ export class ServiceOrderBuilder {
         return this;
     }
 
+    /**
+     * Adds a QuoteItem.
+     * Requires a parent quote — if no `withQuote()` was called, a default DRAFT quote is created.
+     * Defaults to the current (non-SUPERSEDED) quote; pass `quoteIndex` to target a specific quote.
+     * Pass `findingIndex` to link the item to a finding; omit for direct-flow items (`finding_id: null`).
+     * At least one component is created per item (defaults applied if none passed).
+     * Can be called any number of times.
+     */
+    withQuoteItem(options: QuoteItemOptions = {}): this {
+        this.quoteItemOptions.push(options);
+        return this;
+    }
+
     async build(): Promise<ServiceOrderScenario> {
         // Domain floor: always created
         const user = await this.ensureUser();
@@ -211,6 +263,14 @@ export class ServiceOrderBuilder {
 
         // Dispatch to the deepest entity that was requested.
         // Each `if` is independent; ensureX resolves dependencies recursively.
+        if (this.quoteItemOptions.length > 0) {
+            await this.ensureQuoteItems();
+            if (this.findingOptions.length > 0) {
+                await this.ensureFindings();
+            }
+            return this.snapshot(user, customer, device);
+        }
+
         if (this.quoteOptions.length > 0) {
             await this.ensureQuotes();
             if (this.findingOptions.length > 0) {
@@ -249,6 +309,7 @@ export class ServiceOrderBuilder {
             diagnosis: this.diagnosis ?? undefined,
             findings: this.findings,
             quotes: this.quotes,
+            quoteItems: this.quoteItems,
         };
     }
 
@@ -326,7 +387,9 @@ export class ServiceOrderBuilder {
         const serviceOrder = await this.ensureServiceOrder();
         const user = await this.ensureUser();
 
-        // All quotes in the same scenario share the same diagnosis link.
+        // All quotes in the scenario follow the same flow: linked to a diagnosis when
+        // one was requested (or implied by findings), otherwise direct-flow
+        // (diagnosis_id: null). The decision is shared across all quotes.
         let diagnosisId: string | undefined;
         if (this.diagnosisOptions !== null || this.findingOptions.length > 0) {
             const diagnosis = await this.ensureDiagnosis();
@@ -342,6 +405,91 @@ export class ServiceOrderBuilder {
             ));
         }
         return this.quotes;
+    }
+
+    private async ensureQuoteItems(): Promise<QuoteItemWithComponents[]> {
+        if (this.quoteItems.length > 0) return this.quoteItems;
+        if (this.quoteItemOptions.length === 0) return this.quoteItems;
+
+        // A quoteItem needs a parent quote (FK is NOT NULL). If the caller did not
+        // request one, register a default so `ensureQuotes` creates it — same
+        // auto-resolve behavior the builder uses for every other required FK.
+        if (this.quoteOptions.length === 0) {
+            this.quoteOptions.push({});
+        }
+
+        const quotes = await this.ensureQuotes();
+        const user = await this.ensureUser();
+
+        for (const options of this.quoteItemOptions) {
+            const quote = this.resolveQuoteForItem(quotes, options.quoteIndex);
+            const wantsFinding = options.findingIndex !== undefined;
+
+            let findingId: string | undefined;
+            let inheritedDescription: string | undefined;
+
+            if (wantsFinding) {
+                const findings = await this.ensureFindings();
+                const finding = findings[options.findingIndex!];
+                if (!finding) {
+                    throw new Error(
+                        `withQuoteItem() findingIndex ${options.findingIndex} is out of range ` +
+                        `(only ${findings.length} finding(s) requested).`,
+                    );
+                }
+                findingId = finding.id;
+                inheritedDescription = finding.description;
+            }
+
+            const description = options.description ?? inheritedDescription ?? "Quote item default description";
+            const decision = options.decision ?? QuoteItemDecision.PENDING;
+
+            const item = await this.createQuoteItem(
+                quote.id,
+                findingId,
+                user.id,
+                description,
+                decision,
+            );
+
+            // At least one component per item (defaults applied when none passed).
+            const componentOptions = (options.components && options.components.length > 0)
+                ? options.components
+                : [{}];
+
+            const components: QuoteItemComponent[] = [];
+            for (const compOptions of componentOptions) {
+                components.push(
+                    await this.createQuoteItemComponent(item.id, compOptions),
+                );
+            }
+
+            this.quoteItems.push({ ...item, components });
+        }
+
+        return this.quoteItems;
+    }
+
+    private resolveQuoteForItem(quotes: Quote[], quoteIndex?: number): Quote {
+        if (quoteIndex !== undefined) {
+            const candidate = quotes[quoteIndex];
+            if (!candidate) {
+                throw new Error(
+                    `withQuoteItem() quoteIndex ${quoteIndex} is out of range ` +
+                    `(only ${quotes.length} quote(s) requested).`,
+                );
+            }
+            return candidate;
+        }
+
+        const current = quotes.find((q) => q.status !== QuoteStatus.SUPERSEDED);
+        if (!current) {
+            throw new Error(
+                "withQuoteItem() found no current (non-SUPERSEDED) quote — " +
+                "pass quoteIndex to target a specific quote.",
+            );
+        }
+        return current;
     }
 
     // --- Row creation (single Prisma call, no recursion) ---
@@ -451,6 +599,39 @@ export class ServiceOrderBuilder {
                 status: options.status ?? QuoteStatus.DRAFT,
                 submittedAt: options.submittedAt ?? null,
                 respondedAt: options.respondedAt ?? null,
+            },
+        });
+    }
+
+    private async createQuoteItem(
+        quoteId: string,
+        findingId: string | undefined,
+        createdById: string,
+        description: string,
+        decision: QuoteItemDecision,
+    ): Promise<QuoteItem> {
+        return this.prisma.quoteItem.create({
+            data: {
+                quoteId,
+                findingId: findingId ?? null,
+                createdById,
+                description,
+                decision,
+            },
+        });
+    }
+
+    private async createQuoteItemComponent(
+        quoteItemId: string,
+        options: QuoteItemComponentOptions,
+    ): Promise<QuoteItemComponent> {
+        return this.prisma.quoteItemComponent.create({
+            data: {
+                quoteItemId,
+                type: options.type ?? QuoteItemComponentType.PART,
+                description: options.description ?? "Default component",
+                quantity: options.quantity ?? 1,
+                unitPrice: options.unitPrice ?? 100,
             },
         });
     }

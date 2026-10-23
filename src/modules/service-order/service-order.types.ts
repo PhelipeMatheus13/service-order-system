@@ -109,6 +109,10 @@ interface ListQuotesByServiceOrderIdInput {
     serviceOrderId: string;
 };
 
+interface ListQuoteItemsByQuoteIdInput {
+    quoteId: string;
+};
+
 export {
     ServiceOrderStatus,
     ServiceOrderStatusChangeSource,
@@ -136,5 +140,6 @@ export type {
     CreateQuoteInput,
     QuoteItemWithComponents,
     CreateQuoteItemInput,
-    ListQuotesByServiceOrderIdInput
+    ListQuotesByServiceOrderIdInput,
+    ListQuoteItemsByQuoteIdInput
 };

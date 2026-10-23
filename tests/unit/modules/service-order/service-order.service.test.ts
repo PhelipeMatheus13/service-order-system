@@ -17,7 +17,8 @@ import {
     CreateQuoteItemInput,
     QuoteItemWithComponents,
     ListFidingsByDiagnosisId,
-    ListQuotesByServiceOrderIdInput
+    ListQuotesByServiceOrderIdInput,
+    ListQuoteItemsByQuoteIdInput,
 } from "../../../../src/modules/service-order/service-order.types.js";
 // (shared)
 import { getPrisma } from "../../../../src/shared/config/database.js";
@@ -1764,6 +1765,154 @@ describe("Service Order Service (Unit)", () => {
             vi.mocked(serviceOrderRepository.listQuotesByServiceOrderId).mockResolvedValue([]);
 
             const result = await serviceOrderService.listQuotesByServiceOrderId(validInput);
+
+            expect(result).toEqual([]);
+        });
+    });
+
+    describe("getQuoteItemById", () => {
+        const quoteItemId = "uuid-quote-item-123";
+
+        const mockQuoteItem = {
+            id: quoteItemId,
+            quoteId: "uuid-quote-123",
+            findingId: "uuid-finding-123",
+            description: "Battery replacement",
+            decision: "PENDING",
+            createdById: "uuid-user-123",
+            createdAt: new Date(),
+            updatedById: null,
+            updatedAt: null,
+            quoteItemComponents: [
+                {
+                    id: "uuid-component-123",
+                    quoteItemId,
+                    type: "PART",
+                    description: "Battery",
+                    quantity: 1,
+                    unitPrice: new Prisma.Decimal(80),
+                    createdAt: new Date(),
+                    updatedAt: null,
+                },
+            ],
+        } as QuoteItemWithComponents;
+
+        it("should throw if serviceOrderRepository.findQuoteItemById fails", async () => {
+            const error = new Error("fake error");
+            vi.mocked(serviceOrderRepository.findQuoteItemById).mockRejectedValue(error);
+
+            await expect(serviceOrderService.getQuoteItemById(quoteItemId))
+                .rejects.toThrow(error);
+        });
+
+        it("should throw NOT_FOUND if quote item does not exist", async () => {
+            vi.mocked(serviceOrderRepository.findQuoteItemById).mockResolvedValue(null);
+
+            await expect(serviceOrderService.getQuoteItemById(quoteItemId))
+                .rejects.toMatchObject({
+                    statusCode: 404,
+                    message: "Quote item not found",
+                });
+        });
+
+        it("should return quote item", async () => {
+            vi.mocked(serviceOrderRepository.findQuoteItemById).mockResolvedValue(mockQuoteItem);
+
+            const result = await serviceOrderService.getQuoteItemById(quoteItemId);
+
+            expect(serviceOrderRepository.findQuoteItemById).toHaveBeenCalledWith(quoteItemId);
+            expect(result).toBe(mockQuoteItem);
+        });
+    });
+
+    describe("listQuoteItemsByQuoteId", () => {
+        const validInput: ListQuoteItemsByQuoteIdInput = {
+            quoteId: "uuid-quote-123",
+        };
+
+        const mockQuoteRecord = {
+            id: validInput.quoteId,
+            serviceOrderId: "uuid-service-order-123",
+            diagnosisId: "uuid-diagnosis-123",
+            status: "DRAFT",
+            submittedAt: null,
+            respondedAt: null,
+            createdById: "uuid-user-456",
+            createdAt: new Date(),
+            updatedAt: null,
+        } as QuoteRecord;
+
+        const mockQuoteItems = [
+            {
+                id: "uuid-quote-item-1",
+                quoteId: validInput.quoteId,
+                findingId: "uuid-finding-123",
+                description: "Battery replacement",
+                decision: "PENDING",
+                createdById: "uuid-user-456",
+                createdAt: new Date(),
+                updatedById: null,
+                updatedAt: null,
+                quoteItemComponents: [
+                    {
+                        id: "uuid-component-1",
+                        quoteItemId: "uuid-quote-item-1",
+                        type: "PART",
+                        description: "Battery",
+                        quantity: 1,
+                        unitPrice: new Prisma.Decimal(80),
+                        createdAt: new Date(),
+                        updatedAt: null,
+                    },
+                ],
+            },
+        ] as QuoteItemWithComponents[];
+
+        it("should throw if serviceOrderRepository.findQuoteById fails", async () => {
+            const error = new Error("fake error");
+            vi.mocked(serviceOrderRepository.findQuoteById).mockRejectedValue(error);
+
+            await expect(serviceOrderService.listQuoteItemsByQuoteId(validInput))
+                .rejects.toThrow(error);
+        });
+
+        it("should throw NOT_FOUND if quote does not exist", async () => {
+            vi.mocked(serviceOrderRepository.findQuoteById).mockResolvedValue(null);
+
+            await expect(serviceOrderService.listQuoteItemsByQuoteId(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 404,
+                    message: "Quote not found",
+                });
+
+            expect(serviceOrderRepository.listQuoteItemsByQuoteId).not.toHaveBeenCalled();
+        });
+
+        it("should throw if serviceOrderRepository.listQuoteItemsByQuoteId fails", async () => {
+            const error = new Error("fake error");
+            vi.mocked(serviceOrderRepository.findQuoteById).mockResolvedValue(mockQuoteRecord);
+            vi.mocked(serviceOrderRepository.listQuoteItemsByQuoteId).mockRejectedValue(error);
+
+            await expect(serviceOrderService.listQuoteItemsByQuoteId(validInput))
+                .rejects.toThrow(error);
+        });
+
+        it("should return quote items", async () => {
+            vi.mocked(serviceOrderRepository.findQuoteById).mockResolvedValue(mockQuoteRecord);
+            vi.mocked(serviceOrderRepository.listQuoteItemsByQuoteId).mockResolvedValue(mockQuoteItems);
+
+            const result = await serviceOrderService.listQuoteItemsByQuoteId(validInput);
+
+            expect(serviceOrderRepository.findQuoteById).toHaveBeenCalledWith(validInput.quoteId);
+            expect(serviceOrderRepository.listQuoteItemsByQuoteId).toHaveBeenCalledWith(validInput);
+            expect(result).toBe(mockQuoteItems);
+        });
+
+        it("should return an empty array when the quote has no items", async () => {
+            vi.mocked(serviceOrderRepository.findQuoteById).mockResolvedValue(mockQuoteRecord);
+            vi.mocked(serviceOrderRepository.listQuoteItemsByQuoteId).mockResolvedValue([]);
+
+            const result = await serviceOrderService.listQuoteItemsByQuoteId(validInput);
 
             expect(result).toEqual([]);
         });

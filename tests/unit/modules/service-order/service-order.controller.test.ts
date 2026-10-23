@@ -1018,4 +1018,142 @@ describe("Service Order Controller (Unit)", () => {
             expect(res.status).not.toHaveBeenCalled();
         });
     });
+
+    describe("getQuoteItemById", () => {
+        it("should return 200 with quote item and components", async () => {
+            req.params.id = "uuid-quote-item-123";
+
+            const mockQuoteItem = {
+                id: "uuid-quote-item-123",
+                quoteId: "uuid-quote-123",
+                findingId: "uuid-finding-123",
+                description: "Battery replacement",
+                decision: "PENDING",
+                createdById: "uuid-user-123",
+                createdAt: new Date(),
+                updatedById: null,
+                updatedAt: null,
+                quoteItemComponents: [
+                    {
+                        id: "uuid-component-123",
+                        quoteItemId: "uuid-quote-item-123",
+                        type: "PART",
+                        description: "Battery",
+                        quantity: 1,
+                        unitPrice: new Prisma.Decimal(80),
+                        createdAt: new Date(),
+                        updatedAt: null,
+                    },
+                ],
+            } as QuoteItemWithComponents;
+
+            vi.mocked(serviceOrderService).getQuoteItemById.mockResolvedValue(mockQuoteItem);
+
+            await serviceOrderController.getQuoteItemById(req, res, next);
+
+            expect(serviceOrderService.getQuoteItemById).toHaveBeenCalledWith("uuid-quote-item-123");
+            expect(res.status).toHaveBeenCalledWith(200);
+            expect(res.json).toHaveBeenCalledWith({
+                success: true,
+                data: mockQuoteItem,
+            });
+            expect(next).not.toHaveBeenCalled();
+        });
+
+        it("should call next with badRequest error if id is missing", async () => {
+            req.params = {};
+
+            await serviceOrderController.getQuoteItemById(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(expect.objectContaining({
+                statusCode: 400,
+                message: "Quote item ID is required",
+            }));
+            expect(serviceOrderService.getQuoteItemById).not.toHaveBeenCalled();
+            expect(res.status).not.toHaveBeenCalled();
+        });
+
+        it("should propagate error when service fails", async () => {
+            req.params.id = "uuid-quote-item-123";
+
+            const error = new Error("Service error");
+            vi.mocked(serviceOrderService).getQuoteItemById.mockRejectedValue(error);
+
+            await serviceOrderController.getQuoteItemById(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(error);
+            expect(res.status).not.toHaveBeenCalled();
+        });
+    });
+
+    describe("listQuoteItemsByQuoteId", () => {
+        it("should return 200 with quote items and components", async () => {
+            req.params.id = "uuid-quote-123";
+
+            const mockQuoteItems = [
+                {
+                    id: "uuid-quote-item-1",
+                    quoteId: "uuid-quote-123",
+                    findingId: "uuid-finding-123",
+                    description: "Battery replacement",
+                    decision: "PENDING",
+                    createdById: "uuid-user-123",
+                    createdAt: new Date(),
+                    updatedById: null,
+                    updatedAt: null,
+                    quoteItemComponents: [
+                        {
+                            id: "uuid-component-1",
+                            quoteItemId: "uuid-quote-item-1",
+                            type: "PART",
+                            description: "Battery",
+                            quantity: 1,
+                            unitPrice: new Prisma.Decimal(80),
+                            createdAt: new Date(),
+                            updatedAt: null,
+                        },
+                    ],
+                },
+            ] as QuoteItemWithComponents[];
+
+            vi.mocked(serviceOrderService).listQuoteItemsByQuoteId.mockResolvedValue(mockQuoteItems);
+
+            await serviceOrderController.listQuoteItemsByQuoteId(req, res, next);
+
+            expect(serviceOrderService.listQuoteItemsByQuoteId).toHaveBeenCalledWith({
+                quoteId: "uuid-quote-123",
+            });
+            expect(res.status).toHaveBeenCalledWith(200);
+            expect(res.json).toHaveBeenCalledWith({
+                success: true,
+                data: mockQuoteItems,
+            });
+            expect(next).not.toHaveBeenCalled();
+        });
+
+        it("should call next with badRequest error if id is missing", async () => {
+            req.params = {};
+
+            await serviceOrderController.listQuoteItemsByQuoteId(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(expect.objectContaining({
+                statusCode: 400,
+                message: "Quote ID is required",
+            }));
+            expect(serviceOrderService.listQuoteItemsByQuoteId).not.toHaveBeenCalled();
+            expect(res.status).not.toHaveBeenCalled();
+        });
+
+        it("should propagate error when service fails", async () => {
+            req.params.id = "uuid-quote-123";
+
+            const error = new Error("Service error");
+            vi.mocked(serviceOrderService).listQuoteItemsByQuoteId.mockRejectedValue(error);
+
+            await serviceOrderController.listQuoteItemsByQuoteId(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(error);
+            expect(res.status).not.toHaveBeenCalled();
+        });
+    });
 });

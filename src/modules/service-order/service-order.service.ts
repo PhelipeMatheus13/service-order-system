@@ -16,6 +16,7 @@ import {
     CreateQuoteItemInput,
     QuoteItemWithComponents,
     ListQuotesByServiceOrderIdInput,
+    ListQuoteItemsByQuoteIdInput,
 } from "./service-order.types.js";
 import { ServiceOrderStatus } from "./service-order.types.js";
 import { getPrisma } from "../../shared/config/database.js";
@@ -439,13 +440,22 @@ const getQuoteById = async (id: string): Promise<QuoteRecord> => {
     return quote;
 };
 
-const listQuotesByServiceOrderId = async(input: ListQuotesByServiceOrderIdInput): Promise<QuoteRecord[]> => {
+const listQuotesByServiceOrderId = async (input: ListQuotesByServiceOrderIdInput): Promise<QuoteRecord[]> => {
     const serviceOrder = await serviceOrderRepository.findById(input.serviceOrderId);
-    if (!serviceOrder) {
-        throw notFound({ message: "Service order not found" });
-    }
-
+    if (!serviceOrder)  throw notFound({ message: "Service order not found" });
     return serviceOrderRepository.listQuotesByServiceOrderId(input);
+};
+
+const getQuoteItemById = async (id: string): Promise<QuoteItemWithComponents> => {
+    const QuoteItemWithComponents = await serviceOrderRepository.findQuoteItemById(id);
+    if (!QuoteItemWithComponents) throw notFound({ message: "Quote item not found" });
+    return QuoteItemWithComponents;
+};
+
+const listQuoteItemsByQuoteId = async(input: ListQuoteItemsByQuoteIdInput): Promise<QuoteItemWithComponents[]> => {
+    const quote = await serviceOrderRepository.findQuoteById(input.quoteId);
+    if (!quote) throw notFound({ message: "Quote not found" });
+    return serviceOrderRepository.listQuoteItemsByQuoteId(input);
 };
 
 export default {
@@ -465,4 +475,6 @@ export default {
     createQuoteItem,
     getQuoteById,
     listQuotesByServiceOrderId,
+    getQuoteItemById,
+    listQuoteItemsByQuoteId,
 };

@@ -113,6 +113,22 @@ const missingQuoteIdError = registry.registerComponent("responses", "missingQuot
     },
 });
 
+const missingQuoteItemIdError = registry.registerComponent("responses", "missingQuoteItemIdError", {
+    description: "Invalid request, missing Quote item id",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            example: {
+                success: false,
+                error: {
+                    code: "BAD_REQUEST",
+                    message: "Quote Item ID is required",
+                },
+            },
+        },
+    },
+});
+
 // 404
 const userNotFoundError = registry.registerComponent("responses", "userNotFoundError", {
     description: "User not found or does not exist",
@@ -251,6 +267,22 @@ const quoteOrFindingNotFoundError = registry.registerComponent("responses", "quo
                             message: "Finding not found",
                         },
                     },
+                },
+            },
+        },
+    },
+});
+
+const quoteItemNotFoundError  = registry.registerComponent("responses", "quoteItemNotFoundError", {
+    description: "Quote item not found or does not exist",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            example: {
+                success: false,
+                error: {
+                    code: "NOT_FOUND",
+                    message: "Quote item not found",
                 },
             },
         },
@@ -955,6 +987,7 @@ export {
     missingDiagnosisIdError,
     missingFindingIdError,
     missingQuoteIdError,
+    missingQuoteItemIdError,
     // 404
     userNotFoundError,
     customerNotFoundError,
@@ -964,6 +997,7 @@ export {
     findingNotFoundError,
     quoteNotFoundError,
     quoteOrFindingNotFoundError,
+    quoteItemNotFoundError,
     // 409
     emailAlreadyExistsError,
     deviceUniqueConstraintError,

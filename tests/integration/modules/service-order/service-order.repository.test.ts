@@ -1930,5 +1930,147 @@ describe("Service Order Repository (Integration)", () => {
                 expect(result).toEqual([]);
             });
         });
+
+        describe("findQuoteItemById", () => {
+            it("should return the quote item with its components if the given ID exists", async () => {
+                const { user, findings, quoteItems } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "ATTENDANT" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "AWAITING_QUOTE" })
+                    .withDiagnosis()
+                    .withFinding({ repairable: true })
+                    .withQuote()
+                    .withQuoteItem({
+                        findingIndex: 0, // link the first finding to the quote item
+                        description: "Battery replacement",
+                        components: [
+                            { type: "PART", description: "Battery", quantity: 1, unitPrice: 80 },
+                            { type: "LABOR", description: "Battery replacement labor", quantity: 1, unitPrice: 20 },
+                        ],
+                    })
+                    .build();
+
+                const quoteItemId = quoteItems[0].id;
+
+                const result = await serviceOrderRepository.findQuoteItemById(quoteItemId);
+
+                expect(result).toBeTruthy();
+                expect(result?.id).toBe(quoteItemId);
+                expect(result?.quoteId).toBe(quoteItems[0].quoteId);
+                expect(result?.findingId).toBe(findings[0].id);
+                expect(result?.description).toBe("Battery replacement");
+                expect(result?.decision).toBe("PENDING");
+                expect(result?.createdById).toBe(user.id);
+                expect(result?.createdAt).toBeTruthy();
+                expect(result?.updatedById).toBeNull();
+                expect(result?.updatedAt).toBeNull();
+                expect(result?.quoteItemComponents).toHaveLength(2);
+
+                const partComponent = result?.quoteItemComponents.find((c) => c.type === "PART");
+                expect(partComponent).toBeTruthy();
+                expect(partComponent?.description).toBe("Battery");
+                expect(partComponent?.quantity).toBe(1);
+                expect(partComponent?.unitPrice.toString()).toBe("80");
+
+                const laborComponent = result?.quoteItemComponents.find((c) => c.type === "LABOR");
+                expect(laborComponent).toBeTruthy();
+                expect(laborComponent?.description).toBe("Battery replacement labor");
+                expect(laborComponent?.quantity).toBe(1);
+                expect(laborComponent?.unitPrice.toString()).toBe("20");
+            });
+
+            it("should return null if a quote item with the given ID does not exist", async () => {
+                const result = await serviceOrderRepository.findQuoteItemById("0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa");
+
+                expect(result).toBeNull();
+            });
+        });
+
+        describe("listQuoteItemsByQuoteId", () => {
+            it("should return all quote items with their components ordered by creation date ascending", async () => {
+                const { user, findings, quotes, quoteItems } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "ATTENDANT" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "AWAITING_QUOTE" })
+                    .withDiagnosis()
+                    .withFinding({ repairable: true, description: "Battery issue" })
+                    .withFinding({ repairable: true, description: "Screen issue" })
+                    .withQuote()
+                    .withQuoteItem({
+                        findingIndex: 0,
+                        description: "Battery replacement",
+                        components: [
+                            { type: "PART", description: "Battery", quantity: 1, unitPrice: 80 },
+                            { type: "LABOR", description: "Battery replacement labor", quantity: 1, unitPrice: 20 },
+                        ],
+                    })
+                    .withQuoteItem({
+                        findingIndex: 1,
+                        description: "Screen replacement",
+                        components: [
+                            { type: "PART", description: "Screen", quantity: 1, unitPrice: 120 },
+                        ],
+                    })
+                    .build();
+
+                const quoteId = quotes[0].id;
+
+                const result = await serviceOrderRepository.listQuoteItemsByQuoteId({quoteId});
+
+                expect(result).toHaveLength(2);
+
+                // Assert 1: Battery replacement (created first)
+                expect(result[0].id).toBe(quoteItems[0].id);
+                expect(result[0].quoteId).toBe(quoteId);
+                expect(result[0].findingId).toBe(findings[0].id);
+                expect(result[0].description).toBe("Battery replacement");
+                expect(result[0].decision).toBe("PENDING");
+                expect(result[0].createdById).toBe(user.id);
+                expect(result[0].quoteItemComponents).toHaveLength(2);
+
+                const batteryPart = result[0].quoteItemComponents.find((c) => c.type === "PART");
+                expect(batteryPart?.description).toBe("Battery");
+                expect(batteryPart?.quantity).toBe(1);
+                expect(batteryPart?.unitPrice.toString()).toBe("80");
+
+                const batteryLabor = result[0].quoteItemComponents.find((c) => c.type === "LABOR");
+                expect(batteryLabor?.description).toBe("Battery replacement labor");
+                expect(batteryLabor?.unitPrice.toString()).toBe("20");
+
+                // Assert 2: Screen replacement (created second)
+                expect(result[1].id).toBe(quoteItems[1].id);
+                expect(result[1].findingId).toBe(findings[1].id);
+                expect(result[1].description).toBe("Screen replacement");
+                expect(result[1].quoteItemComponents).toHaveLength(1);
+                expect(result[1].quoteItemComponents[0].unitPrice.toString()).toBe("120");
+            });
+
+            it("should return an empty array when the quote has no items", async () => {
+                const { quotes } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "ATTENDANT" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "AWAITING_QUOTE" })
+                    .withDiagnosis()
+                    .withQuote()
+                    .build();
+
+                const result = await serviceOrderRepository.listQuoteItemsByQuoteId({
+                    quoteId: quotes[0]!.id,
+                });
+
+                expect(result).toEqual([]);
+            });
+
+            it("should return an empty array when the quote does not exist", async () => {
+                const result = await serviceOrderRepository.listQuoteItemsByQuoteId({
+                    quoteId: "0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa",
+                });
+
+                expect(result).toEqual([]);
+            });
+        });
     });
 });
