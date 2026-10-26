@@ -1768,6 +1768,93 @@ describe("Service Order Repository (Integration)", () => {
                 expect(foundFirstComponent?.quantity).toBe(firstComponent.quantity);
             });
         });
+
+        describe("deleteQuoteItemById", () => {
+            it("should delete the quote item and its components, returning true", async () => {
+                const { quoteItems } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "ATTENDANT" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "AWAITING_QUOTE" })
+                    .withDiagnosis()
+                    .withFinding({ repairable: true })
+                    .withQuote()
+                    .withQuoteItem({
+                        findingIndex: 0,
+                        description: "Battery replacement",
+                        components: [
+                            { type: "PART", description: "Battery", quantity: 1, unitPrice: 80 },
+                            { type: "LABOR", description: "Battery replacement labor", quantity: 1, unitPrice: 20 },
+                        ],
+                    })
+                    .build();
+
+                const quoteItemId = quoteItems[0].id;
+
+                const deleted = await prisma.$transaction((tx) =>
+                    serviceOrderRepository.deleteQuoteItemById(quoteItemId, tx),
+                );
+
+                expect(deleted).toBe(true);
+
+                const foundItem = await prisma.quoteItem.findUnique({
+                    where: { id: quoteItemId },
+                });
+                expect(foundItem).toBeNull();
+
+                // Components are removed via ON DELETE CASCADE.
+                const foundComponents = await prisma.quoteItemComponent.findMany({
+                    where: { quoteItemId },
+                });
+                expect(foundComponents).toEqual([]);
+            });
+
+            it("should return false when the quote item does not exist", async () => {
+                const deleted = await prisma.$transaction((tx) =>
+                    serviceOrderRepository.deleteQuoteItemById("0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa", tx),
+                );
+
+                expect(deleted).toBe(false);
+            });
+
+            it("should rollback the deletion when the transaction throws", async () => {
+                const { quoteItems } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "ATTENDANT" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "AWAITING_QUOTE" })
+                    .withDiagnosis()
+                    .withFinding({ repairable: true })
+                    .withQuote()
+                    .withQuoteItem({
+                        findingIndex: 0,
+                        description: "Battery replacement",
+                        components: [
+                            { type: "PART", description: "Battery", quantity: 1, unitPrice: 80 },
+                        ],
+                    })
+                    .build();
+
+                const quoteItemId = quoteItems[0].id;
+
+                await expect(
+                    prisma.$transaction(async (tx) => {
+                        await serviceOrderRepository.deleteQuoteItemById(quoteItemId, tx);
+                        throw new Error("rollback");
+                    }),
+                ).rejects.toThrow("rollback");
+
+                const foundItem = await prisma.quoteItem.findUnique({
+                    where: { id: quoteItemId },
+                });
+                expect(foundItem).not.toBeNull();
+
+                const foundComponents = await prisma.quoteItemComponent.findMany({
+                    where: { quoteItemId },
+                });
+                expect(foundComponents).toHaveLength(1);
+            });
+        });
     });
 
     describe("Reader repository", () => {

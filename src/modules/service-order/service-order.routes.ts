@@ -246,7 +246,7 @@ registry.registerPath({
     tags: ["Quote"],
     method: "post",
     path: "/service-orders/quotes/{id}/items",
-    summary: "create a new quote item with components(requires ADMIN or ATTENDANT role)",
+    summary: "create a new quote item with components (requires ADMIN or ATTENDANT role)",
     security: [{ bearerAuth: [] }],
     request: {
         params: z.object({ id: z.string() }),
@@ -535,7 +535,7 @@ router.get("/quotes/:id", checkAccessToken, serviceOrderController.getQuoteById)
 registry.registerPath({
     tags: ["Quote"],
     method: "get",
-    path: "/service-orders/quotes/items/{id}",
+    path: "/service-orders/quote-items/{id}",
     summary: "Get quote item by ID",
     security: [{ bearerAuth: [] }],
     request: {
@@ -571,7 +571,7 @@ registry.registerPath({
         500: { $ref: "#/components/responses/internalError" },
     }
 });
-router.get("/quotes/items/:id", checkAccessToken, serviceOrderController.getQuoteItemById);
+router.get("/quote-items/:id", checkAccessToken, serviceOrderController.getQuoteItemById);
 
 registry.registerPath({
     tags: ["Quote"],
@@ -774,8 +774,8 @@ router.patch("/diagnoses/:id/complete", checkAccessToken, authorize("ADMIN", "TE
 registry.registerPath({
     tags: ["Quote"],
     method: "patch",
-    path: "/service-orders/quotes/items/{id}",
-    summary: "Update quote item by ID",
+    path: "/service-orders/quote-items/{id}",
+    summary: "Update quote item by ID (requires ADMIN or ATTENDANT role)",
     security: [{ bearerAuth: [] }],
     request: {
         params: z.object({ id: z.string() }),
@@ -791,6 +791,7 @@ registry.registerPath({
                     schema: z.object({
                         success: z.boolean().openapi({ example: true }),
                         data: quoteItemWithComponentsSchema,
+                        message: z.string().openapi({ example: "Quote items updated successfully" }),
                     }),
                 },
             },
@@ -816,7 +817,7 @@ registry.registerPath({
         500: { $ref: "#/components/responses/internalError" },
     }
 });
-router.patch("/quotes/items/:id", checkAccessToken, authorize("ADMIN", "ATTENDANT"), validate(updateQuoteItemAndComponentsSchema), serviceOrderController.updateQuoteItemAndComponents);
+router.patch("/quote-items/:id", checkAccessToken, authorize("ADMIN", "ATTENDANT"), validate(updateQuoteItemAndComponentsSchema), serviceOrderController.updateQuoteItemAndComponents);
 
 // DELETE
 registry.registerPath({
@@ -874,5 +875,61 @@ registry.registerPath({
     }
 });
 router.delete("/findings/:id", checkAccessToken, authorize("ADMIN", "TECHNICIAN"), serviceOrderController.deleteFinding);
+
+registry.registerPath({
+    tags: ["Quote"],
+    method: "delete",
+    path: "/service-orders/quote-items/{id}",
+    summary: "Delete quote item by ID (requires ADMIN or ATTENDANT role)",
+    security: [{ bearerAuth: [] }],
+    request: {
+        params: z.object({ id: z.string() }),
+    },
+    responses: {
+        200: {
+            description: "Quote item successfully deleted",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        success: z.boolean().openapi({ example: true }),
+                        message: z.string().openapi({ example: "Quote item successfully deleted" }),
+                    }),
+                },
+            },
+        },
+        400: { $ref: "#/components/responses/missingQuoteItemIdError" },
+        401: {
+            description: "Missing, invalid or expired access token",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
+                        invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
+                        accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
+                    },
+                },
+            },
+        },
+        404: { $ref: "#/components/responses/quoteItemNotFoundError" },
+        409: {
+            description: "Quote is no longer in DRAFT status",
+            content: {
+                "application/json": {
+                    schema: { $ref: "#/components/schemas/Error" },
+                    example: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Quote is no longer in DRAFT status",
+                        },
+                    },
+                },
+            },
+        },
+        500: { $ref: "#/components/responses/internalError" },
+    }
+});
+router.delete("/quote-items/:id",  checkAccessToken, authorize("ADMIN", "ATTENDANT"), serviceOrderController.deleteQuoteItem);
 
 export default router;

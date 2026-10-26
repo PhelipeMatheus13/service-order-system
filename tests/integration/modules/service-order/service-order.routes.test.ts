@@ -532,7 +532,7 @@ describe("Service Order Routes (Integration)", () => {
         });
     });
 
-    describe("GET /service-orders/quotes/items/:id", () => {
+    describe("GET /service-orders/quote-items/:id", () => {
         it("should return the quote item with its components", async () => {
             const { user, findings, quoteItems } = await new ServiceOrderBuilder(prisma)
                 .withUser({ role: "ATTENDANT" })
@@ -556,7 +556,7 @@ describe("Service Order Routes (Integration)", () => {
             const quoteItemId = quoteItems[0].id;
 
             const res = await request(app)
-                .get(`/service-orders/quotes/items/${quoteItemId}`)
+                .get(`/service-orders/quote-items/${quoteItemId}`)
                 .set("Authorization", `Bearer ${accessToken}`);
 
             expect(res.statusCode).toBe(200);
@@ -815,7 +815,7 @@ describe("Service Order Routes (Integration)", () => {
         });
     });
 
-    describe("PATCH /service-orders/quotes/items/:id", () => {
+    describe("PATCH /service-orders/quote-items/:id", () => {
         it("should update the quote item and its components successfully", async () => {
             const { user, quoteItems } = await new ServiceOrderBuilder(prisma)
                 .withUser({ role: "ATTENDANT" })
@@ -841,7 +841,7 @@ describe("Service Order Routes (Integration)", () => {
             const [firstComponent] = quoteItem.components;
 
             const res = await request(app)
-                .patch(`/service-orders/quotes/items/${quoteItem.id}`)
+                .patch(`/service-orders/quote-items/${quoteItem.id}`)
                 .set("Authorization", `Bearer ${accessToken}`)
                 .send({
                     description: "Battery replacement (updated)",
@@ -858,6 +858,7 @@ describe("Service Order Routes (Integration)", () => {
 
             expect(res.statusCode).toBe(200);
             expect(res.body.success).toBe(true);
+            expect(res.body.message).toBe("Quote item successfully updated");
             expect(res.body.data).toMatchObject({
                 id: quoteItem.id,
                 description: "Battery replacement (updated)",
@@ -921,6 +922,51 @@ describe("Service Order Routes (Integration)", () => {
             });
 
             expect(deletedFinding).toBeNull();
+        });
+    });
+
+    describe("DELETE /service-orders/quote-items/:id", () => {
+        it("should delete the quote item successfully", async () => {
+            const { user, quoteItems } = await new ServiceOrderBuilder(prisma)
+                .withUser({ role: "ATTENDANT" })
+                .withCustomer()
+                .withDevice()
+                .withServiceOrder({ status: "AWAITING_QUOTE" })
+                .withDiagnosis()
+                .withFinding({ repairable: true })
+                .withQuote()
+                .withQuoteItem({
+                    findingIndex: 0,
+                    description: "Battery replacement",
+                    components: [
+                        { type: "PART", description: "Battery", quantity: 1, unitPrice: 80 },
+                        { type: "LABOR", description: "Battery replacement labor", quantity: 1, unitPrice: 20 },
+                    ],
+                })
+                .build();
+
+            const accessToken = generateAccessToken(user.id, "ATTENDANT");
+            const quoteItemId = quoteItems[0].id;
+
+            const res = await request(app)
+                .delete(`/service-orders/quote-items/${quoteItemId}`)
+                .set("Authorization", `Bearer ${accessToken}`);
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(res.body.message).toBe("Quote item successfully deleted");
+
+            // Verify the quote item was deleted from the database
+            const deletedItem = await prisma.quoteItem.findUnique({
+                where: { id: quoteItemId },
+            });
+            expect(deletedItem).toBeNull();
+
+            // Verify components were deleted via ON DELETE CASCADE
+            const deletedComponents = await prisma.quoteItemComponent.findMany({
+                where: { quoteItemId },
+            });
+            expect(deletedComponents).toEqual([]);
         });
     });
 });

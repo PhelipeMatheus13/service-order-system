@@ -219,6 +219,17 @@ const updateQuoteItemAndComponents = asyncHandler(async (req, res) => {
     res.status(200).json({
         success: true,
         data: quoteItemsWithComponents, 
+        message: "Quote item successfully updated",
+    });
+});
+
+const deleteQuoteItem = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (!id) throw badRequest({ message: "Quote item ID is required"  });
+    await serviceOrderService.deleteQuoteItem(String(id));
+    res.status(200).json({
+        success: true,
+        message: "Quote item successfully deleted",
     });
 });
 
@@ -242,4 +253,5 @@ export default {
     getQuoteItemById,
     listQuoteItemsByQuoteId,
     updateQuoteItemAndComponents,
+    deleteQuoteItem,
 };

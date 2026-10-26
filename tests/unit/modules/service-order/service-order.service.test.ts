@@ -2139,4 +2139,104 @@ describe("Service Order Service (Unit)", () => {
             expect(result).toBe(mockUpdatedQuoteItem);
         });
     });
+
+    describe("deleteQuoteItem", () => {
+        const quoteItemId = "uuid-quote-item-123";
+
+        const mockQuoteItem = {
+            id: quoteItemId,
+            quoteId: "uuid-quote-123",
+            findingId: "uuid-finding-123",
+            description: "Battery replacement",
+            decision: "PENDING",
+            createdById: "uuid-user-456",
+            createdAt: new Date(),
+            updatedById: null,
+            updatedAt: null,
+            quoteItemComponents: [
+                {
+                    id: "uuid-component-1",
+                    quoteItemId,
+                    type: "PART",
+                    description: "Battery",
+                    quantity: 1,
+                    unitPrice: new Prisma.Decimal(80),
+                    createdAt: new Date(),
+                    updatedAt: null,
+                },
+            ],
+        } as QuoteItemWithComponents;
+
+        const setupDeleteQuoteItemMocks = () => {
+            const tx = {} as any;
+
+            vi.mocked(serviceOrderRepository.findQuoteItemById).mockResolvedValue(mockQuoteItem);
+            vi.mocked(getPrisma).mockReturnValue({
+                $transaction: vi.fn(async (callback) => callback(tx)),
+            } as any);
+            vi.mocked(serviceOrderRepository.lockQuoteIfDraft).mockResolvedValue(true);
+            vi.mocked(serviceOrderRepository.deleteQuoteItemById).mockResolvedValue(true);
+
+            return { tx };
+        };
+
+        it("should throw if serviceOrderRepository.findQuoteItemById fails", async () => {
+            const error = new Error("fake error");
+            vi.mocked(serviceOrderRepository.findQuoteItemById).mockRejectedValue(error);
+
+            await expect(serviceOrderService.deleteQuoteItem(quoteItemId))
+                .rejects.toThrow(error);
+        });
+
+        it("should throw NOT_FOUND if quote item does not exist", async () => {
+            vi.mocked(serviceOrderRepository.findQuoteItemById).mockResolvedValue(null);
+
+            await expect(serviceOrderService.deleteQuoteItem(quoteItemId))
+                .rejects.toMatchObject({
+                    statusCode: 404,
+                    message: "Quote item not found",
+                });
+
+            expect(getPrisma).not.toHaveBeenCalled();
+        });
+
+        it("should throw CONFLICT if lockQuoteIfDraft returns false (race condition)", async () => {
+            const { tx } = setupDeleteQuoteItemMocks();
+            vi.mocked(serviceOrderRepository.lockQuoteIfDraft).mockResolvedValue(false);
+
+            await expect(serviceOrderService.deleteQuoteItem(quoteItemId))
+                .rejects.toMatchObject({
+                    statusCode: 409,
+                    message: "Quote is no longer in DRAFT status",
+                });
+
+            expect(serviceOrderRepository.lockQuoteIfDraft).toHaveBeenCalledWith(mockQuoteItem.quoteId, tx);
+            expect(serviceOrderRepository.deleteQuoteItemById).not.toHaveBeenCalled();
+        });
+
+        it("should throw CONFLICT if deleteQuoteItemById returns false (item deleted mid-flight)", async () => {
+            const { tx } = setupDeleteQuoteItemMocks();
+            vi.mocked(serviceOrderRepository.deleteQuoteItemById).mockResolvedValue(false);
+
+            await expect(serviceOrderService.deleteQuoteItem(quoteItemId))
+                .rejects.toMatchObject({
+                    statusCode: 404,
+                    message: "Quote item not found",
+                });
+
+            expect(serviceOrderRepository.lockQuoteIfDraft).toHaveBeenCalledWith(mockQuoteItem.quoteId, tx);
+            expect(serviceOrderRepository.deleteQuoteItemById).toHaveBeenCalledWith(quoteItemId, tx);
+        });
+
+        it("should delete quote item successfully", async () => {
+            const { tx } = setupDeleteQuoteItemMocks();
+
+            await expect(serviceOrderService.deleteQuoteItem(quoteItemId))
+                .resolves.toBeUndefined();
+
+            expect(serviceOrderRepository.findQuoteItemById).toHaveBeenCalledWith(quoteItemId);
+            expect(serviceOrderRepository.lockQuoteIfDraft).toHaveBeenCalledWith(mockQuoteItem.quoteId, tx);
+            expect(serviceOrderRepository.deleteQuoteItemById).toHaveBeenCalledWith(quoteItemId, tx);
+        });
+    });
 });

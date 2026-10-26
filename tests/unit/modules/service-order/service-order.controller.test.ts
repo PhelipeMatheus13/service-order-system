@@ -1221,6 +1221,7 @@ describe("Service Order Controller (Unit)", () => {
             expect(res.json).toHaveBeenCalledWith({
                 success: true,
                 data: mockUpdatedQuoteItem,
+                message: "Quote item successfully updated",
             });
             expect(next).not.toHaveBeenCalled();
         });
@@ -1255,6 +1256,49 @@ describe("Service Order Controller (Unit)", () => {
             vi.mocked(serviceOrderService).updateQuoteItemAndComponents.mockRejectedValue(error);
 
             await serviceOrderController.updateQuoteItemAndComponents(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(error);
+            expect(res.status).not.toHaveBeenCalled();
+        });
+    });
+
+    describe("deleteQuoteItem", () => {
+        it("should return 200 on successful deletion", async () => {
+            req.params.id = "uuid-quote-item-123";
+
+            vi.mocked(serviceOrderService).deleteQuoteItem.mockResolvedValue(undefined);
+
+            await serviceOrderController.deleteQuoteItem(req, res, next);
+
+            expect(serviceOrderService.deleteQuoteItem).toHaveBeenCalledWith("uuid-quote-item-123");
+            expect(res.status).toHaveBeenCalledWith(200);
+            expect(res.json).toHaveBeenCalledWith({
+                success: true,
+                message: "Quote item successfully deleted",
+            });
+            expect(next).not.toHaveBeenCalled();
+        });
+
+        it("should call next with badRequest error if id is missing", async () => {
+            req.params = {};
+
+            await serviceOrderController.deleteQuoteItem(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(expect.objectContaining({
+                statusCode: 400,
+                message: "Quote item ID is required",
+            }));
+            expect(serviceOrderService.deleteQuoteItem).not.toHaveBeenCalled();
+            expect(res.status).not.toHaveBeenCalled();
+        });
+
+        it("should propagate error when service fails", async () => {
+            req.params.id = "uuid-quote-item-123";
+
+            const error = new Error("Service error");
+            vi.mocked(serviceOrderService).deleteQuoteItem.mockRejectedValue(error);
+
+            await serviceOrderController.deleteQuoteItem(req, res, next);
 
             expect(next).toHaveBeenCalledWith(error);
             expect(res.status).not.toHaveBeenCalled();

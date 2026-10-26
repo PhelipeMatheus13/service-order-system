@@ -19,11 +19,12 @@ import type {
     ListQuotesByServiceOrderIdInput,
     ListFidingsByDiagnosisId,
     ListQuoteItemsByQuoteIdInput,
-    UpdateQuoteItemAndComponentsInput
+    UpdateQuoteItemAndComponentsInput,
 } from "./service-order.types.ts";
 import { ServiceOrderStatus } from "./service-order.types.js";
 import { getPrisma } from "../../shared/config/database.js";
 import { Prisma, PrismaClient } from "../../generated/prisma/client.js";
+import { isNotFoundError } from "../../shared/utils/prisma-error.js";
 
 type PrismaClientOrTx = PrismaClient | Prisma.TransactionClient;
 
@@ -347,6 +348,17 @@ const updateQuoteItemAndComponents = async (
     });
 };
 
+const deleteQuoteItemById = async (id: string, tx: Prisma.TransactionClient): Promise<boolean> => {
+    const prisma: PrismaClientOrTx = tx || getPrisma();
+    try {
+        await prisma.quoteItem.delete({ where: { id } });
+        return true
+    } catch (error) {
+        if (isNotFoundError(error)) return false;
+        throw error
+    }
+};
+
 // Reader
 const findById = async (id: string): Promise<ServiceOrderRecord | null> => {
     const prisma = getPrisma();
@@ -453,6 +465,7 @@ export default {
     lockQuoteIfDraft,
     createQuoteItemAndComponents,
     updateQuoteItemAndComponents,
+    deleteQuoteItemById,
     // Reader
     findById,
     list,

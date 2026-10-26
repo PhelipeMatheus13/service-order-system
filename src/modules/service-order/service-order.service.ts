@@ -443,7 +443,7 @@ const getQuoteById = async (id: string): Promise<QuoteRecord> => {
 
 const listQuotesByServiceOrderId = async (input: ListQuotesByServiceOrderIdInput): Promise<QuoteRecord[]> => {
     const serviceOrder = await serviceOrderRepository.findById(input.serviceOrderId);
-    if (!serviceOrder)  throw notFound({ message: "Service order not found" });
+    if (!serviceOrder) throw notFound({ message: "Service order not found" });
     return serviceOrderRepository.listQuotesByServiceOrderId(input);
 };
 
@@ -453,7 +453,7 @@ const getQuoteItemById = async (id: string): Promise<QuoteItemWithComponents> =>
     return QuoteItemWithComponents;
 };
 
-const listQuoteItemsByQuoteId = async(input: ListQuoteItemsByQuoteIdInput): Promise<QuoteItemWithComponents[]> => {
+const listQuoteItemsByQuoteId = async (input: ListQuoteItemsByQuoteIdInput): Promise<QuoteItemWithComponents[]> => {
     const quote = await serviceOrderRepository.findQuoteById(input.quoteId);
     if (!quote) throw notFound({ message: "Quote not found" });
     return serviceOrderRepository.listQuoteItemsByQuoteId(input);
@@ -500,6 +500,26 @@ const updateQuoteItemAndComponents = async (input: UpdateQuoteItemAndComponentsI
     }
 };
 
+const deleteQuoteItem = async (quoteItemId: string): Promise<void> => {
+    const quoteItem = await serviceOrderRepository.findQuoteItemById(quoteItemId);
+    if (!quoteItem) {
+        throw notFound({ message: "Quote item not found" });
+    }
+
+    return await getPrisma().$transaction(async (tx) => {
+        const locked = await serviceOrderRepository.lockQuoteIfDraft(quoteItem.quoteId, tx);
+        if (!locked) {
+            throw conflict({ message: "Quote is no longer in DRAFT status" });
+        }
+
+        const deleted = await serviceOrderRepository.deleteQuoteItemById(quoteItemId, tx);
+        if (!deleted) {
+            // Race condition: Item was deleted by another request between the pre-check and the delete.
+            throw notFound({ message: "Quote item not found" });
+        }
+    });
+};
+
 export default {
     createServiceOrder,
     getServiceOrderById,
@@ -520,4 +540,5 @@ export default {
     getQuoteItemById,
     listQuoteItemsByQuoteId,
     updateQuoteItemAndComponents,
+    deleteQuoteItem,
 };
