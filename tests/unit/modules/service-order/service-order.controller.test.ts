@@ -1304,4 +1304,53 @@ describe("Service Order Controller (Unit)", () => {
             expect(res.status).not.toHaveBeenCalled();
         });
     });
+
+    describe("requestQuoteSubmission", () => {
+        it("should return 200 on successful submission request", async () => {
+            req.params.id = "uuid-quote-123";
+            req.user = { id: "uuid-user-123" };
+
+            vi.mocked(serviceOrderService).requestQuoteSubmission.mockResolvedValue(undefined);
+
+            await serviceOrderController.requestQuoteSubmission(req, res, next);
+
+            expect(serviceOrderService.requestQuoteSubmission).toHaveBeenCalledWith({
+                quoteId: "uuid-quote-123",
+                submissionRequestedBy: "uuid-user-123",
+            });
+            expect(res.status).toHaveBeenCalledWith(200);
+            expect(res.json).toHaveBeenCalledWith({
+                success: true,
+                message: "Quote submission requested successfully",
+            });
+            expect(next).not.toHaveBeenCalled();
+        });
+
+        it("should call next with badRequest error if id is missing", async () => {
+            req.params = {};
+            req.user = { id: "uuid-user-123" };
+
+            await serviceOrderController.requestQuoteSubmission(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(expect.objectContaining({
+                statusCode: 400,
+                message: "Quote ID is required",
+            }));
+            expect(serviceOrderService.requestQuoteSubmission).not.toHaveBeenCalled();
+            expect(res.status).not.toHaveBeenCalled();
+        });
+
+        it("should propagate error when service fails", async () => {
+            req.params.id = "uuid-quote-123";
+            req.user = { id: "uuid-user-123" };
+
+            const error = new Error("Service error");
+            vi.mocked(serviceOrderService).requestQuoteSubmission.mockRejectedValue(error);
+
+            await serviceOrderController.requestQuoteSubmission(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(error);
+            expect(res.status).not.toHaveBeenCalled();
+        });
+    });
 });

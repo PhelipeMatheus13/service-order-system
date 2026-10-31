@@ -657,6 +657,37 @@ const updateQuoteItemAndComponentsConflictError = registry.registerComponent("re
     },
 });
 
+const requestQuoteSubmissionConflictError = registry.registerComponent("responses", "requestQuoteSubmissionConflictError", {
+    description: "Quote submission cannot be requested",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            examples: {
+                quoteNotDraft: {
+                    summary: "Quote is not in DRAFT status",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Quote is not in DRAFT status",
+                        },
+                    },
+                },
+                quoteNoLongerDraft: {
+                    summary: "Quote status changed during the request (race condition)",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Quote is no longer in DRAFT status",
+                        },
+                    },
+                },
+            },
+        },
+    },
+});
+
 // VALIDATION ERRORS (422)
 const registerValidationError = registry.registerComponent("responses", "registerValidationError", {
     description: "Register validation error",
@@ -1122,6 +1153,7 @@ export {
     createQuoteConflictError,
     createQuoteItemAndComponentsConflictError,
     updateQuoteItemAndComponentsConflictError,
+    requestQuoteSubmissionConflictError,
     // 422
     registerValidationError,
     confirmEmailValidationError,

@@ -819,6 +819,48 @@ registry.registerPath({
 });
 router.patch("/quote-items/:id", checkAccessToken, authorize("ADMIN", "ATTENDANT"), validate(updateQuoteItemAndComponentsSchema), serviceOrderController.updateQuoteItemAndComponents);
 
+registry.registerPath({
+    tags: ["Quote"],
+    method: "patch",
+    path: "/service-orders/quotes/{id}/submit",
+    summary: "Request quote submission (requires ADMIN or ATTENDANT role)",
+    security: [{ bearerAuth: [] }],
+    request: {
+        params: z.object({ id: z.string() }),
+    },
+    responses: {
+        200: {
+            description: "Quote submission requested successfully",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        success: z.boolean().openapi({ example: true }),
+                        message: z.string().openapi({ example: "Quote submission requested successfully" }),
+                    }),
+                },
+            },
+        },
+        400: { $ref: "#/components/responses/missingQuoteIdError" },
+        401: {
+            description: "Missing, invalid or expired access token",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
+                        invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
+                        accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
+                    },
+                },
+            },
+        },
+        404: { $ref: "#/components/responses/quoteNotFoundError" },
+        409: { $ref: "#/components/responses/requestQuoteSubmissionConflictError" },
+        500: { $ref: "#/components/responses/internalError" },
+    }
+});
+router.patch("/quotes/:id/submit", checkAccessToken, authorize("ADMIN", "ATTENDANT"), serviceOrderController.requestQuoteSubmission);
+
 // DELETE
 registry.registerPath({
     tags: ["Diagnosis"],

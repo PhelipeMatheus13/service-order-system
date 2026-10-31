@@ -20,8 +20,12 @@ import type {
     ListFidingsByDiagnosisId,
     ListQuoteItemsByQuoteIdInput,
     UpdateQuoteItemAndComponentsInput,
+    UpdateQuoteStatusData,
+    RequestQuoteSubmissionInput,
+    OutboxQuoteRecord,
+    QuoteEmailPayload
 } from "./service-order.types.ts";
-import { ServiceOrderStatus } from "./service-order.types.js";
+import { ServiceOrderStatus, QuoteStatus, DiagnosisResult, QuoteItemComponentType } from "./service-order.types.js";
 import { getPrisma } from "../../shared/config/database.js";
 import { Prisma, PrismaClient } from "../../generated/prisma/client.js";
 import { isNotFoundError } from "../../shared/utils/prisma-error.js";
@@ -359,6 +363,76 @@ const deleteQuoteItemById = async (id: string, tx: Prisma.TransactionClient): Pr
     }
 };
 
+const updateQuoteStatus = async (input: UpdateQuoteStatusData): Promise<boolean> => {
+    const prisma = getPrisma();
+
+    // Atomic guard: the UPDATE only succeeds if the current status is one
+    // of the expected ones. This prevents concurrent operations from
+    // overwriting each other's state transitions.
+    const result = await prisma.quote.updateMany({
+        where: {
+            id: input.quoteId,
+            status: {
+                in: input.expectedStatuses,
+            },
+        },
+        data: {
+            status: input.toStatus,
+            updatedAt: new Date(),
+        },
+    });
+
+    return result.count > 0;
+};
+
+const requestQuoteSubmission = async (input: RequestQuoteSubmissionInput): Promise<boolean> => {
+    const prisma = getPrisma();
+
+    // Atomic guard: only transitions DRAFT → SUBMISSION_PENDING.
+    // submission_requested_by is mandatory here because this is the
+    // only flow that records who requested the submission.
+    const result = await prisma.quote.updateMany({
+        where: {
+            id: input.quoteId,
+            status: QuoteStatus.DRAFT,
+        },
+        data: {
+            status: QuoteStatus.SUBMISSION_PENDING,
+            submissionRequestedById: input.submissionRequestedBy,
+            updatedAt: new Date(),
+        },
+    });
+
+    return result.count > 0;
+};
+
+const markOutboxQuoteAsConsumed = async (ids: number[]): Promise<void> => {
+    if (ids.length === 0) return;
+
+    const prisma = getPrisma();
+    await prisma.outboxQuote.updateMany({
+        where: { id: { in: ids } },
+        data: { consumedAt: new Date() },
+    });
+};
+
+const markQuoteSubmittedById = async (id: string, tx: Prisma.TransactionClient): Promise<boolean> => {
+    const result = await tx.quote.updateMany({
+        where: { 
+            id,
+            status: QuoteStatus.SUBMISSION_PENDING, 
+            submittedAt: null,
+        },
+        data: {
+            submittedAt: new Date(),
+            status: QuoteStatus.SENT,
+            updatedAt: new Date(),
+        }
+    });
+
+    return result.count > 0;
+};
+
 // Reader
 const findById = async (id: string): Promise<ServiceOrderRecord | null> => {
     const prisma = getPrisma();
@@ -435,7 +509,7 @@ const findQuoteItemById = async (id: string): Promise<QuoteItemWithComponents | 
             quoteItemComponents: true,
         },
     });
-}
+};
 
 const listQuoteItemsByQuoteId = async (input: ListQuoteItemsByQuoteIdInput): Promise<QuoteItemWithComponents[]> => {
     const prisma = getPrisma();
@@ -448,6 +522,105 @@ const listQuoteItemsByQuoteId = async (input: ListQuoteItemsByQuoteIdInput): Pro
             quoteItemComponents: true,
         },
     });
+};
+
+const listOutboxQuoteUnconsumed = async (): Promise<OutboxQuoteRecord[]> => {
+    const prisma = getPrisma();
+    return prisma.outboxQuote.findMany({
+        where: { consumedAt: null },
+        orderBy: { createdAt: "asc" },
+    });
+};
+
+const findQuoteEmailPayloadById = async (quoteId: string): Promise<QuoteEmailPayload | null> => {
+    const prisma = getPrisma();
+
+    const rows = await prisma.$queryRaw<Array<{ payload: QuoteEmailPayload }>>`
+        SELECT jsonb_build_object(
+            'customer', jsonb_build_object(
+                'id', c.id,
+                'firstName', c.first_name,
+                'lastName', c.last_name,
+                'email', c.email
+            ),
+            'device', jsonb_build_object(
+                'id', d.id,
+                'type', d.type,
+                'brand', d.brand,
+                'model', d.model,
+                'color', d.color,
+                'serialNumber', d.serial_number
+            ),
+            'serviceOrder', jsonb_build_object(
+                'id', so.id,
+                'reportedProblem', so.reported_problem,
+                'status', so.status,
+                'diagnosis',
+                    CASE
+                        WHEN diag.id IS NULL THEN NULL
+                        ELSE jsonb_build_object(
+                            'id', diag.id,
+                            'result', diag.result,
+                            'findings', (
+                                SELECT COALESCE(
+                                    jsonb_agg(
+                                        jsonb_build_object(
+                                            'id', f.id,
+                                            'description', f.description,
+                                            'repairable', f.repairable
+                                        )
+                                        ORDER BY f.created_at
+                                    ),
+                                    '[]'::jsonb
+                                )
+                                FROM findings f
+                                WHERE f.diagnosis_id = diag.id
+                            )
+                        )
+                    END,
+                'quoteItems', (
+                    SELECT COALESCE(
+                        jsonb_agg(
+                            jsonb_build_object(
+                                'id', qi.id,
+                                'description', qi.description,
+                                'findingId', qi.finding_id,
+                                'components', (
+                                    SELECT COALESCE(
+                                        jsonb_agg(
+                                            jsonb_build_object(
+                                                'id', qic.id,
+                                                'type', qic.type,
+                                                'description', qic.description,
+                                                'quantity', qic.quantity,
+                                                'unitPrice', qic.unit_price::text
+                                            )
+                                            ORDER BY qic.created_at
+                                        ),
+                                        '[]'::jsonb
+                                    )
+                                    FROM quote_item_components qic
+                                    WHERE qic.quote_item_id = qi.id
+                                )
+                            )
+                            ORDER BY qi.created_at
+                        ),
+                        '[]'::jsonb
+                    )
+                    FROM quote_items qi
+                    WHERE qi.quote_id = q.id
+                )
+            )
+        ) AS payload
+        FROM quotes q
+        JOIN service_orders so ON so.id = q.service_order_id
+        JOIN devices d ON d.id = so.device_id
+        JOIN customers c ON c.id = d.customer_id
+        LEFT JOIN diagnoses diag ON diag.id = q.diagnosis_id
+        WHERE q.id = ${quoteId}::uuid
+    `;
+
+    return rows[0]?.payload ?? null;
 };
 
 export default {
@@ -466,6 +639,10 @@ export default {
     createQuoteItemAndComponents,
     updateQuoteItemAndComponents,
     deleteQuoteItemById,
+    updateQuoteStatus,
+    requestQuoteSubmission,
+    markOutboxQuoteAsConsumed,
+    markQuoteSubmittedById,
     // Reader
     findById,
     list,
@@ -477,4 +654,6 @@ export default {
     listQuotesByServiceOrderId,
     findQuoteItemById,
     listQuoteItemsByQuoteId,
+    listOutboxQuoteUnconsumed,
+    findQuoteEmailPayloadById
 };

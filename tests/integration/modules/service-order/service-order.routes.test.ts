@@ -894,6 +894,38 @@ describe("Service Order Routes (Integration)", () => {
         });
     });
 
+    describe("PATCH /service-orders/quotes/:id/submit", () => {
+        it("should request the quote submission successfully", async () => {
+            const { user, quotes } = await new ServiceOrderBuilder(prisma)
+                .withUser({ role: "ATTENDANT" })
+                .withCustomer()
+                .withDevice()
+                .withServiceOrder({ status: "AWAITING_QUOTE" })
+                .withDiagnosis()
+                .withQuote({ status: "DRAFT" })
+                .build();
+
+            const accessToken = generateAccessToken(user.id, "ATTENDANT");
+            const quoteId = quotes[0]!.id;
+
+            const res = await request(app)
+                .patch(`/service-orders/quotes/${quoteId}/submit`)
+                .set("Authorization", `Bearer ${accessToken}`);
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(res.body.message).toBe("Quote submission requested successfully");
+
+            const quote = await prisma.quote.findUnique({
+                where: { id: quoteId },
+            });
+
+            expect(quote?.status).toBe("SUBMISSION_PENDING");
+            expect(quote?.submittedAt).toBeNull();  
+            expect(quote?.updatedAt).toBeTruthy();
+        });
+    });
+
     describe("DELETE /service-orders/findings/:id", () => {
         it("should delete the finding successfully", async () => {
             const { user, findings } = await new ServiceOrderBuilder(prisma)

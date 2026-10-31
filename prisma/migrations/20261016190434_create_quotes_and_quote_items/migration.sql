@@ -1,6 +1,7 @@
 -- CreateEnum
 CREATE TYPE "quote_status_enum" AS ENUM (
     'DRAFT',
+    'SUBMISSION_PENDING',
     'SENT', 
     'DECIDED', 
     'SUPERSEDED'
@@ -26,6 +27,7 @@ CREATE TABLE "quotes" (
     "service_order_id" UUID NOT NULL,
     "diagnosis_id" UUID,
     "status" "quote_status_enum" NOT NULL DEFAULT 'DRAFT',
+    "submission_requested_by" UUID,
     "submitted_at" TIMESTAMPTZ,
     "responded_at" TIMESTAMPTZ,
     "created_by" UUID NOT NULL,
@@ -67,6 +69,7 @@ CREATE TABLE "quote_item_components" (
 -- CreateIndex
 CREATE INDEX "quotes_service_order_id_idx" ON "quotes"("service_order_id");
 CREATE INDEX "quotes_diagnosis_id_idx" ON "quotes"("diagnosis_id");
+CREATE INDEX "quotes_submission_requested_by_idx" ON "quotes"("submission_requested_by");
 CREATE INDEX "quotes_created_by_idx" ON "quotes"("created_by");
 CREATE INDEX "quote_items_quote_id_idx" ON "quote_items"("quote_id");
 CREATE INDEX "quote_items_finding_id_idx" ON "quote_items"("finding_id");
@@ -94,6 +97,14 @@ ADD CONSTRAINT "quotes_diagnosis_id_fkey"
 FOREIGN KEY ("diagnosis_id") 
 REFERENCES "diagnoses"("id") 
 ON DELETE CASCADE 
+ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "quotes" 
+ADD CONSTRAINT "quotes_submission_requested_by_fkey" 
+FOREIGN KEY ("submission_requested_by") 
+REFERENCES "users"("id") 
+ON DELETE RESTRICT 
 ON UPDATE CASCADE;
 
 -- AddForeignKey

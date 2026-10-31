@@ -20,6 +20,7 @@ import {
     ListQuotesByServiceOrderIdInput,
     ListQuoteItemsByQuoteIdInput,
     UpdateQuoteItemAndComponentsInput,
+    RequestQuoteSubmissionInput,
 } from "../../../../src/modules/service-order/service-order.types.js";
 // (shared)
 import { getPrisma } from "../../../../src/shared/config/database.js";
@@ -2237,6 +2238,93 @@ describe("Service Order Service (Unit)", () => {
             expect(serviceOrderRepository.findQuoteItemById).toHaveBeenCalledWith(quoteItemId);
             expect(serviceOrderRepository.lockQuoteIfDraft).toHaveBeenCalledWith(mockQuoteItem.quoteId, tx);
             expect(serviceOrderRepository.deleteQuoteItemById).toHaveBeenCalledWith(quoteItemId, tx);
+        });
+    });
+
+    describe("requestQuoteSubmission", () => {
+        const validInput: RequestQuoteSubmissionInput = {
+            quoteId: "uuid-quote-123",
+            submissionRequestedBy: "uuid-user-123",
+        };
+
+        const mockQuoteRecord = {
+            id: validInput.quoteId,
+            serviceOrderId: "uuid-service-order-123",
+            diagnosisId: "uuid-diagnosis-123",
+            status: "DRAFT",
+            submissionRequestedById: null,
+            submittedAt: null,
+            respondedAt: null,
+            createdById: "uuid-user-456",
+            createdAt: new Date(),
+            updatedAt: null,
+        } as QuoteRecord;
+
+        it("should throw if serviceOrderRepository.findQuoteById fails", async () => {
+            const error = new Error("fake error");
+            vi.mocked(serviceOrderRepository.findQuoteById).mockRejectedValue(error);
+
+            await expect(serviceOrderService.requestQuoteSubmission(validInput))
+                .rejects.toThrow(error);
+        });
+
+        it("should throw NOT_FOUND if quote does not exist", async () => {
+            vi.mocked(serviceOrderRepository.findQuoteById).mockResolvedValue(null);
+
+            await expect(serviceOrderService.requestQuoteSubmission(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 404,
+                    message: "Quote not found",
+                });
+
+            expect(serviceOrderRepository.requestQuoteSubmission).not.toHaveBeenCalled();
+        });
+
+        it("should throw CONFLICT if quote is not DRAFT", async () => {
+            vi.mocked(serviceOrderRepository.findQuoteById).mockResolvedValue({
+                ...mockQuoteRecord,
+                status: "SENT",
+                submittedAt: new Date(),
+            });
+
+            await expect(serviceOrderService.requestQuoteSubmission(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 409,
+                    message: "Quote is not in DRAFT status",
+                });
+
+            expect(serviceOrderRepository.requestQuoteSubmission).not.toHaveBeenCalled();
+        });
+
+        it("should throw if serviceOrderRepository.requestQuoteSubmission fails", async () => {
+            const error = new Error("fake error");
+            vi.mocked(serviceOrderRepository.findQuoteById).mockResolvedValue(mockQuoteRecord);
+            vi.mocked(serviceOrderRepository.requestQuoteSubmission).mockRejectedValue(error);
+
+            await expect(serviceOrderService.requestQuoteSubmission(validInput))
+                .rejects.toThrow(error);
+        });
+
+        it("should throw CONFLICT if requestQuoteSubmission returns false (race condition)", async () => {
+            vi.mocked(serviceOrderRepository.findQuoteById).mockResolvedValue(mockQuoteRecord);
+            vi.mocked(serviceOrderRepository.requestQuoteSubmission).mockResolvedValue(false);
+
+            await expect(serviceOrderService.requestQuoteSubmission(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 409,
+                    message: "Quote is no longer in DRAFT status",
+                });
+        });
+
+        it("should request quote submission successfully", async () => {
+            vi.mocked(serviceOrderRepository.findQuoteById).mockResolvedValue(mockQuoteRecord);
+            vi.mocked(serviceOrderRepository.requestQuoteSubmission).mockResolvedValue(true);
+
+            await expect(serviceOrderService.requestQuoteSubmission(validInput))
+                .resolves.toBeUndefined();
+
+            expect(serviceOrderRepository.findQuoteById).toHaveBeenCalledWith(validInput.quoteId);
+            expect(serviceOrderRepository.requestQuoteSubmission).toHaveBeenCalledWith(validInput);
         });
     });
 });

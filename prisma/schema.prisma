@@ -60,6 +60,7 @@ enum DiagnosisResult {
 
 enum QuoteStatus {
   DRAFT
+  SUBMISSION_PENDING
   SENT
   DECIDED
   SUPERSEDED
@@ -95,18 +96,19 @@ model User {
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt    DateTime? @map("updated_at") @db.Timestamptz()
 
-  resourceValidations         UserResourceValidation[]
-  activationTokens            UserActivationToken[]
-  refreshTokens               RefreshToken[]
-  serviceOrders               ServiceOrder[]
-  serviceOrderStatusHistories ServiceOrderStatusHistory[]
-  diagnosisCreated            Diagnosis[]                 @relation("DiagnosisCreatedBy")
-  diagnosisCompletedBy        Diagnosis[]                 @relation("DiagnosisCompletedBy")
-  findingsCreated             Finding[]                   @relation("FindingCreatedBy")
-  findingsUpdated             Finding[]                   @relation("FindingUpdatedBy")
-  quotes                      Quote[]
-  quoteItemsCreated           QuoteItem[]                 @relation("QuoteItemCreatedBy")
-  quoteItemsUpdated           QuoteItem[]                 @relation("QuoteItemUpdatedBy")
+  resourceValidations          UserResourceValidation[]
+  activationTokens             UserActivationToken[]
+  refreshTokens                RefreshToken[]
+  serviceOrders                ServiceOrder[]
+  serviceOrderStatusHistories  ServiceOrderStatusHistory[]
+  diagnosisCreatedBy           Diagnosis[]                 @relation("DiagnosisCreatedBy")
+  diagnosisCompletedBy         Diagnosis[]                 @relation("DiagnosisCompletedBy")
+  findingCreatedBy             Finding[]                   @relation("FindingCreatedBy")
+  findingUpdatedBy             Finding[]                   @relation("FindingUpdatedBy")
+  quoteSubmissionRequestedById Quote[]                     @relation("SubmissionRequestedById")
+  quoteCreatedBy               Quote[]                     @relation("QuoteCreatedBy")
+  quoteItemCreatedBy           QuoteItem[]                 @relation("QuoteItemCreatedBy")
+  quoteItemUpdatedBy           QuoteItem[]                 @relation("QuoteItemUpdatedBy")
 
   @@index([createdAt(sort: Desc)])
   @@map("users")
@@ -287,23 +289,26 @@ model Finding {
 }
 
 model Quote {
-  id             String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  serviceOrderId String      @map("service_order_id") @db.Uuid
-  diagnosisId    String?     @map("diagnosis_id") @db.Uuid
-  status         QuoteStatus @default(DRAFT)
-  submittedAt    DateTime?   @map("submitted_at") @db.Timestamptz()
-  respondedAt    DateTime?   @map("responded_at") @db.Timestamptz()
-  createdById    String      @map("created_by") @db.Uuid
-  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt      DateTime?   @map("updated_at") @db.Timestamptz()
+  id                      String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  serviceOrderId          String      @map("service_order_id") @db.Uuid
+  diagnosisId             String?     @map("diagnosis_id") @db.Uuid
+  status                  QuoteStatus @default(DRAFT)
+  submissionRequestedById String?     @map("submission_requested_by") @db.Uuid
+  submittedAt             DateTime?   @map("submitted_at") @db.Timestamptz()
+  respondedAt             DateTime?   @map("responded_at") @db.Timestamptz()
+  createdById             String      @map("created_by") @db.Uuid
+  createdAt               DateTime    @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt               DateTime?   @map("updated_at") @db.Timestamptz()
 
-  serviceOrder ServiceOrder @relation(fields: [serviceOrderId], references: [id], onDelete: Cascade)
-  diagnosis    Diagnosis?   @relation(fields: [diagnosisId], references: [id], onDelete: Cascade)
-  createdBy    User         @relation(fields: [createdById], references: [id], onDelete: Restrict)
-  quoteItems   QuoteItem[]
+  serviceOrder          ServiceOrder @relation(fields: [serviceOrderId], references: [id], onDelete: Cascade)
+  diagnosis             Diagnosis?   @relation(fields: [diagnosisId], references: [id], onDelete: Cascade)
+  submissionRequestedBy User?        @relation("SubmissionRequestedById", fields: [submissionRequestedById], references: [id], onDelete: Restrict)
+  createdBy             User         @relation("QuoteCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  quoteItems            QuoteItem[]
 
   @@index([serviceOrderId])
   @@index([diagnosisId])
+  @@index([submissionRequestedById])
   @@index([createdById])
   @@map("quotes")
 }
@@ -346,4 +351,17 @@ model QuoteItemComponent {
 
   @@index([quoteItemId])
   @@map("quote_item_components")
+}
+
+model OutboxQuote {
+  id          Int                @id @default(autoincrement())
+  quoteId     String             @map("quote_id") @db.Uuid
+  eventType   String?            @map("event_type") @db.VarChar(100)
+  action      OutboxActionStatus
+  beforeState Json?              @map("before_state") @db.JsonB
+  afterState  Json?              @map("after_state") @db.JsonB
+  createdAt   DateTime           @default(now()) @map("created_at") @db.Timestamptz()
+  consumedAt  DateTime?          @map("consumed_at") @db.Timestamptz()
+
+  @@map("outbox_quotes")
 }

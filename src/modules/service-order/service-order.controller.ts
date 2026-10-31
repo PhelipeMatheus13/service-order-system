@@ -234,6 +234,19 @@ const deleteQuoteItem = asyncHandler(async (req, res) => {
 });
 
 
+const requestQuoteSubmission = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (!id) throw badRequest({ message: "Quote ID is required" });
+    await serviceOrderService.requestQuoteSubmission({
+        quoteId: String(id), 
+        submissionRequestedBy: String(req.user?.id),
+    });
+    res.status(200).json({
+        success: true,
+        message: "Quote submission requested successfully",
+    });
+});
+
 export default {
     createServiceOrder,
     getServiceOrderById,
@@ -254,4 +267,5 @@ export default {
     listQuoteItemsByQuoteId,
     updateQuoteItemAndComponents,
     deleteQuoteItem,
+    requestQuoteSubmission,
 };

@@ -18,6 +18,8 @@ interface UserCreatedPayload {
     } | null;
 }
 
+// TODO: test
+
 const sendEmailConfirmationCodeSubscriber: Subscriber = {
     config: {
         topic: "public.users.created",

@@ -6,6 +6,7 @@ import { startSubscribers, type Subscriber } from "./shared/pubsub/subscriber.js
 import { startPeriodicJobs, type PeriodicJob } from "./shared/background/periodic-job.js";
 import { getAndPushUnconsumedUserEvents } from "./modules/user/jobs/outbox-relay.js";
 import { sendEmailConfirmationCodeSubscriber } from "./modules/user/subscribers/user-created.js";
+import { sendQuoteToCustomerSubscriber } from "./modules/service-order/subscribers/quote-submission-requested.js";
 import logger from "./shared/config/logger.js";
 
 const periodicJobs: PeriodicJob[] = [
@@ -14,6 +15,7 @@ const periodicJobs: PeriodicJob[] = [
 
 const subscribers: Subscriber[] = [
     sendEmailConfirmationCodeSubscriber,
+    sendQuoteToCustomerSubscriber
 ];
 
 const startPubsub = async (): Promise<void> => {

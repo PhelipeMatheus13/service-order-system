@@ -3,6 +3,8 @@ import { getRequiredEnv } from "../config/env.js";
 import logger from "../config/logger.js";
 import { internal } from "../errors/errors.js";
 
+// TTODO: allow passing the event ID to set up an independence key, in order to prevent duplicate emails
+
 let transporter: Transporter | null = null;
 
 const getTransporter = (): Transporter => {

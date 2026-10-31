@@ -17,9 +17,10 @@ import {
     QuoteItemWithComponents,
     ListQuotesByServiceOrderIdInput,
     ListQuoteItemsByQuoteIdInput,
+    RequestQuoteSubmissionInput,
     UpdateQuoteItemAndComponentsInput,
 } from "./service-order.types.js";
-import { ServiceOrderStatus } from "./service-order.types.js";
+import { ServiceOrderStatus, QuoteStatus } from "./service-order.types.js";
 import { getPrisma } from "../../shared/config/database.js";
 import { notFound, unauthorized, conflict } from "../../shared/errors/errors.js";
 import { isForeignKeyConstraintOn, isUniqueConstraintOn, isNotFoundError } from "../../shared/utils/prisma-error.js";
@@ -470,7 +471,7 @@ const updateQuoteItemAndComponents = async (input: UpdateQuoteItemAndComponentsI
         throw notFound({ message: "Quote not found" });
     }
 
-    if (quote.status !== "DRAFT") {
+    if (quote.status !== QuoteStatus.DRAFT) {
         throw conflict({ message: "Quote is not in DRAFT status" });
     }
 
@@ -520,6 +521,23 @@ const deleteQuoteItem = async (quoteItemId: string): Promise<void> => {
     });
 };
 
+const requestQuoteSubmission = async (input: RequestQuoteSubmissionInput): Promise<void> => {
+    const quote = await serviceOrderRepository.findQuoteById(input.quoteId);
+    if (!quote) {
+        throw notFound({ message: "Quote not found" });
+    }
+
+    if (quote.status !== QuoteStatus.DRAFT) {
+        throw conflict({ message: "Quote is not in DRAFT status" });
+    }
+
+    const updated = await serviceOrderRepository.requestQuoteSubmission(input);
+
+    if (!updated) {
+        throw conflict({ message: "Quote is no longer in DRAFT status" });
+    }
+};
+
 export default {
     createServiceOrder,
     getServiceOrderById,
@@ -541,4 +559,5 @@ export default {
     listQuoteItemsByQuoteId,
     updateQuoteItemAndComponents,
     deleteQuoteItem,
+    requestQuoteSubmission,
 };
