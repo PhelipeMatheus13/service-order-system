@@ -4,6 +4,13 @@ interface SendConfirmationInput {
     to: string;
     name: string;
     code: string;
+    idempotencyKey: string;
+}
+
+interface ResendConfirmationCodeInput {
+    to: string;
+    name: string;
+    code: string;
 }
 
 /**
@@ -11,7 +18,7 @@ interface SendConfirmationInput {
  * user-created subscriber and the (future) resend-code flow, since both
  * need the exact same template.
  */
-const sendConfirmationCode = async ({ to, name, code }: SendConfirmationInput): Promise<void> => {
+const sendConfirmationCode = async ({ to, name, code, idempotencyKey }: SendConfirmationInput): Promise<void> => {
     const subject = "Confirm your registration";
     const html = `
         <p>Hi, ${name}!</p>
@@ -20,10 +27,10 @@ const sendConfirmationCode = async ({ to, name, code }: SendConfirmationInput): 
         <p>If you didn't request this, please ignore this email.</p>
     `;
 
-    await sendMail({ to, subject, html });
+    await sendMail({ to, subject, html, idempotencyKey });
 };
 
-const resendConfirmationCode = async ({ to, name, code }: SendConfirmationInput): Promise<void> => {
+const resendConfirmationCode = async ({ to, name, code }: ResendConfirmationCodeInput): Promise<void> => {
     const subject = "Resend: Confirm your registration";
     const html = `
         <p>Hi, ${name}!</p>
