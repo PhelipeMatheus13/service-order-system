@@ -3,6 +3,7 @@ import type { Subscriber } from "../../../shared/pubsub/subscriber.js";
 import PubsubError from "../../../shared/pubsub/error.js";
 import logger from "../../../shared/config/logger.js";
 import { getPrisma } from "../../../shared/config/database.js";
+import { AppError } from "../../../shared/errors/errors.js";
 import serviceOrderRepository from "../service-order.repository.js";
 import { sendQuoteToCustomer } from "../service-order.emails.js";
 
@@ -30,14 +31,14 @@ const sendQuoteToCustomerSubscriber: Subscriber = {
     handler: async (message) => {
         const payload = message.content as QuoteSubmissionRequestedPayload;
         if (!payload.quoteId) {
-            logger.error({ payload }, "Failed to process quote-submission event: payload is missing the 'quoteId'");
-            throw new PubsubError("quote-submission event missing 'quoteId'", false);
+            logger.error({ payload }, "quote-submission: payload is missing the 'quoteId', aborting processing");
+            throw new PubsubError("quote-submission: payload is missing 'quoteId'", false); // DLQ
         }
 
         const quote = await serviceOrderRepository.findQuoteById(payload.quoteId);
         if (!quote) {
-            logger.error({ payload }, "Failed to process quote-submission event: quote not found");
-            throw new PubsubError("Quote not found", false);
+            logger.error({ payload }, "quote-submission: quote not found, aborting processing");
+            throw new PubsubError("quote-submission: quote not found", false); // DLQ
         }
 
         if (quote.status === QuoteStatus.SENT && quote.submittedAt) return; // fully done
@@ -45,31 +46,45 @@ const sendQuoteToCustomerSubscriber: Subscriber = {
         if (quote.status !== QuoteStatus.SUBMISSION_PENDING) {
             logger.error(
                 { payload, quoteStatus: quote.status },
-                "Cannot process quote-submission event: quote is in an unexpected status",
+                "quote-submission: quote is in an unexpected status, aborting processing",
             );
-            throw new PubsubError("Quote is in an unexpected status", false); // DLQ
+            throw new PubsubError("quote-submission: quote is in an unexpected status", false); // DLQ
         }
 
         const quoteEmailPayload = await serviceOrderRepository.findQuoteEmailPayloadById(payload.quoteId);
         if (!quoteEmailPayload) {
-            logger.error({ payload }, "Failed to process quote-submission event: quote email payload not found");
-            throw new PubsubError("Quote email payload not found", false);
+            logger.error({ payload }, "quote-submission: quote email payload not found, aborting processing");
+            throw new PubsubError("quote-submission: quote email payload not found", false); // DLQ
         }
 
         if (quoteEmailPayload.serviceOrder.status !== ServiceOrderStatus.AWAITING_QUOTE) {
             logger.error(
                 { payload, serviceOrderStatus: quoteEmailPayload.serviceOrder.status },
-                "Cannot transition quote: service order is not in AWAITING_QUOTE",
+                "quote-submission: service order is not in AWAITING_QUOTE status, aborting processing",
             );
-            throw new PubsubError("Service order is not in AWAITING_QUOTE", false); // DLQ
+            throw new PubsubError("quote-submission: service order is not in AWAITING_QUOTE status", false); // DLQ
         }
 
-        await sendQuoteToCustomer({
-            to: quoteEmailPayload.customer.email,
-            name: `${quoteEmailPayload.customer.firstName} ${quoteEmailPayload.customer.lastName}`,
-            payload: quoteEmailPayload,
-        });
+        try {
+            await sendQuoteToCustomer({
+                to: quoteEmailPayload.customer.email,
+                name: `${quoteEmailPayload.customer.firstName} ${quoteEmailPayload.customer.lastName}`,
+                payload: quoteEmailPayload,
+                idempotencyKey: `quote-submission/${payload.quoteId}`,
+            });
+        } catch (error) {
+            if (error instanceof AppError && error.code === "IDEMPOTENCY_CONFLICT") {
+                throw new PubsubError("quote-submission: idempotency conflict while sending quote aborting processing", false); // DLQ
+            }
 
+            if (error instanceof AppError && error.code === "IDEMPOTENCY_IN_PROGRESS") {
+                // The request that owns the key is still sending; if it fails, its own message retries.
+                logger.warn({ payload }, "quote-submission: quote already being sent, skipping");
+                return;
+            }
+            
+            throw error;
+        }
 
         await getPrisma().$transaction(async (tx) => {
             const quoteUpdated = await serviceOrderRepository.markQuoteSubmittedById(payload.quoteId, tx);
@@ -77,7 +92,7 @@ const sendQuoteToCustomerSubscriber: Subscriber = {
             if (!quoteUpdated) {
                 // Another consumer already committed the SENT transition (quote has
                 // SENT + submittedAt). Retry: early-return fires, no-op.
-                throw new PubsubError("Quote status changed concurrently", true);
+                throw new PubsubError("quote-submission: quote status changed concurrently", true);
             }
 
             const serviceOrderUpdated = await serviceOrderRepository.updateServiceOrderStatus({
@@ -89,7 +104,7 @@ const sendQuoteToCustomerSubscriber: Subscriber = {
             if (!serviceOrderUpdated) {
                 // Same reasoning: another consumer transitioned the SO. Roll back
                 // the quote update (throws → transaction aborts) and retry.
-                throw new PubsubError("Service order status changed concurrently", true);
+                throw new PubsubError("quote-submission: service order status changed concurrently", true);
             }
 
             await serviceOrderRepository.createServiceOrderStatusHistory({
@@ -102,9 +117,8 @@ const sendQuoteToCustomerSubscriber: Subscriber = {
         });
     },
     onError: (error, message) => {
-        logger.error({ err: error, message }, "Failed to process quote-submission event");
+        logger.error({ err: error, message }, "quote-submission: failed to process event");
     },
 };
-
 
 export { sendQuoteToCustomerSubscriber };

@@ -1,13 +1,11 @@
 import { sendMail } from "../../shared/services/mailer.js";
 import type { QuoteEmailPayload } from "./service-order.types.js";
 
-// TODO: allow sending an ID for an independence key
-// TODO: Refactor and test
-
 interface SendQuoteToCustomerInput {
     to: string;
     name: string;
     payload: QuoteEmailPayload;
+    idempotencyKey: string;
 }
 
 const formatBRL = (value: number): string =>
@@ -16,7 +14,7 @@ const formatBRL = (value: number): string =>
 const calculateItemTotal = (components: QuoteEmailPayload["serviceOrder"]["quoteItems"][number]["components"]): number =>
     components.reduce((sum, c) => sum + c.quantity * Number(c.unitPrice), 0);
 
-const sendQuoteToCustomer = async ({ to, name, payload }: SendQuoteToCustomerInput): Promise<void> => {
+const sendQuoteToCustomer = async ({ to, name, payload, idempotencyKey }: SendQuoteToCustomerInput): Promise<void> => {
     const { device, serviceOrder } = payload;
 
     const deviceDescription = [device.brand, device.model, device.color]
@@ -85,7 +83,7 @@ const sendQuoteToCustomer = async ({ to, name, payload }: SendQuoteToCustomerInp
         <p>If you didn't request this, please ignore this email.</p>
     `;
 
-    await sendMail({ to, subject, html });
+    await sendMail({ to, subject, html, idempotencyKey });
 };
 
 export { sendQuoteToCustomer };

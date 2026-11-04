@@ -3,6 +3,7 @@ import { vi, describe, beforeEach, it, expect } from "vitest";
 import { ServiceOrderStatus, QuoteStatus } from "../../../../../src/modules/service-order/service-order.types.js";
 import { sendQuoteToCustomerSubscriber } from "../../../../../src/modules/service-order/subscribers/quote-submission-requested.js";
 
+import { conflict } from "../../../../../src/shared/errors/errors.js";
 import serviceOrderRepository from "../../../../../src/modules/service-order/service-order.repository.js";
 import { sendQuoteToCustomer } from "../../../../../src/modules/service-order/service-order.emails.js";
 import { getPrisma } from "../../../../../src/shared/config/database.js";
@@ -15,6 +16,7 @@ vi.mock("../../../../../src/shared/config/database.js");
 vi.mock("../../../../../src/shared/config/logger.js", () => ({
     default: {
         error: vi.fn(),
+        warn: vi.fn(),
     },
 }));
 
@@ -24,7 +26,7 @@ describe("Quote Submission Subscriber (Unit)", () => {
     const message = {
         topic: "public.quotes.submission_requested",
         content: {
-            id: "1",
+            id: 1,
             quoteId: "quote-123",
             eventType: "public.quotes.submission_requested",
             action: "UPDATE",
@@ -95,7 +97,7 @@ describe("Quote Submission Subscriber (Unit)", () => {
         await expect(sendQuoteToCustomerSubscriber.handler(messageWithoutQuoteId))
             .rejects.toMatchObject({
                 retriable: false,
-                message: "quote-submission event missing 'quoteId'",
+                message: "quote-submission: payload is missing 'quoteId'",
             });
 
         expect(serviceOrderRepository.findQuoteById).not.toHaveBeenCalled();
@@ -107,10 +109,22 @@ describe("Quote Submission Subscriber (Unit)", () => {
         await expect(sendQuoteToCustomerSubscriber.handler(message))
             .rejects.toMatchObject({
                 retriable: false,
-                message: "Quote not found",
+                message: "quote-submission: quote not found",
             });
 
         expect(sendQuoteToCustomer).not.toHaveBeenCalled();
+    });
+
+    it("should propagate the error when findQuoteById fails", async () => {
+        const dbError = new Error("DB unavailable");
+        vi.mocked(serviceOrderRepository.findQuoteById).mockRejectedValue(dbError);
+
+        await expect(sendQuoteToCustomerSubscriber.handler(message))
+            .rejects.toThrow(dbError);
+
+        expect(serviceOrderRepository.findQuoteEmailPayloadById).not.toHaveBeenCalled();
+        expect(sendQuoteToCustomer).not.toHaveBeenCalled();
+        expect(getPrisma).not.toHaveBeenCalled();
     });
 
     it("should return early when quote is SENT and submittedAt is set", async () => {
@@ -136,12 +150,12 @@ describe("Quote Submission Subscriber (Unit)", () => {
         await expect(sendQuoteToCustomerSubscriber.handler(message))
             .rejects.toMatchObject({
                 retriable: false,
-                message: "Quote is in an unexpected status",
+                message: "quote-submission: quote is in an unexpected status",
             });
 
         expect(logger.error).toHaveBeenCalledWith(
             { payload: message.content, quoteStatus: QuoteStatus.DECIDED },
-            "Cannot process quote-submission event: quote is in an unexpected status",
+            "quote-submission: quote is in an unexpected status, aborting processing",
         );
 
         expect(sendQuoteToCustomer).not.toHaveBeenCalled();
@@ -154,7 +168,7 @@ describe("Quote Submission Subscriber (Unit)", () => {
         await expect(sendQuoteToCustomerSubscriber.handler(message))
             .rejects.toMatchObject({
                 retriable: false,
-                message: "Quote email payload not found",
+                message: "quote-submission: quote email payload not found",
             });
 
         expect(sendQuoteToCustomer).not.toHaveBeenCalled();
@@ -170,7 +184,7 @@ describe("Quote Submission Subscriber (Unit)", () => {
         await expect(sendQuoteToCustomerSubscriber.handler(message))
             .rejects.toMatchObject({
                 retriable: false,
-                message: "Service order is not in AWAITING_QUOTE",
+                message: "quote-submission: service order is not in AWAITING_QUOTE status",
             });
 
         expect(sendQuoteToCustomer).not.toHaveBeenCalled();
@@ -187,6 +201,59 @@ describe("Quote Submission Subscriber (Unit)", () => {
         expect(serviceOrderRepository.markQuoteSubmittedById).not.toHaveBeenCalled();
     });
 
+    it("should throw non-retriable when sendQuoteToCustomer fails with IDEMPOTENCY_CONFLICT", async () => {
+        setupsendQuoteToCustomerMock();
+        vi.mocked(sendQuoteToCustomer).mockRejectedValue(
+            conflict({
+                code: "IDEMPOTENCY_CONFLICT",
+                message: "Idempotency key reused with a different payload",
+            }),
+        );
+
+        await expect(sendQuoteToCustomerSubscriber.handler(message))
+            .rejects.toMatchObject({
+                retriable: false,
+                message: "quote-submission: idempotency conflict while sending quote aborting processing",
+            });
+
+        expect(serviceOrderRepository.markQuoteSubmittedById).not.toHaveBeenCalled();
+    });
+
+    it("should log a warning and return when sendQuoteToCustomer fails with IDEMPOTENCY_IN_PROGRESS", async () => {
+        setupsendQuoteToCustomerMock();
+        vi.mocked(sendQuoteToCustomer).mockRejectedValue(
+            conflict({
+                code: "IDEMPOTENCY_IN_PROGRESS",
+                message: "A request with the same idempotency key is still being processed",
+            }),
+        );
+
+        await expect(sendQuoteToCustomerSubscriber.handler(message))
+            .resolves.toBeUndefined();
+
+        expect(logger.warn).toHaveBeenCalledWith(
+            { payload: message.content },
+            "quote-submission: quote already being sent, skipping",
+        );
+
+        expect(serviceOrderRepository.markQuoteSubmittedById).not.toHaveBeenCalled();
+    });
+
+    it("should rethrow an AppError with an unhandled code as-is", async () => {
+        setupsendQuoteToCustomerMock();
+        const appError = conflict({
+            code: "SOME_UNHANDLED_CODE" as any,
+            message: "Something else went wrong",
+        });
+        vi.mocked(sendQuoteToCustomer).mockRejectedValue(appError);
+
+        await expect(sendQuoteToCustomerSubscriber.handler(message))
+            .rejects.toBe(appError);
+
+        expect(logger.warn).not.toHaveBeenCalled();
+        expect(serviceOrderRepository.markQuoteSubmittedById).not.toHaveBeenCalled();
+    });
+
     it("should throw retriable when markQuoteSubmittedById returns false (race)", async () => {
         setupsendQuoteToCustomerMock();
         vi.mocked(serviceOrderRepository.markQuoteSubmittedById).mockResolvedValue(false);
@@ -194,13 +261,14 @@ describe("Quote Submission Subscriber (Unit)", () => {
         await expect(sendQuoteToCustomerSubscriber.handler(message))
             .rejects.toMatchObject({
                 retriable: true,
-                message: "Quote status changed concurrently",
+                message: "quote-submission: quote status changed concurrently",
             });
 
         expect(sendQuoteToCustomer).toHaveBeenCalledWith({
             to: "jane@example.com",
             name: "Jane Doe",
             payload: quoteEmailPayload,
+            idempotencyKey: "quote-submission/quote-123",
         });
 
         expect(serviceOrderRepository.updateServiceOrderStatus).not.toHaveBeenCalled();
@@ -214,7 +282,7 @@ describe("Quote Submission Subscriber (Unit)", () => {
         await expect(sendQuoteToCustomerSubscriber.handler(message))
             .rejects.toMatchObject({
                 retriable: true,
-                message: "Service order status changed concurrently",
+                message: "quote-submission: service order status changed concurrently",
             });
 
         expect(serviceOrderRepository.createServiceOrderStatusHistory).not.toHaveBeenCalled();
@@ -229,6 +297,27 @@ describe("Quote Submission Subscriber (Unit)", () => {
             .rejects.toThrow(historyError);
     });
 
+    it("should propagate the error when the transaction rejects", async () => {
+        setupsendQuoteToCustomerMock();
+        const txError = new Error("Transaction failed");
+        vi.mocked(getPrisma).mockReturnValue({
+            $transaction: vi.fn().mockRejectedValue(txError),
+        } as any);
+
+        await expect(sendQuoteToCustomerSubscriber.handler(message))
+            .rejects.toThrow(txError);
+
+        // email already went out before the transaction — retry relies on this
+        expect(sendQuoteToCustomer).toHaveBeenCalledWith({
+            to: "jane@example.com",
+            name: "Jane Doe",
+            payload: quoteEmailPayload,
+            idempotencyKey: "quote-submission/quote-123",
+        });
+
+        expect(serviceOrderRepository.markQuoteSubmittedById).not.toHaveBeenCalled();
+    });
+
     it("should send the email and commit the transaction on the happy path", async () => {
         setupsendQuoteToCustomerMock();
 
@@ -239,6 +328,7 @@ describe("Quote Submission Subscriber (Unit)", () => {
             to: "jane@example.com",
             name: "Jane Doe",
             payload: quoteEmailPayload,
+            idempotencyKey: "quote-submission/quote-123",
         });
 
         expect(serviceOrderRepository.markQuoteSubmittedById).toHaveBeenCalledWith(
@@ -272,7 +362,7 @@ describe("Quote Submission Subscriber (Unit)", () => {
 
         expect(logger.error).toHaveBeenCalledWith(
             { err: error, message },
-            "Failed to process quote-submission event",
+            "quote-submission: failed to process event",
         );
     });
 });
