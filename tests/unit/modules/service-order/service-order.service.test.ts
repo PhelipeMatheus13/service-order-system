@@ -21,6 +21,7 @@ import {
     ListQuoteItemsByQuoteIdInput,
     UpdateQuoteItemAndComponentsInput,
     RequestQuoteSubmissionInput,
+    reviseQuoteInput,
 } from "../../../../src/modules/service-order/service-order.types.js";
 // (shared)
 import { getPrisma } from "../../../../src/shared/config/database.js";
@@ -2325,6 +2326,352 @@ describe("Service Order Service (Unit)", () => {
 
             expect(serviceOrderRepository.findQuoteById).toHaveBeenCalledWith(validInput.quoteId);
             expect(serviceOrderRepository.requestQuoteSubmission).toHaveBeenCalledWith(validInput);
+        });
+    });
+
+    describe("reviseQuote", () => {
+        const validInput: reviseQuoteInput = {
+            quoteId: "uuid-quote-123",
+            revisedById: "uuid-user-123",
+        };
+
+        const mockQuoteRecord = {
+            id: validInput.quoteId,
+            serviceOrderId: "uuid-service-order-123",
+            diagnosisId: "uuid-diagnosis-123",
+            status: "SENT",
+            submittedAt: new Date(),
+            respondedAt: null,
+            createdById: "uuid-user-456",
+            createdAt: new Date(),
+            updatedAt: null,
+        } as QuoteRecord;
+
+        const mockServiceOrderRecord = {
+            id: mockQuoteRecord.serviceOrderId,
+            customerId: "uuid-customer-123",
+            deviceId: "uuid-device-123",
+            reportedProblem: "Screen is cracked and touch is not responding.",
+            status: "AWAITING_APPROVAL",
+            createdById: "uuid-user-456",
+            cancelledAt: null,
+            cancelReason: null,
+            finishedAt: null,
+            createdAt: new Date(),
+            updatedAt: null,
+        } as ServiceOrderRecord;
+
+        const mockNewQuoteRecord = {
+            ...mockQuoteRecord,
+            id: "uuid-new-quote-123",
+            status: "DRAFT",
+            submittedAt: null,
+            respondedAt: null,
+            createdById: validInput.revisedById,
+            updatedAt: null,
+        } as QuoteRecord;
+
+        const setupReviseQuoteMocks = () => {
+            const tx = {} as any;
+
+            vi.mocked(serviceOrderRepository.findQuoteById).mockResolvedValue(mockQuoteRecord);
+            vi.mocked(serviceOrderRepository.findById).mockResolvedValue(mockServiceOrderRecord);
+            vi.mocked(getPrisma).mockReturnValue({
+                $transaction: vi.fn(async (callback) => callback(tx)),
+            } as any);
+            vi.mocked(serviceOrderRepository.supersedeQuote).mockResolvedValue(true);
+            vi.mocked(serviceOrderRepository.cloneQuote).mockResolvedValue(mockNewQuoteRecord);
+            vi.mocked(serviceOrderRepository.lockServiceOrderIfInStatuses).mockResolvedValue("AWAITING_APPROVAL");
+            vi.mocked(serviceOrderRepository.updateServiceOrderStatus).mockResolvedValue(true);
+            vi.mocked(serviceOrderRepository.createServiceOrderStatusHistory).mockResolvedValue({
+                id: "uuid-history-123",
+                serviceOrderId: mockServiceOrderRecord.id,
+                fromStatus: "AWAITING_APPROVAL",
+                toStatus: "AWAITING_QUOTE",
+                changeSource: "USER",
+                changedById: validInput.revisedById,
+                createdAt: new Date(),
+            });
+
+            return { tx };
+        };
+
+        it("should throw if serviceOrderRepository.findQuoteById fails", async () => {
+            const error = new Error("fake error");
+            vi.mocked(serviceOrderRepository.findQuoteById).mockRejectedValue(error);
+
+            await expect(serviceOrderService.reviseQuote(validInput))
+                .rejects.toThrow(error);
+        });
+
+        it("should throw NOT_FOUND if quote does not exist", async () => {
+            vi.mocked(serviceOrderRepository.findQuoteById).mockResolvedValue(null);
+
+            await expect(serviceOrderService.reviseQuote(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 404,
+                    message: "Quote not found",
+                });
+
+            expect(serviceOrderRepository.findById).not.toHaveBeenCalled();
+            expect(getPrisma).not.toHaveBeenCalled();
+        });
+
+        it("should throw CONFLICT if quote is not SUBMISSION_PENDING or SENT", async () => {
+            vi.mocked(serviceOrderRepository.findQuoteById).mockResolvedValue({
+                ...mockQuoteRecord,
+                status: "DRAFT",
+            });
+
+            await expect(serviceOrderService.reviseQuote(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 409,
+                    message: "Quote is not in a valid status for revision",
+                });
+
+            expect(serviceOrderRepository.findById).not.toHaveBeenCalled();
+        });
+
+        it("should throw if serviceOrderRepository.findById fails", async () => {
+            const error = new Error("fake error");
+            vi.mocked(serviceOrderRepository.findQuoteById).mockResolvedValue(mockQuoteRecord);
+            vi.mocked(serviceOrderRepository.findById).mockRejectedValue(error);
+
+            await expect(serviceOrderService.reviseQuote(validInput))
+                .rejects.toThrow(error);
+        });
+
+        it("should throw NOT_FOUND if service order does not exist", async () => {
+            vi.mocked(serviceOrderRepository.findQuoteById).mockResolvedValue(mockQuoteRecord);
+            vi.mocked(serviceOrderRepository.findById).mockResolvedValue(null);
+
+            await expect(serviceOrderService.reviseQuote(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 404,
+                    message: "Service order not found",
+                });
+
+            expect(getPrisma).not.toHaveBeenCalled();
+        });
+
+        it("should throw CONFLICT if service order is not AWAITING_QUOTE or AWAITING_APPROVAL", async () => {
+            vi.mocked(serviceOrderRepository.findQuoteById).mockResolvedValue(mockQuoteRecord);
+            vi.mocked(serviceOrderRepository.findById).mockResolvedValue({
+                ...mockServiceOrderRecord,
+                status: "WAITING_DIAGNOSIS",
+            });
+
+            await expect(serviceOrderService.reviseQuote(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 409,
+                    message: "Service order is not in a valid status for quote revision",
+                });
+
+            expect(getPrisma).not.toHaveBeenCalled();
+        });
+
+        it("should throw CONFLICT if supersedeQuote returns false (race condition)", async () => {
+            const { tx } = setupReviseQuoteMocks();
+            vi.mocked(serviceOrderRepository.supersedeQuote).mockResolvedValue(false);
+
+            await expect(serviceOrderService.reviseQuote(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 409,
+                    message: "Quote is no longer in a valid status for revision",
+                });
+
+            expect(serviceOrderRepository.supersedeQuote).toHaveBeenCalledWith(validInput.quoteId, tx);
+            expect(serviceOrderRepository.cloneQuote).not.toHaveBeenCalled();
+        });
+
+        it("should propagate error when supersedeQuote throws", async () => {
+            const { tx } = setupReviseQuoteMocks();
+            const error = new Error("fake error");
+            vi.mocked(serviceOrderRepository.supersedeQuote).mockRejectedValue(error);
+
+            await expect(serviceOrderService.reviseQuote(validInput))
+                .rejects.toThrow(error);
+
+            expect(serviceOrderRepository.supersedeQuote).toHaveBeenCalledWith(validInput.quoteId, tx);
+            expect(serviceOrderRepository.cloneQuote).not.toHaveBeenCalled();
+        });
+
+        it("should propagate error when cloneQuote fails", async () => {
+            const { tx } = setupReviseQuoteMocks();
+            const error = new Error("fake error");
+            vi.mocked(serviceOrderRepository.cloneQuote).mockRejectedValue(error);
+
+            await expect(serviceOrderService.reviseQuote(validInput))
+                .rejects.toThrow(error);
+
+            expect(serviceOrderRepository.cloneQuote).toHaveBeenCalledWith(
+                validInput.quoteId,
+                validInput.revisedById,
+                tx,
+            );
+        });
+
+        it("should throw CONFLICT if service order is no longer available under lock", async () => {
+            const { tx } = setupReviseQuoteMocks();
+            vi.mocked(serviceOrderRepository.lockServiceOrderIfInStatuses).mockResolvedValue(null);
+
+            await expect(serviceOrderService.reviseQuote(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 409,
+                    message: "Service order is no longer available for quote revision",
+                });
+
+            expect(serviceOrderRepository.lockServiceOrderIfInStatuses).toHaveBeenCalledWith(
+                mockServiceOrderRecord.id,
+                ["AWAITING_QUOTE", "AWAITING_APPROVAL"],
+                tx,
+            );
+            expect(serviceOrderRepository.updateServiceOrderStatus).not.toHaveBeenCalled();
+            expect(serviceOrderRepository.createServiceOrderStatusHistory).not.toHaveBeenCalled();
+        });
+
+        it("should propagate error when lockServiceOrderIfInStatuses throws", async () => {
+            const { tx } = setupReviseQuoteMocks();
+            const error = new Error("fake error");
+            vi.mocked(serviceOrderRepository.lockServiceOrderIfInStatuses).mockRejectedValue(error);
+
+            await expect(serviceOrderService.reviseQuote(validInput))
+                .rejects.toThrow(error);
+
+            expect(serviceOrderRepository.lockServiceOrderIfInStatuses).toHaveBeenCalledWith(
+                mockServiceOrderRecord.id,
+                ["AWAITING_QUOTE", "AWAITING_APPROVAL"],
+                tx,
+            );
+            expect(serviceOrderRepository.updateServiceOrderStatus).not.toHaveBeenCalled();
+            expect(serviceOrderRepository.createServiceOrderStatusHistory).not.toHaveBeenCalled();
+        });
+
+        it("should return the new quote without updating the service order when lock returns AWAITING_QUOTE", async () => {
+            const { tx } = setupReviseQuoteMocks();
+            vi.mocked(serviceOrderRepository.lockServiceOrderIfInStatuses).mockResolvedValue("AWAITING_QUOTE");
+
+            const result = await serviceOrderService.reviseQuote(validInput);
+
+            expect(serviceOrderRepository.lockServiceOrderIfInStatuses).toHaveBeenCalledWith(
+                mockServiceOrderRecord.id,
+                ["AWAITING_QUOTE", "AWAITING_APPROVAL"],
+                tx,
+            );
+            expect(serviceOrderRepository.updateServiceOrderStatus).not.toHaveBeenCalled();
+            expect(serviceOrderRepository.createServiceOrderStatusHistory).not.toHaveBeenCalled();
+            expect(result).toBe(mockNewQuoteRecord);
+        });
+
+        it("should short-circuit without touching the SO when quote is SUBMISSION_PENDING and SO is AWAITING_QUOTE", async () => {
+            const { tx } = setupReviseQuoteMocks();
+            vi.mocked(serviceOrderRepository.findQuoteById).mockResolvedValue({
+                ...mockQuoteRecord,
+                status: "SUBMISSION_PENDING",
+                submittedAt: null,
+            });
+            vi.mocked(serviceOrderRepository.findById).mockResolvedValue({
+                ...mockServiceOrderRecord,
+                status: "AWAITING_QUOTE",
+            });
+            vi.mocked(serviceOrderRepository.lockServiceOrderIfInStatuses).mockResolvedValue("AWAITING_QUOTE");
+
+            const result = await serviceOrderService.reviseQuote(validInput);
+
+            expect(serviceOrderRepository.supersedeQuote).toHaveBeenCalledWith(validInput.quoteId, tx);
+            expect(serviceOrderRepository.cloneQuote).toHaveBeenCalledWith(
+                validInput.quoteId,
+                validInput.revisedById,
+                tx,
+            );
+            expect(serviceOrderRepository.lockServiceOrderIfInStatuses).toHaveBeenCalledWith(
+                mockServiceOrderRecord.id,
+                ["AWAITING_QUOTE", "AWAITING_APPROVAL"],
+                tx,
+            );
+            expect(serviceOrderRepository.updateServiceOrderStatus).not.toHaveBeenCalled();
+            expect(serviceOrderRepository.createServiceOrderStatusHistory).not.toHaveBeenCalled();
+            expect(result).toBe(mockNewQuoteRecord);
+        });
+
+        it("should throw CONFLICT if updateServiceOrderStatus returns false (race condition)", async () => {
+            const { tx } = setupReviseQuoteMocks();
+            vi.mocked(serviceOrderRepository.updateServiceOrderStatus).mockResolvedValue(false);
+
+            await expect(serviceOrderService.reviseQuote(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 409,
+                    message: "Service order is no longer available for quote revision",
+                });
+
+            expect(serviceOrderRepository.updateServiceOrderStatus).toHaveBeenCalledWith(
+                {
+                    serviceOrderId: mockServiceOrderRecord.id,
+                    expectedStatuses: ["AWAITING_APPROVAL"],
+                    toStatus: "AWAITING_QUOTE",
+                },
+                tx,
+            );
+            expect(serviceOrderRepository.createServiceOrderStatusHistory).not.toHaveBeenCalled();
+        });
+
+        it("should propagate error when createServiceOrderStatusHistory fails", async () => {
+            const { tx } = setupReviseQuoteMocks();
+            const error = new Error("fake error");
+            vi.mocked(serviceOrderRepository.createServiceOrderStatusHistory).mockRejectedValue(error);
+
+            await expect(serviceOrderService.reviseQuote(validInput))
+                .rejects.toThrow(error);
+
+            expect(serviceOrderRepository.createServiceOrderStatusHistory).toHaveBeenCalledWith(
+                {
+                    serviceOrderId: mockServiceOrderRecord.id,
+                    fromStatus: "AWAITING_APPROVAL",
+                    toStatus: "AWAITING_QUOTE",
+                    changeSource: "USER",
+                    changedById: validInput.revisedById,
+                },
+                tx,
+            );
+        });
+
+        it("should supersede, clone, lock, transition to AWAITING_QUOTE and record history", async () => {
+            const { tx } = setupReviseQuoteMocks();
+
+            const result = await serviceOrderService.reviseQuote(validInput);
+
+            expect(serviceOrderRepository.findQuoteById).toHaveBeenCalledWith(validInput.quoteId);
+            expect(serviceOrderRepository.findById).toHaveBeenCalledWith(mockQuoteRecord.serviceOrderId);
+            expect(serviceOrderRepository.supersedeQuote).toHaveBeenCalledWith(validInput.quoteId, tx);
+            expect(serviceOrderRepository.cloneQuote).toHaveBeenCalledWith(
+                validInput.quoteId,
+                validInput.revisedById,
+                tx,
+            );
+            expect(serviceOrderRepository.lockServiceOrderIfInStatuses).toHaveBeenCalledWith(
+                mockServiceOrderRecord.id,
+                ["AWAITING_QUOTE", "AWAITING_APPROVAL"],
+                tx,
+            );
+            expect(serviceOrderRepository.updateServiceOrderStatus).toHaveBeenCalledWith(
+                {
+                    serviceOrderId: mockServiceOrderRecord.id,
+                    expectedStatuses: ["AWAITING_APPROVAL"],
+                    toStatus: "AWAITING_QUOTE",
+                },
+                tx,
+            );
+            expect(serviceOrderRepository.createServiceOrderStatusHistory).toHaveBeenCalledWith(
+                {
+                    serviceOrderId: mockServiceOrderRecord.id,
+                    fromStatus: "AWAITING_APPROVAL",
+                    toStatus: "AWAITING_QUOTE",
+                    changeSource: "USER",
+                    changedById: validInput.revisedById,
+                },
+                tx,
+            );
+            expect(result).toBe(mockNewQuoteRecord);
         });
     });
 });

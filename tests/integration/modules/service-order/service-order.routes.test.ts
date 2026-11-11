@@ -270,6 +270,104 @@ describe("Service Order Routes (Integration)", () => {
         });
     });
 
+    describe("POST /service-orders/quotes/:id/revise", () => {
+        it("should revise a quote successfully", async () => {
+            const { user, serviceOrder, diagnosis, findings, quotes, quoteItems } =
+                await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "ATTENDANT" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "AWAITING_APPROVAL" })
+                    .withDiagnosis({ result: "FAULT_FOUND" })
+                    .withFinding({ description: "Battery degraded", repairable: true })
+                    .withQuote({ status: "SENT", submittedAt: new Date() })
+                    .withQuoteItem({
+                        quoteIndex: 0,
+                        findingIndex: 0,
+                        description: "Battery replacement",
+                        components: [
+                            { type: "PART", description: "Battery", quantity: 1, unitPrice: 80 },
+                            { type: "LABOR", description: "Replacement labor", quantity: 2, unitPrice: 25 },
+                        ],
+                    })
+                    .build();
+
+            const accessToken = generateAccessToken(user.id, "ATTENDANT");
+            const originalQuoteId = quotes[0]!.id;
+
+            const res = await request(app)
+                .post(`/service-orders/quotes/${originalQuoteId}/revise`)
+                .set("Authorization", `Bearer ${accessToken}`);
+
+            expect(res.statusCode).toBe(201);
+            expect(res.body.success).toBe(true);
+            expect(res.body.message).toBe("Quote successfully revised");
+            expect(res.body.data).toMatchObject({
+                serviceOrderId: serviceOrder!.id,
+                diagnosisId: diagnosis!.id,
+                status: "DRAFT",
+                createdById: user.id,
+                submittedAt: null,
+                respondedAt: null,
+            });
+            expect(res.body.data.id).toBeTruthy();
+            expect(res.body.data.id).not.toBe(originalQuoteId);
+
+            // Old quote superseded
+            const oldQuote = await prisma.quote.findUnique({
+                where: { id: originalQuoteId },
+            });
+            expect(oldQuote?.status).toBe("SUPERSEDED");
+
+            // New quote persisted with cloned items and components
+            const newQuote = await prisma.quote.findUnique({
+                where: { id: res.body.data.id },
+                include: { quoteItems: { include: { quoteItemComponents: true } } },
+            });
+            expect(newQuote?.status).toBe("DRAFT");
+            expect(newQuote?.quoteItems).toHaveLength(1);
+
+            const clonedItem = newQuote!.quoteItems[0];
+            expect(clonedItem.id).not.toBe(quoteItems[0].id);
+            expect(clonedItem.description).toBe("Battery replacement");
+            expect(clonedItem.findingId).toBe(findings[0].id);
+            expect(clonedItem.decision).toBe("PENDING");
+            expect(clonedItem.quoteItemComponents).toHaveLength(2);
+
+            // Service order transitioned back to AWAITING_QUOTE
+            const soFound = await prisma.serviceOrder.findUnique({
+                where: { id: serviceOrder!.id },
+            });
+            expect(soFound?.status).toBe("AWAITING_QUOTE");
+
+            // Status history records the transition
+            const history = await prisma.serviceOrderStatusHistory.findFirst({
+                where: { serviceOrderId: serviceOrder!.id },
+                orderBy: { createdAt: "desc" },
+            });
+            expect(history?.fromStatus).toBe("AWAITING_APPROVAL");
+            expect(history?.toStatus).toBe("AWAITING_QUOTE");
+            expect(history?.changeSource).toBe("USER");
+            expect(history?.changedById).toBe(user.id);
+        });
+
+        it("should return 401 when the access token is missing", async () => {
+            const { quotes } = await new ServiceOrderBuilder(prisma)
+                .withUser({ role: "ATTENDANT" })
+                .withCustomer()
+                .withDevice()
+                .withServiceOrder({ status: "AWAITING_APPROVAL" })
+                .withDiagnosis()
+                .withQuote({ status: "SENT", submittedAt: new Date() })
+                .build();
+
+            const res = await request(app)
+                .post(`/service-orders/quotes/${quotes[0]!.id}/revise`);
+
+            expect(res.statusCode).toBe(401);
+        });
+    });
+
     describe("GET /service-orders/:id", () => {
         it("should return the service order data", async () => {
             const { user, customer, device, serviceOrder } = await new ServiceOrderBuilder(prisma)
@@ -921,7 +1019,7 @@ describe("Service Order Routes (Integration)", () => {
             });
 
             expect(quote?.status).toBe("SUBMISSION_PENDING");
-            expect(quote?.submittedAt).toBeNull();  
+            expect(quote?.submittedAt).toBeNull();
             expect(quote?.updatedAt).toBeTruthy();
         });
     });

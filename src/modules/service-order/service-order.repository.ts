@@ -29,6 +29,7 @@ import { ServiceOrderStatus, QuoteStatus, DiagnosisResult, QuoteItemComponentTyp
 import { getPrisma } from "../../shared/config/database.js";
 import { Prisma, PrismaClient } from "../../generated/prisma/client.js";
 import { isNotFoundError } from "../../shared/utils/prisma-error.js";
+import { notFound } from "../../shared/errors/errors.js";
 
 type PrismaClientOrTx = PrismaClient | Prisma.TransactionClient;
 
@@ -418,9 +419,9 @@ const markOutboxQuoteAsConsumed = async (ids: number[]): Promise<void> => {
 
 const markQuoteSubmittedById = async (id: string, tx: Prisma.TransactionClient): Promise<boolean> => {
     const result = await tx.quote.updateMany({
-        where: { 
+        where: {
             id,
-            status: QuoteStatus.SUBMISSION_PENDING, 
+            status: QuoteStatus.SUBMISSION_PENDING,
             submittedAt: null,
         },
         data: {
@@ -431,6 +432,132 @@ const markQuoteSubmittedById = async (id: string, tx: Prisma.TransactionClient):
     });
 
     return result.count > 0;
+};
+
+const lockServiceOrderIfInStatuses = async (
+    serviceOrderId: string,
+    allowedStatuses: ServiceOrderStatus[],
+    tx: Prisma.TransactionClient
+): Promise<ServiceOrderStatus | null> => {
+    // Same pattern as lockQuoteIfDraft: the UPDATE acquires the row lock,
+    // the WHERE status guard validates, and RETURNING gives the real
+    // status (read under lock) for use as fromStatus in the audit history.
+    // Raw SQL because updateMany doesn't support RETURNING.
+    const rows = await tx.$queryRaw<{ status: ServiceOrderStatus }[]>`
+        UPDATE service_orders
+        SET updated_at = NOW()
+        WHERE id = ${serviceOrderId}::uuid
+          AND status::text = ANY(${allowedStatuses}::text[])
+        RETURNING status
+    `;
+
+    return rows[0]?.status ?? null;
+};
+
+const supersedeQuote = async (quoteId: string, tx: Prisma.TransactionClient): Promise<boolean> => {
+    const result = await tx.quote.updateMany({
+        where: {
+            id: quoteId,
+            status: {
+                in: [QuoteStatus.SENT, QuoteStatus.SUBMISSION_PENDING],
+            },
+        },
+        data: {
+            status: QuoteStatus.SUPERSEDED,
+            updatedAt: new Date(),
+        },
+    });
+
+    return result.count > 0;
+};
+
+// Returns only the QuoteRecord (v1). The front-end hasn't been built
+// yet, so we don't know if a full payload (items + components) will be
+// needed here or fetched separately via GET. Revisit when that's clear.
+const cloneQuote = async (quoteId: string, revisedById: string, tx: Prisma.TransactionClient): Promise<QuoteRecord> => {
+    // Single statement to clone quote, items and components. item_map
+    // MATERIALIZED fixes (old_id, new_id) once so both inserts share the
+    // same mapping. finding_id can't be used for correlation: it is
+    // nullable and not unique per quote.
+    const rows = await tx.$queryRaw<QuoteRecord[]>`
+        WITH
+        item_map AS MATERIALIZED (
+            SELECT
+                id                AS old_id,
+                gen_random_uuid() AS new_id,
+                finding_id,
+                description
+            FROM quote_items
+            WHERE quote_id = ${quoteId}::uuid
+        ),
+        new_quote AS (
+            INSERT INTO quotes (
+                service_order_id,
+                diagnosis_id,
+                status,
+                created_by,
+                created_at
+            )
+            SELECT
+                q.service_order_id,
+                q.diagnosis_id,
+                'DRAFT',
+                ${revisedById}::uuid,
+                NOW()
+            FROM quotes q
+            WHERE q.id = ${quoteId}::uuid
+            RETURNING
+                id,
+                service_order_id AS "serviceOrderId",
+                diagnosis_id     AS "diagnosisId",
+                status,
+                submitted_at     AS "submittedAt",
+                responded_at     AS "respondedAt",
+                created_by       AS "createdById",
+                created_at       AS "createdAt",
+                updated_at       AS "updatedAt"
+        ),
+        new_items AS (
+            INSERT INTO quote_items (
+                id, quote_id, finding_id, description, decision, created_by, created_at
+            )
+            SELECT
+                im.new_id,
+                nq.id,
+                im.finding_id,
+                im.description,
+                'PENDING',
+                ${revisedById}::uuid,
+                NOW()
+            FROM item_map im
+            CROSS JOIN new_quote nq
+            RETURNING id
+        ),
+        new_components AS (
+            INSERT INTO quote_item_components (
+                quote_item_id, type, description, quantity, unit_price, created_at
+            )
+            SELECT
+                im.new_id,
+                qic.type,
+                qic.description,
+                qic.quantity,
+                qic.unit_price,
+                NOW()
+            FROM item_map im
+            JOIN quote_item_components qic ON qic.quote_item_id = im.old_id
+            RETURNING id
+        )
+        SELECT * FROM new_quote;
+    `;
+
+    // Unreachable in practice: supersedeQuote already hit this id in the
+    // same transaction. Throw (not null) so the contract fails loudly.
+    if (!rows[0]) {
+        throw notFound({ message: "Quote not found" });
+    }
+
+    return rows[0];
 };
 
 // Reader
@@ -643,6 +770,9 @@ export default {
     requestQuoteSubmission,
     markOutboxQuoteAsConsumed,
     markQuoteSubmittedById,
+    lockServiceOrderIfInStatuses,
+    supersedeQuote,
+    cloneQuote,
     // Reader
     findById,
     list,

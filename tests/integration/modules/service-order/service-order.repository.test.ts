@@ -2146,6 +2146,380 @@ describe("Service Order Repository (Integration)", () => {
                 expect(after?.updatedAt).toBeNull();
             });
         });
+
+        describe("lockServiceOrderIfInStatuses", () => {
+            it("should lock the row, set updated_at and return the actual status when it matches", async () => {
+                const { serviceOrder } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "TECHNICIAN" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "IN_DIAGNOSIS" })
+                    .build();
+
+                const serviceOrderId = serviceOrder!.id;
+
+                const before = await prisma.serviceOrder.findUnique({ where: { id: serviceOrderId } });
+                expect(before?.status).toBe("IN_DIAGNOSIS");
+                expect(before?.updatedAt).toBeNull();
+
+                const locked = await prisma.$transaction((tx) =>
+                    serviceOrderRepository.lockServiceOrderIfInStatuses(
+                        serviceOrderId,
+                        ["IN_DIAGNOSIS"],
+                        tx,
+                    ),
+                );
+
+                expect(locked).toBe("IN_DIAGNOSIS");
+
+                const after = await prisma.serviceOrder.findUnique({ where: { id: serviceOrderId } });
+                expect(after?.status).toBe("IN_DIAGNOSIS");
+                expect(after?.updatedAt).toBeTruthy();
+            });
+
+            it("should return the actual status (read under lock) when multiple statuses are allowed", async () => {
+                const { serviceOrder } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "TECHNICIAN" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "AWAITING_QUOTE" })
+                    .build();
+
+                const locked = await prisma.$transaction((tx) =>
+                    serviceOrderRepository.lockServiceOrderIfInStatuses(
+                        serviceOrder!.id,
+                        ["WAITING_DIAGNOSIS", "IN_DIAGNOSIS", "AWAITING_QUOTE"],
+                        tx,
+                    ),
+                );
+
+                expect(locked).toBe("AWAITING_QUOTE");
+            });
+
+            it("should return null and leave the row untouched when the status is not allowed", async () => {
+                const { serviceOrder } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "TECHNICIAN" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "DELIVERED" })
+                    .build();
+
+                const serviceOrderId = serviceOrder!.id;
+
+                const locked = await prisma.$transaction((tx) =>
+                    serviceOrderRepository.lockServiceOrderIfInStatuses(
+                        serviceOrderId,
+                        ["WAITING_DIAGNOSIS", "IN_DIAGNOSIS"],
+                        tx,
+                    ),
+                );
+
+                expect(locked).toBeNull();
+
+                const after = await prisma.serviceOrder.findUnique({ where: { id: serviceOrderId } });
+                expect(after?.status).toBe("DELIVERED");
+                expect(after?.updatedAt).toBeNull();
+            });
+
+            it("should return null when the service order does not exist", async () => {
+                const locked = await prisma.$transaction((tx) =>
+                    serviceOrderRepository.lockServiceOrderIfInStatuses(
+                        "0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa",
+                        ["WAITING_DIAGNOSIS"],
+                        tx,
+                    ),
+                );
+
+                expect(locked).toBeNull();
+            });
+
+            it("should rollback the lock when the transaction throws", async () => {
+                const { serviceOrder } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "TECHNICIAN" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "IN_DIAGNOSIS" })
+                    .build();
+
+                const serviceOrderId = serviceOrder!.id;
+
+                await expect(
+                    prisma.$transaction(async (tx) => {
+                        await serviceOrderRepository.lockServiceOrderIfInStatuses(
+                            serviceOrderId,
+                            ["IN_DIAGNOSIS"],
+                            tx,
+                        );
+                        throw new Error("rollback");
+                    }),
+                ).rejects.toThrow("rollback");
+
+                const after = await prisma.serviceOrder.findUnique({ where: { id: serviceOrderId } });
+                expect(after?.status).toBe("IN_DIAGNOSIS");
+                expect(after?.updatedAt).toBeNull();
+            });
+        });
+
+        describe("supersedeQuote", () => {
+            it("should supersede a SENT quote and return true", async () => {
+                const { quotes } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "ATTENDANT" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "AWAITING_APPROVAL" })
+                    .withDiagnosis()
+                    .withQuote({ status: "SENT", submittedAt: new Date() })
+                    .build();
+
+                const quoteId = quotes[0]!.id;
+
+                const before = await prisma.quote.findUnique({ where: { id: quoteId } });
+                expect(before?.status).toBe("SENT");
+                expect(before?.updatedAt).toBeNull();
+
+                const superseded = await prisma.$transaction((tx) =>
+                    serviceOrderRepository.supersedeQuote(quoteId, tx),
+                );
+
+                expect(superseded).toBe(true);
+
+                const after = await prisma.quote.findUnique({ where: { id: quoteId } });
+                expect(after?.status).toBe("SUPERSEDED");
+                expect(after?.updatedAt).toBeTruthy();
+            });
+
+            it("should return false and leave the quote untouched when the status is not supersedable", async () => {
+                const { quotes } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "ATTENDANT" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "AWAITING_QUOTE" })
+                    .withDiagnosis()
+                    .withQuote({ status: "DRAFT" })
+                    .build();
+
+                const quoteId = quotes[0]!.id;
+
+                const superseded = await prisma.$transaction((tx) =>
+                    serviceOrderRepository.supersedeQuote(quoteId, tx),
+                );
+
+                expect(superseded).toBe(false);
+
+                const after = await prisma.quote.findUnique({ where: { id: quoteId } });
+                expect(after?.status).toBe("DRAFT");
+                expect(after?.updatedAt).toBeNull();
+            });
+
+            it("should return false when the quote does not exist", async () => {
+                const superseded = await prisma.$transaction((tx) =>
+                    serviceOrderRepository.supersedeQuote(
+                        "0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa",
+                        tx,
+                    ),
+                );
+
+                expect(superseded).toBe(false);
+            });
+
+            it("should rollback the supersede when the transaction throws", async () => {
+                const { quotes } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "ATTENDANT" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "AWAITING_APPROVAL" })
+                    .withDiagnosis()
+                    .withQuote({ status: "SENT", submittedAt: new Date() })
+                    .build();
+
+                const quoteId = quotes[0]!.id;
+
+                await expect(
+                    prisma.$transaction(async (tx) => {
+                        await serviceOrderRepository.supersedeQuote(quoteId, tx);
+                        throw new Error("rollback");
+                    }),
+                ).rejects.toThrow("rollback");
+
+                const after = await prisma.quote.findUnique({ where: { id: quoteId } });
+                expect(after?.status).toBe("SENT");
+                expect(after?.updatedAt).toBeNull();
+            });
+        });
+
+        describe("cloneQuote", () => {
+            let reviewerId: string;
+
+            beforeEach(async () => {
+                const reviewer = await prisma.user.create({
+                    data: {
+                        firstName: "Jane",
+                        lastName: "Reviewer",
+                        email: "jane.reviewer@example.com",
+                        passwordHash: "passwordHash",
+                        role: "TECHNICIAN",
+                        active: true,
+                    },
+                    select: { id: true },
+                });
+
+                reviewerId = reviewer.id;
+            });
+
+            it("should clone a SUPERSEDED quote into a new DRAFT, resetting decision and overriding created_by", async () => {
+                const { user, diagnosis, serviceOrder, findings, quotes, quoteItems } =
+                    await new ServiceOrderBuilder(prisma)
+                        .withUser({ role: "ATTENDANT" })
+                        .withCustomer()
+                        .withDevice()
+                        .withServiceOrder({ status: "AWAITING_QUOTE" })
+                        .withDiagnosis({ result: "FAULT_FOUND" })
+                        .withFinding({ description: "Battery degraded", repairable: true })
+                        .withFinding({ description: "Screen cracked", repairable: true })
+                        .withQuote({ status: "SUPERSEDED" })
+                        .withQuoteItem({
+                            quoteIndex: 0,
+                            findingIndex: 0,
+                            description: "Battery replacement",
+                            decision: "APPROVED",
+                            components: [
+                                { type: "PART", description: "Battery", quantity: 1, unitPrice: 80 },
+                                { type: "LABOR", description: "Replacement labor", quantity: 2, unitPrice: 25.5 },
+                            ],
+                        })
+                        .withQuoteItem({
+                            quoteIndex: 0,
+                            findingIndex: 1,
+                            description: "Screen replacement",
+                            components: [
+                                { type: "PART", description: "Screen", quantity: 3, unitPrice: 120 },
+                            ],
+                        })
+                        .build();
+
+                const sourceQuoteId = quotes[0]!.id;
+
+                const cloned = await prisma.$transaction((tx) =>
+                    serviceOrderRepository.cloneQuote(sourceQuoteId, reviewerId, tx),
+                );
+
+                // --- New quote row ---
+                expect(cloned.id).not.toBe(sourceQuoteId);
+                expect(cloned.serviceOrderId).toBe(serviceOrder!.id);
+                expect(cloned.diagnosisId).toBe(diagnosis!.id);
+                expect(cloned.status).toBe("DRAFT");
+                expect(cloned.createdById).toBe(reviewerId);
+                expect(cloned.createdById).not.toBe(user.id);
+                expect(cloned.submittedAt).toBeNull();
+                expect(cloned.respondedAt).toBeNull();
+                expect(cloned.createdAt).toBeTruthy();
+                expect(cloned.updatedAt).toBeNull();
+
+                // --- Cloned items + components: fresh ids, decision reset, FKs preserved,
+                // components correlated to the right parent and all fields copied ---
+                const clonedItems = await prisma.quoteItem.findMany({
+                    where: { quoteId: cloned.id },
+                    include: { quoteItemComponents: true },
+                });
+                expect(clonedItems).toHaveLength(2);
+
+                const clonedBattery = clonedItems.find((i) => i.description === "Battery replacement")!;
+                expect(clonedBattery.id).not.toBe(quoteItems[0].id);
+                expect(clonedBattery.findingId).toBe(findings[0].id);
+                expect(clonedBattery.decision).toBe("PENDING");
+                expect(clonedBattery.createdById).toBe(reviewerId);
+                expect(clonedBattery.quoteItemComponents).toHaveLength(2);
+
+                const batteryPart = clonedBattery.quoteItemComponents.find((c) => c.type === "PART")!;
+                expect(batteryPart.description).toBe("Battery");
+                expect(batteryPart.quantity).toBe(1);
+                expect(batteryPart.unitPrice.toString()).toBe("80");
+
+                const batteryLabor = clonedBattery.quoteItemComponents.find((c) => c.type === "LABOR")!;
+                expect(batteryLabor.description).toBe("Replacement labor");
+                expect(batteryLabor.quantity).toBe(2);
+                expect(batteryLabor.unitPrice.toString()).toBe("25.5");
+
+                const clonedScreen = clonedItems.find((i) => i.description === "Screen replacement")!;
+                expect(clonedScreen.id).not.toBe(quoteItems[1].id);
+                expect(clonedScreen.findingId).toBe(findings[1].id);
+                expect(clonedScreen.decision).toBe("PENDING");
+                expect(clonedScreen.quoteItemComponents).toHaveLength(1);
+
+                const screenPart = clonedScreen.quoteItemComponents[0];
+                expect(screenPart.type).toBe("PART");
+                expect(screenPart.description).toBe("Screen");
+                expect(screenPart.quantity).toBe(3);
+                expect(screenPart.unitPrice.toString()).toBe("120");
+
+                // --- Source row untouched ---
+                const sourceAfter = await prisma.quote.findUnique({ where: { id: sourceQuoteId } });
+                expect(sourceAfter?.status).toBe("SUPERSEDED");
+                expect(sourceAfter?.createdById).toBe(user.id);
+            });
+
+            it("should clone a quote with no items into an empty DRAFT quote", async () => {
+                const { quotes } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "ATTENDANT" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "AWAITING_QUOTE" })
+                    .withDiagnosis()
+                    .withQuote({ status: "SUPERSEDED" })
+                    .build();
+
+                const cloned = await prisma.$transaction((tx) =>
+                    serviceOrderRepository.cloneQuote(quotes[0]!.id, reviewerId, tx),
+                );
+
+                expect(cloned.status).toBe("DRAFT");
+
+                const clonedItems = await prisma.quoteItem.findMany({
+                    where: { quoteId: cloned.id },
+                });
+                expect(clonedItems).toEqual([]);
+            });
+
+            it("should throw notFound when the source quote does not exist", async () => {
+                await expect(
+                    prisma.$transaction((tx) =>
+                        serviceOrderRepository.cloneQuote(
+                            "0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa",
+                            reviewerId,
+                            tx,
+                        ),
+                    ),
+                ).rejects.toThrow("Quote not found");
+            });
+
+            it("should rollback the clone when the transaction throws", async () => {
+                const { quotes } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "ATTENDANT" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "AWAITING_QUOTE" })
+                    .withDiagnosis()
+                    .withQuote({ status: "SUPERSEDED" })
+                    .withQuoteItem({
+                        quoteIndex: 0,
+                        description: "Item",
+                        components: [
+                            { type: "PART", description: "Part", quantity: 1, unitPrice: 10 },
+                        ],
+                    })
+                    .build();
+
+                await expect(
+                    prisma.$transaction(async (tx) => {
+                        await serviceOrderRepository.cloneQuote(quotes[0]!.id, reviewerId, tx);
+                        throw new Error("rollback");
+                    }),
+                ).rejects.toThrow("rollback");
+
+                // Only the source quote + item + component survive (all cloned rows rolled back).
+                expect(await prisma.quote.count()).toBe(1);
+            });
+        });
     });
 
     describe("Reader repository", () => {

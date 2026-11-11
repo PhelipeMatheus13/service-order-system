@@ -1353,4 +1353,68 @@ describe("Service Order Controller (Unit)", () => {
             expect(res.status).not.toHaveBeenCalled();
         });
     });
+
+    describe("reviseQuote", () => {
+        it("should return 201 on successful quote revision", async () => {
+            req.params.id = "uuid-quote-123";
+            req.user = { id: "uuid-user-123" };
+
+            const mockNewQuoteRecord = {
+                id: "uuid-new-quote-123",
+                serviceOrderId: "uuid-service-order-123",
+                diagnosisId: "uuid-diagnosis-123",
+                status: "DRAFT",
+                submittedAt: null,
+                respondedAt: null,
+                createdById: "uuid-user-123",
+                createdAt: new Date(),
+                updatedAt: null,
+            } as QuoteRecord;
+
+            vi.mocked(serviceOrderService).reviseQuote.mockResolvedValue(mockNewQuoteRecord);
+
+            await serviceOrderController.reviseQuote(req, res, next);
+
+            expect(serviceOrderService.reviseQuote).toHaveBeenCalledWith({
+                quoteId: "uuid-quote-123",
+                revisedById: "uuid-user-123",
+            });
+
+            expect(res.status).toHaveBeenCalledWith(201);
+            expect(res.json).toHaveBeenCalledWith({
+                success: true,
+                data: mockNewQuoteRecord,
+                message: "Quote successfully revised",
+            });
+            expect(next).not.toHaveBeenCalled();
+        });
+
+        it("should call next with badRequest error if id is missing", async () => {
+            req.params = {};
+            req.user = { id: "uuid-user-123" };
+
+            await serviceOrderController.reviseQuote(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(expect.objectContaining({
+                statusCode: 400,
+                code: "BAD_REQUEST",
+                message: "Quote ID is required",
+            }));
+            expect(serviceOrderService.reviseQuote).not.toHaveBeenCalled();
+            expect(res.status).not.toHaveBeenCalled();
+        });
+
+        it("should propagate error when service fails", async () => {
+            req.params.id = "uuid-quote-123";
+            req.user = { id: "uuid-user-123" };
+
+            const error = new Error("Service error");
+            vi.mocked(serviceOrderService).reviseQuote.mockRejectedValue(error);
+
+            await serviceOrderController.reviseQuote(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(error);
+            expect(res.status).not.toHaveBeenCalled();
+        });
+    });
 });

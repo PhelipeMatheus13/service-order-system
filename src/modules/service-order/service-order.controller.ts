@@ -247,6 +247,20 @@ const requestQuoteSubmission = asyncHandler(async (req, res) => {
     });
 });
 
+const reviseQuote = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (!id) throw badRequest({ message: "Quote ID is required" });
+    const newQuote = await serviceOrderService.reviseQuote({
+        quoteId: String(id),
+        revisedById: String(req.user?.id),
+    });
+    res.status(201).json({
+        success: true,
+        data: newQuote,
+        message: "Quote successfully revised",
+    });
+});
+
 export default {
     createServiceOrder,
     getServiceOrderById,
@@ -268,4 +282,5 @@ export default {
     updateQuoteItemAndComponents,
     deleteQuoteItem,
     requestQuoteSubmission,
+    reviseQuote,
 };

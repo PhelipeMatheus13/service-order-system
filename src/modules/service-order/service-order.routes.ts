@@ -288,7 +288,53 @@ registry.registerPath({
         500: { $ref: "#/components/responses/internalError" },
     }
 });
-router.post("/quotes/:id/items", checkAccessToken, authorize("ADMIN", "ATTENDANT"), validate(createQuoteItemAndComponentsSchema), serviceOrderController.createQuoteItem)
+router.post("/quotes/:id/items", checkAccessToken, authorize("ADMIN", "ATTENDANT"), validate(createQuoteItemAndComponentsSchema), serviceOrderController.createQuoteItem);
+
+registry.registerPath({
+    tags: ["Quote"],
+    method: "post",
+    path: "/service-orders/quotes/:id/revise",
+    summary: "Revise a quote (requires ADMIN or ATTENDANT role)",
+    security: [{ bearerAuth: [] }],
+    request: {
+        params: z.object({ id: z.string() }),
+        body: {
+            content: { "application/json": { schema: createQuoteItemAndComponentsSchema } },
+        },
+    },
+    responses: {
+        201: {
+            description: "Quote successfully revised",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        success: z.boolean().openapi({ example: true }),
+                        data: quoteSchema,
+                        message: z.string().openapi({ example: "Quote successfully revised" }),
+                    }),
+                },
+            },
+        },
+        400: { $ref: "#/components/responses/missingQuoteIdError" },
+        401: {
+            description: "Authentication failed",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
+                        invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
+                        accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
+                    },
+                },
+            },
+        },
+        404: { $ref: "#/components/responses/quoteOrServiceOrderNotFoundError" },
+        409: { $ref: "#/components/responses/reviseQuoteConflictError" },
+        500: { $ref: "#/components/responses/internalError" },
+    }
+});
+router.post("/quotes/:id/revise", checkAccessToken, authorize("ADMIN", "ATTENDANT"), serviceOrderController.reviseQuote);
 
 // GET 
 registry.registerPath({

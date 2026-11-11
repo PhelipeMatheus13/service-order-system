@@ -185,6 +185,11 @@ interface QuoteEmailPayload {
     }
 }
 
+interface reviseQuoteInput {
+    quoteId: string, 
+    revisedById: string
+}
+
 export {
     ServiceOrderStatus,
     ServiceOrderStatusChangeSource,
@@ -221,4 +226,5 @@ export type {
     UpdateQuoteStatusData,
     OutboxQuote as OutboxQuoteRecord,
     QuoteEmailPayload, 
+    reviseQuoteInput,
 };

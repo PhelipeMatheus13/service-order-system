@@ -19,6 +19,7 @@ import {
     ListQuoteItemsByQuoteIdInput,
     RequestQuoteSubmissionInput,
     UpdateQuoteItemAndComponentsInput,
+    reviseQuoteInput,
 } from "./service-order.types.js";
 import { ServiceOrderStatus, QuoteStatus } from "./service-order.types.js";
 import { getPrisma } from "../../shared/config/database.js";
@@ -538,6 +539,81 @@ const requestQuoteSubmission = async (input: RequestQuoteSubmissionInput): Promi
     }
 };
 
+const reviseQuote = async (input: reviseQuoteInput): Promise<QuoteRecord> => {
+    const quote = await serviceOrderRepository.findQuoteById(input.quoteId);
+    if (!quote) {
+        throw notFound({ message: "Quote not found" });
+    }
+
+    if (quote.status !== QuoteStatus.SUBMISSION_PENDING && quote.status !== QuoteStatus.SENT) {
+        throw conflict({ message: "Quote is not in a valid status for revision" });
+    }
+
+    const serviceOrder = await serviceOrderRepository.findById(quote.serviceOrderId);
+    if (!serviceOrder) {
+        throw notFound({ message: "Service order not found" });
+    }
+
+    if (serviceOrder.status !== ServiceOrderStatus.AWAITING_QUOTE && serviceOrder.status !== ServiceOrderStatus.AWAITING_APPROVAL) {
+        throw conflict({ message: "Service order is not in a valid status for quote revision" });
+    }
+
+    // TODO: consider adding try catch to cover error scenarios in the prisma 
+    return await getPrisma().$transaction(async (tx) => {
+        const suspended = await serviceOrderRepository.supersedeQuote(input.quoteId, tx);
+        if (!suspended) {
+            throw conflict({ message: "Quote is no longer in a valid status for revision" });
+        }
+
+        const newQuote = await serviceOrderRepository.cloneQuote(input.quoteId, input.revisedById, tx);
+
+        // Lock the SO and read its real status under lock. Fixes the stale
+        // fromStatus: even if the subscriber transitioned the SO between
+        // the pre-check and now, we read what's actually there.
+        const fromStatus = await serviceOrderRepository.lockServiceOrderIfInStatuses(
+            serviceOrder.id,
+            [ServiceOrderStatus.AWAITING_QUOTE, ServiceOrderStatus.AWAITING_APPROVAL],
+            tx,
+        );
+
+        if (!fromStatus) {
+            throw conflict({ message: "Service order is no longer available for quote revision" });
+        }
+
+        if (fromStatus === ServiceOrderStatus.AWAITING_QUOTE) {
+            return newQuote
+        }
+
+        // atomic guard: only succeeds if the service order is still in one
+        // of the statuses accepted for revision (held under lock).
+        const statusUpdated = await serviceOrderRepository.updateServiceOrderStatus(
+            {
+                serviceOrderId: serviceOrder.id,
+                expectedStatuses: [fromStatus],
+                toStatus: ServiceOrderStatus.AWAITING_QUOTE,
+            },
+            tx,
+        );
+
+        if (!statusUpdated) {
+            throw conflict({ message: "Service order is no longer available for quote revision" });
+        }
+
+        await serviceOrderRepository.createServiceOrderStatusHistory(
+            {
+                serviceOrderId: serviceOrder.id,
+                fromStatus,
+                toStatus: ServiceOrderStatus.AWAITING_QUOTE,
+                changeSource: "USER",
+                changedById: input.revisedById,
+            },
+            tx,
+        );
+
+        return newQuote;
+    });
+};
+
 export default {
     createServiceOrder,
     getServiceOrderById,
@@ -560,4 +636,5 @@ export default {
     updateQuoteItemAndComponents,
     deleteQuoteItem,
     requestQuoteSubmission,
+    reviseQuote,
 };

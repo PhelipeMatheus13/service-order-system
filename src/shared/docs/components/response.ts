@@ -330,6 +330,37 @@ const updateQuoteItemAndComponentsNotFoundError = registry.registerComponent("re
     },
 });
 
+const quoteOrServiceOrderNotFoundError = registry.registerComponent("responses", "quoteOrServiceOrderNotFoundError", {
+    description: "Quote or service order not found or does not exist",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            examples: {
+                quoteNotFound: {
+                    summary: "Quote not found",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "NOT_FOUND",
+                            message: "Quote not found",
+                        },
+                    },
+                },
+                findingNotFound: {
+                    summary: "Service order not found",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "NOT_FOUND",
+                            message: "Service order not found",
+                        },
+                    },
+                },
+            },
+        },
+    },
+});
+
 // 409
 const emailAlreadyExistsError = registry.registerComponent("responses", "emailAlreadyExistsError", {
     description: "Email already in use",
@@ -680,6 +711,57 @@ const requestQuoteSubmissionConflictError = registry.registerComponent("response
                         error: {
                             code: "CONFLICT",
                             message: "Quote is no longer in DRAFT status",
+                        },
+                    },
+                },
+            },
+        },
+    },
+});
+
+const reviseQuoteConflictError = registry.registerComponent("responses", "reviseQuoteConflictError", {
+    description: "Quote cannot be revised",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            examples: {
+                quoteInvalidStatus: {
+                    summary: "Quote is not in SENT or SUBMISSION_PENDING",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Quote is not in a valid status for revision",
+                        },
+                    },
+                },
+                serviceOrderInvalidStatus: {
+                    summary: "Service order is not in AWAITING_QUOTE or AWAITING_APPROVAL",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Service order is not in a valid status for quote revision",
+                        },
+                    },
+                },
+                quoteSupersededConcurrently: {
+                    summary: "Quote was superseded or decided by another request (race condition)",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Quote is no longer in a valid status for revision",
+                        },
+                    },
+                },
+                serviceOrderLockFailed: {
+                    summary: "Service order moved out of the accepted statuses under lock (race condition)",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Service order is no longer available for quote revision",
                         },
                     },
                 },
@@ -1143,6 +1225,7 @@ export {
     quoteOrFindingNotFoundError,
     quoteItemNotFoundError,
     updateQuoteItemAndComponentsNotFoundError,
+    quoteOrServiceOrderNotFoundError,
     // 409
     emailAlreadyExistsError,
     deviceUniqueConstraintError,
@@ -1154,6 +1237,7 @@ export {
     createQuoteItemAndComponentsConflictError,
     updateQuoteItemAndComponentsConflictError,
     requestQuoteSubmissionConflictError,
+    reviseQuoteConflictError,
     // 422
     registerValidationError,
     confirmEmailValidationError,
