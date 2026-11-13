@@ -16,12 +16,13 @@ import {
     CreateQuoteItemAndComponentsInput,
     QuoteItemWithComponents,
     ListQuotesByServiceOrderIdInput,
-    ListQuoteItemsByQuoteIdInput,
+    ListQuoteItemsWithComponentsByQuoteIdInput,
     RequestQuoteSubmissionInput,
     UpdateQuoteItemAndComponentsInput,
-    reviseQuoteInput,
+    ReviseQuoteInput,
+    QuoteDecisionInput,
 } from "./service-order.types.js";
-import { ServiceOrderStatus, QuoteStatus } from "./service-order.types.js";
+import { ServiceOrderStatus, QuoteStatus, QuoteItemDecision } from "./service-order.types.js";
 import { getPrisma } from "../../shared/config/database.js";
 import { notFound, unauthorized, conflict } from "../../shared/errors/errors.js";
 import { isForeignKeyConstraintOn, isUniqueConstraintOn, isNotFoundError } from "../../shared/utils/prisma-error.js";
@@ -388,6 +389,8 @@ const createQuote = async (input: CreateQuoteInput): Promise<QuoteRecord> => {
     }
 };
 
+// TODO: enforce UNIQUE (quote_id, finding_id) on quote_items — multiple items
+// per finding is conceptually wrong, tolerated only because superseded quotes coexist.
 const createQuoteItemAndComponents = async (input: CreateQuoteItemAndComponentsInput): Promise<QuoteItemWithComponents> => {
     const quote = await serviceOrderRepository.findQuoteById(input.quoteId);
     if (!quote) {
@@ -455,10 +458,10 @@ const getQuoteItemById = async (id: string): Promise<QuoteItemWithComponents> =>
     return QuoteItemWithComponents;
 };
 
-const listQuoteItemsByQuoteId = async (input: ListQuoteItemsByQuoteIdInput): Promise<QuoteItemWithComponents[]> => {
+const listQuoteItemsWithComponentsByQuoteId = async (input: ListQuoteItemsWithComponentsByQuoteIdInput): Promise<QuoteItemWithComponents[]> => {
     const quote = await serviceOrderRepository.findQuoteById(input.quoteId);
     if (!quote) throw notFound({ message: "Quote not found" });
-    return serviceOrderRepository.listQuoteItemsByQuoteId(input);
+    return serviceOrderRepository.listQuoteItemsWithComponentsByQuoteId(input);
 };
 
 const updateQuoteItemAndComponents = async (input: UpdateQuoteItemAndComponentsInput): Promise<QuoteItemWithComponents> => {
@@ -539,7 +542,7 @@ const requestQuoteSubmission = async (input: RequestQuoteSubmissionInput): Promi
     }
 };
 
-const reviseQuote = async (input: reviseQuoteInput): Promise<QuoteRecord> => {
+const reviseQuote = async (input: ReviseQuoteInput): Promise<QuoteRecord> => {
     const quote = await serviceOrderRepository.findQuoteById(input.quoteId);
     if (!quote) {
         throw notFound({ message: "Quote not found" });
@@ -614,6 +617,111 @@ const reviseQuote = async (input: reviseQuoteInput): Promise<QuoteRecord> => {
     });
 };
 
+const quoteDecision = async (input: QuoteDecisionInput): Promise<void> => {
+    const quote = await serviceOrderRepository.findQuoteById(input.quoteId);
+    if (!quote) {
+        throw notFound({ message: "Quote not found" });
+    }
+
+    if (quote.status !== QuoteStatus.SENT) {
+        throw conflict({ message: "Quote is not in a valid status for decision" });
+    }
+
+    const serviceOrder = await serviceOrderRepository.findById(quote.serviceOrderId);
+    if (!serviceOrder) {
+        throw notFound({ message: "Service order not found" });
+    }
+
+    if (serviceOrder.status !== ServiceOrderStatus.AWAITING_APPROVAL) {
+        throw conflict({ message: "Service order is not in a valid status for quote decision" });
+    }
+
+    const quoteItems = await serviceOrderRepository.listQuoteItemsByQuoteId({
+        quoteId: quote.id,
+    });
+
+    // get the IDs persisted in the database and generate an array containing only those IDs
+    const persistedIds = new Set(quoteItems.map((i) => i.id));
+    // get the IDs from the input payload and generate an array containing only those IDs
+    const payloadIds = new Set(input.itemDecisions.map((i) => i.quoteItemId));
+
+    // eliminate duplicates in the payload
+    if (payloadIds.size !== input.itemDecisions.length) {
+        throw conflict({ message: "Payload contains duplicate quote item ids" });
+    }
+
+    // check if the payload contains all the persisted IDs
+    const missingIds = quoteItems.filter((i) => !payloadIds.has(i.id)).map((i) => i.id);
+    // check if the payload contains any unknown IDs
+    const unknownIds = input.itemDecisions.filter((i) => !persistedIds.has(i.quoteItemId)).map((i) => i.quoteItemId);
+
+    // If there are any missing or unknown IDs, throw a conflict error
+    if (missingIds.length > 0 || unknownIds.length > 0) {
+        throw conflict({
+            message: "Payload must include a decision for every quote item and no unknown ids",
+            details: {
+                missingIds,
+                unknownIds,
+            },
+        });
+    }
+
+    const approvedCount = input.itemDecisions.filter(
+        (i) => i.decision === QuoteItemDecision.APPROVED,
+    ).length;
+
+    const nextServiceOrderStatus = approvedCount > 0
+        ? ServiceOrderStatus.AWAITING_MAINTENANCE
+        : ServiceOrderStatus.AWAITING_DELIVERY;
+
+    try {
+        return await getPrisma().$transaction(async (tx) => {
+            const decided = await serviceOrderRepository.markQuoteDecided(quote.id, tx);
+            if (!decided) {
+                throw conflict({ message: "Quote is no longer in a valid status for decision" });
+            }
+
+            const applied = await serviceOrderRepository.applyQuoteItemDecisions(input, tx);
+            if (!applied) {
+                throw conflict({ message: "Quote item state changed during decision" });
+            }
+
+            const statusUpdated = await serviceOrderRepository.updateServiceOrderStatus(
+                {
+                    serviceOrderId: serviceOrder.id,
+                    expectedStatuses: [ServiceOrderStatus.AWAITING_APPROVAL],
+                    toStatus: nextServiceOrderStatus,
+                },
+                tx,
+            );
+
+            if (!statusUpdated) {
+                throw conflict({ message: "Service order is no longer in a valid status for quote decision" });
+            }
+
+            await serviceOrderRepository.createServiceOrderStatusHistory(
+                {
+                    serviceOrderId: serviceOrder.id,
+                    fromStatus: ServiceOrderStatus.AWAITING_APPROVAL,
+                    toStatus: nextServiceOrderStatus,
+                    changeSource: "USER", // V1: initially a decision must be made by a user "ATENDANT" or "ADMIN".
+                    changedById: input.decisionRegisteredById,
+                },
+                tx,
+            );
+        });
+    } catch (error) {
+        if (isForeignKeyConstraintOn(error, "changed_by")) {
+            throw unauthorized({
+                message: "Authenticated user no longer exists",
+                code: "USER_NOT_FOUND",
+            });
+        }
+        
+        throw error;
+    }
+};
+
 export default {
     createServiceOrder,
     getServiceOrderById,
@@ -632,9 +740,10 @@ export default {
     getQuoteById,
     listQuotesByServiceOrderId,
     getQuoteItemById,
-    listQuoteItemsByQuoteId,
+    listQuoteItemsWithComponentsByQuoteId,
     updateQuoteItemAndComponents,
     deleteQuoteItem,
     requestQuoteSubmission,
     reviseQuote,
+    quoteDecision,
 };

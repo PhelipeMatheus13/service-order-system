@@ -358,6 +358,37 @@ const updateQuoteItemAndComponentsSchema = registry.register(
 
 type UpdateQuoteItemAndComponentsRequest = z.infer<typeof updateQuoteItemAndComponentsSchema>;
 
+const quoteDecisionSchema = registry.register(
+    "QuoteDecisionSchema",
+    z.object({
+        itemDecisions: z
+            .array(
+                z.object({
+                    quoteItemId: z
+                        .string()
+                        .uuid("Quote Item ID must be a valid UUID")
+                        .openapi({ example: "550e8400-e29b-41d4-a716-446655440000" }),
+
+                    decision: z
+                        .enum(["APPROVED", "DECLINED"])
+                        .openapi({
+                            example: "APPROVED",
+                            description:
+                                "APPROVED or DECLINED. PENDING is rejected here even though it exists in the DB enum.",
+                        }),
+                })
+            )
+            .min(1, "At least one item decision is required")
+            .openapi({
+                description:
+                    "Decisions for every quote item of the quote. The service rejects the payload if any item is missing, duplicated, or unknown.",
+            }),
+    })
+);
+
+type QuoteDecisionRequest = z.infer<typeof quoteDecisionSchema>;
+
+
 export {
     serviceOrderSchema,
     diagnosisSchema,
@@ -372,6 +403,7 @@ export {
     quoteItemWithComponentsSchema,
     createQuoteItemAndComponentsSchema,
     updateQuoteItemAndComponentsSchema,
+    quoteDecisionSchema,
 };
 
 export type {
@@ -383,4 +415,5 @@ export type {
     CreateQuoteRequest,
     CreateQuoteItemAndComponentsRequest,
     UpdateQuoteItemAndComponentsRequest,
+    QuoteDecisionRequest,
 };

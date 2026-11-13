@@ -368,6 +368,78 @@ describe("Service Order Routes (Integration)", () => {
         });
     });
 
+    describe("POST /service-orders/quotes/:id/quote-decision", () => {
+        it("should decide the quote successfully", async () => {
+            const { user, serviceOrder, quotes, quoteItems } = await new ServiceOrderBuilder(prisma)
+                .withUser({ role: "ATTENDANT" })
+                .withCustomer()
+                .withDevice()
+                .withServiceOrder({ status: "AWAITING_APPROVAL" })
+                .withDiagnosis()
+                .withFinding({ description: "Battery degraded", repairable: true })
+                .withFinding({ description: "Screen cracked", repairable: true })
+                .withQuote({ status: "SENT", submittedAt: new Date() })
+                .withQuoteItem({
+                    quoteIndex: 0,
+                    findingIndex: 0,
+                    description: "Battery replacement",
+                    components: [
+                        { type: "PART", description: "Battery", quantity: 1, unitPrice: 80 },
+                    ],
+                })
+                .withQuoteItem({
+                    findingIndex: 1,
+                    description: "Screen replacement",
+                    components: [
+                        { type: "PART", description: "Screen", quantity: 1, unitPrice: 120 },
+                    ],
+                })
+                .build();
+
+            const accessToken = generateAccessToken(user.id, "ATTENDANT");
+            const quoteId = quotes[0]!.id;
+
+            const res = await request(app)
+                .post(`/service-orders/quotes/${quoteId}/quote-decision`)
+                .set("Authorization", `Bearer ${accessToken}`)
+                .send({
+                    itemDecisions: [
+                        { quoteItemId: quoteItems[0].id, decision: "APPROVED" },
+                        { quoteItemId: quoteItems[1].id, decision: "DECLINED" },
+                    ],
+                });
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(res.body.message).toBe("Quote decision successfully processed");
+
+            const quoteFound = await prisma.quote.findUnique({ where: { id: quoteId } });
+            expect(quoteFound?.status).toBe("DECIDED");
+            expect(quoteFound?.respondedAt).toBeTruthy();
+
+            const items = await prisma.quoteItem.findMany({
+                where: { quoteId },
+                orderBy: { createdAt: "asc" },
+            });
+            expect(items[0].decision).toBe("APPROVED");
+            expect(items[1].decision).toBe("DECLINED");
+
+            const soFound = await prisma.serviceOrder.findUnique({
+                where: { id: serviceOrder!.id },
+            });
+            expect(soFound?.status).toBe("AWAITING_MAINTENANCE");
+
+            const history = await prisma.serviceOrderStatusHistory.findFirst({
+                where: { serviceOrderId: serviceOrder!.id },
+                orderBy: { createdAt: "desc" },
+            });
+            expect(history?.fromStatus).toBe("AWAITING_APPROVAL");
+            expect(history?.toStatus).toBe("AWAITING_MAINTENANCE");
+            expect(history?.changeSource).toBe("USER");
+            expect(history?.changedById).toBe(user.id);
+        });
+    });
+
     describe("GET /service-orders/:id", () => {
         it("should return the service order data", async () => {
             const { user, customer, device, serviceOrder } = await new ServiceOrderBuilder(prisma)

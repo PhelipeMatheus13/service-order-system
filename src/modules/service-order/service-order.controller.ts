@@ -199,10 +199,10 @@ const getQuoteItemById = asyncHandler(async (req, res) => {
     });
 });
 
-const listQuoteItemsByQuoteId = asyncHandler(async (req, res) => {
+const listQuoteItemsWithComponentsByQuoteId = asyncHandler(async (req, res) => {
     const { id } = req.params;
     if (!id) throw badRequest({ message: "Quote ID is required" });
-    const quoteItemsWithComponents = await serviceOrderService.listQuoteItemsByQuoteId({
+    const quoteItemsWithComponents = await serviceOrderService.listQuoteItemsWithComponentsByQuoteId({
         quoteId: String(id),
     });
     res.status(200).json({
@@ -261,6 +261,17 @@ const reviseQuote = asyncHandler(async (req, res) => {
     });
 });
 
+const quoteDecision = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (!id) throw badRequest({ message: "Quote ID is required" });
+    const input = serviceOrderDTO.quoteDecisionDTO(req.body, String(id), String(req.user?.id));
+    await serviceOrderService.quoteDecision(input);
+    res.status(200).json({
+        success: true,
+        message: "Quote decision successfully processed",
+    });
+});
+
 export default {
     createServiceOrder,
     getServiceOrderById,
@@ -278,9 +289,10 @@ export default {
     getQuoteById,
     listQuotesByServiceOrderId,
     getQuoteItemById,
-    listQuoteItemsByQuoteId,
+    listQuoteItemsWithComponentsByQuoteId,
     updateQuoteItemAndComponents,
     deleteQuoteItem,
     requestQuoteSubmission,
     reviseQuote,
+    quoteDecision,
 };

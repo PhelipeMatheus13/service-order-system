@@ -16,6 +16,7 @@ import type {
     UpdateQuoteItemAndComponentsInput,
     UpdateQuoteStatusData,
     RequestQuoteSubmissionInput,
+    ApplyQuoteItemDecisionsData,
 } from "../../../../src/modules/service-order/service-order.types.js";
 // (shared / infra)
 import { PrismaClient } from "../../../../src/generated/prisma/client.js";
@@ -2520,6 +2521,283 @@ describe("Service Order Repository (Integration)", () => {
                 expect(await prisma.quote.count()).toBe(1);
             });
         });
+
+        describe("markQuoteDecided", () => {
+            it("should transition SENT to DECIDED, set respondedAt and updatedAt, and return true", async () => {
+                const { quotes } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "ATTENDANT" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "AWAITING_APPROVAL" })
+                    .withDiagnosis()
+                    .withQuote({ status: "SENT", submittedAt: new Date() })
+                    .build();
+
+                const quoteId = quotes[0]!.id;
+
+                const before = await prisma.quote.findUnique({ where: { id: quoteId } });
+                expect(before?.status).toBe("SENT");
+                expect(before?.respondedAt).toBeNull();
+                expect(before?.updatedAt).toBeNull();
+
+                const marked = await prisma.$transaction((tx) =>
+                    serviceOrderRepository.markQuoteDecided(quoteId, tx),
+                );
+
+                expect(marked).toBe(true);
+
+                const after = await prisma.quote.findUnique({ where: { id: quoteId } });
+                expect(after?.status).toBe("DECIDED");
+                expect(after?.respondedAt).toBeTruthy();
+                expect(after?.updatedAt).toBeTruthy();
+            });
+
+            it("should return false and leave the quote untouched when the status is not SENT", async () => {
+                const { quotes } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "ATTENDANT" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "AWAITING_QUOTE" })
+                    .withDiagnosis()
+                    .withQuote({ status: "DRAFT" })
+                    .build();
+
+                const quoteId = quotes[0]!.id;
+
+                const marked = await prisma.$transaction((tx) =>
+                    serviceOrderRepository.markQuoteDecided(quoteId, tx),
+                );
+
+                expect(marked).toBe(false);
+
+                const after = await prisma.quote.findUnique({ where: { id: quoteId } });
+                expect(after?.status).toBe("DRAFT");
+                expect(after?.respondedAt).toBeNull();
+                expect(after?.updatedAt).toBeNull();
+            });
+
+            it("should return false when the quote is SENT but already has respondedAt (inconsistent state)", async () => {
+                const { quotes } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "ATTENDANT" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "AWAITING_APPROVAL" })
+                    .withDiagnosis()
+                    .withQuote({
+                        status: "SENT",
+                        submittedAt: new Date(),
+                        respondedAt: new Date(),
+                    })
+                    .build();
+
+                const quoteId = quotes[0]!.id;
+
+                const marked = await prisma.$transaction((tx) =>
+                    serviceOrderRepository.markQuoteDecided(quoteId, tx),
+                );
+
+                expect(marked).toBe(false);
+
+                const after = await prisma.quote.findUnique({ where: { id: quoteId } });
+                expect(after?.status).toBe("SENT");
+            });
+
+            it("should return false when the quote does not exist", async () => {
+                const marked = await prisma.$transaction((tx) =>
+                    serviceOrderRepository.markQuoteDecided(
+                        "0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa",
+                        tx,
+                    ),
+                );
+
+                expect(marked).toBe(false);
+            });
+
+            it("should rollback when the transaction throws", async () => {
+                const { quotes } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "ATTENDANT" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "AWAITING_APPROVAL" })
+                    .withDiagnosis()
+                    .withQuote({ status: "SENT", submittedAt: new Date() })
+                    .build();
+
+                const quoteId = quotes[0]!.id;
+
+                await expect(
+                    prisma.$transaction(async (tx) => {
+                        await serviceOrderRepository.markQuoteDecided(quoteId, tx);
+                        throw new Error("rollback");
+                    }),
+                ).rejects.toThrow("rollback");
+
+                const after = await prisma.quote.findUnique({ where: { id: quoteId } });
+                expect(after?.status).toBe("SENT");
+                expect(after?.respondedAt).toBeNull();
+                expect(after?.updatedAt).toBeNull();
+            });
+        });
+
+        describe("applyQuoteItemDecisions", () => {
+            const setupQuoteWithItems = async () => {
+                return new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "ATTENDANT" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "AWAITING_APPROVAL" })
+                    .withDiagnosis()
+                    .withFinding({ repairable: true })
+                    .withQuote({ status: "SENT", submittedAt: new Date() })
+                    .withQuoteItem({
+                        quoteIndex: 0,
+                        findingIndex: 0,
+                        description: "Item A",
+                        components: [{ type: "PART", description: "Part A", quantity: 1, unitPrice: 10 }],
+                    })
+                    .withQuoteItem({
+                        quoteIndex: 0,
+                        findingIndex: 0,
+                        description: "Item B",
+                        components: [{ type: "PART", description: "Part B", quantity: 1, unitPrice: 20 }],
+                    })
+                    .build();
+            };
+
+            it("should apply all decisions and return true", async () => {
+                const { quotes, quoteItems } = await setupQuoteWithItems();
+                const quoteId = quotes[0]!.id;
+
+                const input: ApplyQuoteItemDecisionsData = {
+                    quoteId,
+                    itemDecisions: [
+                        { quoteItemId: quoteItems[0].id, decision: "APPROVED" },
+                        { quoteItemId: quoteItems[1].id, decision: "APPROVED" },
+                    ],
+                };
+
+                const applied = await prisma.$transaction((tx) =>
+                    serviceOrderRepository.applyQuoteItemDecisions(input, tx),
+                );
+
+                expect(applied).toBe(true);
+
+                const items = await prisma.quoteItem.findMany({
+                    where: { quoteId },
+                    orderBy: { createdAt: "asc" },
+                });
+                expect(items[0].decision).toBe("APPROVED");
+                expect(items[1].decision).toBe("APPROVED");
+                expect(items[0].updatedAt).toBeTruthy();
+                expect(items[1].updatedAt).toBeTruthy();
+            });
+
+            it("should return true when the decisions array is empty", async () => {
+                const { quotes } = await setupQuoteWithItems();
+
+                const input: ApplyQuoteItemDecisionsData = {
+                    quoteId: quotes[0]!.id,
+                    itemDecisions: [],
+                };
+
+                const applied = await prisma.$transaction((tx) =>
+                    serviceOrderRepository.applyQuoteItemDecisions(input, tx),
+                );
+
+                expect(applied).toBe(true);
+            });
+
+            it("should return false and not update an item from a different quote", async () => {
+                const scenarioA = await setupQuoteWithItems();
+
+                const scenarioB = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "ATTENDANT", email: "other.user@example.com" })
+                    .withCustomer({ email: "other.customer@example.com" })
+                    .withDevice()
+                    .withServiceOrder({ status: "AWAITING_APPROVAL" })
+                    .withDiagnosis()
+                    .withFinding({ repairable: true })
+                    .withQuote({ status: "SENT", submittedAt: new Date() })
+                    .withQuoteItem({
+                        quoteIndex: 0,
+                        findingIndex: 0,
+                        description: "Other quote item",
+                        components: [{ type: "PART", description: "Part", quantity: 1, unitPrice: 10 }],
+                    })
+                    .build();
+
+                const foreignItemId = scenarioB.quoteItems[0].id;
+
+                const input: ApplyQuoteItemDecisionsData = {
+                    quoteId: scenarioA.quotes[0]!.id,
+                    itemDecisions: [{ quoteItemId: foreignItemId, decision: "APPROVED" }],
+                };
+
+                const applied = await prisma.$transaction((tx) =>
+                    serviceOrderRepository.applyQuoteItemDecisions(input, tx),
+                );
+
+                expect(applied).toBe(false);
+
+                const foreignItem = await prisma.quoteItem.findUnique({ where: { id: foreignItemId } });
+                expect(foreignItem?.decision).toBe("PENDING");
+                expect(foreignItem?.updatedAt).toBeNull();
+            });
+
+            it("should return false when a quoteItemId does not exist", async () => {
+                const { quotes, quoteItems } = await setupQuoteWithItems();
+                const quoteId = quotes[0]!.id;
+
+                const input: ApplyQuoteItemDecisionsData = {
+                    quoteId,
+                    itemDecisions: [
+                        { quoteItemId: quoteItems[0].id, decision: "APPROVED" },
+                        { quoteItemId: "0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa", decision: "APPROVED" },
+                    ],
+                };
+
+                await expect(
+                    prisma.$transaction(async (tx) => {
+                        const applied = await serviceOrderRepository.applyQuoteItemDecisions(input, tx);
+                        if (!applied) throw new Error("rollback");
+                    }),
+                ).rejects.toThrow("rollback");
+
+                const items = await prisma.quoteItem.findMany({
+                    where: { quoteId },
+                    orderBy: { createdAt: "asc" },
+                });
+                expect(items[0].decision).toBe("PENDING");
+                expect(items[1].decision).toBe("PENDING");
+            });
+
+            it("should rollback the partial batch when the transaction throws", async () => {
+                const { quotes, quoteItems } = await setupQuoteWithItems();
+                const quoteId = quotes[0]!.id;
+
+                const input: ApplyQuoteItemDecisionsData = {
+                    quoteId,
+                    itemDecisions: [
+                        { quoteItemId: quoteItems[0].id, decision: "APPROVED" },
+                        { quoteItemId: quoteItems[1].id, decision: "APPROVED" },
+                    ],
+                };
+
+                await expect(
+                    prisma.$transaction(async (tx) => {
+                        await serviceOrderRepository.applyQuoteItemDecisions(input, tx);
+                        throw new Error("rollback");
+                    }),
+                ).rejects.toThrow("rollback");
+
+                const items = await prisma.quoteItem.findMany({
+                    where: { quoteId },
+                    orderBy: { createdAt: "asc" },
+                });
+                expect(items[0].decision).toBe("PENDING");
+                expect(items[1].decision).toBe("PENDING");
+            });
+        });
     });
 
     describe("Reader repository", () => {
@@ -2966,6 +3244,70 @@ describe("Service Order Repository (Integration)", () => {
         });
 
         describe("listQuoteItemsByQuoteId", () => {
+            it("should return quote items ordered by creation date ascending", async () => {
+                const { quotes, quoteItems } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "ATTENDANT" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "AWAITING_QUOTE" })
+                    .withDiagnosis()
+                    .withFinding({ repairable: true, description: "Battery issue" })
+                    .withFinding({ repairable: true, description: "Screen issue" })
+                    .withQuote()
+                    .withQuoteItem({
+                        findingIndex: 0,
+                        description: "Battery replacement",
+                        components: [
+                            { type: "PART", description: "Battery", quantity: 1, unitPrice: 80 },
+                        ],
+                    })
+                    .withQuoteItem({
+                        findingIndex: 1,
+                        description: "Screen replacement",
+                        components: [
+                            { type: "PART", description: "Screen", quantity: 1, unitPrice: 120 },
+                        ],
+                    })
+                    .build();
+
+                const result = await serviceOrderRepository.listQuoteItemsByQuoteId({
+                    quoteId: quotes[0]!.id,
+                });
+
+                expect(result).toHaveLength(2);
+                expect(result[0].id).toBe(quoteItems[0].id);
+                expect(result[0].description).toBe("Battery replacement");
+                expect(result[1].id).toBe(quoteItems[1].id);
+                expect(result[1].description).toBe("Screen replacement");
+            });
+
+            it("should return an empty array when the quote has no items", async () => {
+                const { quotes } = await new ServiceOrderBuilder(prisma)
+                    .withUser({ role: "ATTENDANT" })
+                    .withCustomer()
+                    .withDevice()
+                    .withServiceOrder({ status: "AWAITING_QUOTE" })
+                    .withDiagnosis()
+                    .withQuote()
+                    .build();
+
+                const result = await serviceOrderRepository.listQuoteItemsByQuoteId({
+                    quoteId: quotes[0]!.id,
+                });
+
+                expect(result).toEqual([]);
+            });
+
+            it("should return an empty array when the quote does not exist", async () => {
+                const result = await serviceOrderRepository.listQuoteItemsByQuoteId({
+                    quoteId: "0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa",
+                });
+
+                expect(result).toEqual([]);
+            });
+        });
+
+        describe("listQuoteItemsWithComponentsByQuoteId", () => {
             it("should return all quote items with their components ordered by creation date ascending", async () => {
                 const { user, findings, quotes, quoteItems } = await new ServiceOrderBuilder(prisma)
                     .withUser({ role: "ATTENDANT" })
@@ -2995,7 +3337,7 @@ describe("Service Order Repository (Integration)", () => {
 
                 const quoteId = quotes[0].id;
 
-                const result = await serviceOrderRepository.listQuoteItemsByQuoteId({ quoteId });
+                const result = await serviceOrderRepository.listQuoteItemsWithComponentsByQuoteId({ quoteId });
 
                 expect(result).toHaveLength(2);
 
@@ -3035,7 +3377,7 @@ describe("Service Order Repository (Integration)", () => {
                     .withQuote()
                     .build();
 
-                const result = await serviceOrderRepository.listQuoteItemsByQuoteId({
+                const result = await serviceOrderRepository.listQuoteItemsWithComponentsByQuoteId({
                     quoteId: quotes[0]!.id,
                 });
 
@@ -3043,7 +3385,7 @@ describe("Service Order Repository (Integration)", () => {
             });
 
             it("should return an empty array when the quote does not exist", async () => {
-                const result = await serviceOrderRepository.listQuoteItemsByQuoteId({
+                const result = await serviceOrderRepository.listQuoteItemsWithComponentsByQuoteId({
                     quoteId: "0c6f9075-b4f9-46fb-bd17-f8659cfbd6aa",
                 });
 

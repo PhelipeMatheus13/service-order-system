@@ -21,6 +21,7 @@ import {
     createQuoteItemAndComponentsSchema,
     quoteItemWithComponentsSchema,
     updateQuoteItemAndComponentsSchema,
+    quoteDecisionSchema,
 } from "./service-order.schemas.js";
 import serviceOrderController from "./service-order.controller.js";
 
@@ -335,6 +336,53 @@ registry.registerPath({
     }
 });
 router.post("/quotes/:id/revise", checkAccessToken, authorize("ADMIN", "ATTENDANT"), serviceOrderController.reviseQuote);
+
+registry.registerPath({
+    tags: ["Quote"],
+    method: "post",
+    path: "/service-orders/quotes/:id/quote-decision",
+    summary: "Submit a quote decision (requires ADMIN or ATTENDANT role)",
+    security: [{ bearerAuth: [] }],
+    request: {
+        params: z.object({ id: z.string() }),
+        body: {
+            content: { "application/json": { schema: createQuoteItemAndComponentsSchema } },
+        },
+    },
+    responses: {
+        201: {
+            description: "Quote decision successfully processed",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        success: z.boolean().openapi({ example: true }),
+                        message: z.string().openapi({ example: "Quote decision successfully processed" }),
+                    }),
+                },
+            },
+        },
+        400: { $ref: "#/components/responses/missingQuoteIdError" },
+        401: {
+            description: "Authentication failed or because the authenticated user no longer exists",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
+                        invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
+                        accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
+                        authenticatedUserNoLongerExists: { $ref: "#/components/examples/authenticatedUserNoLongerExists" },
+                    },
+                },
+            },
+        },
+        404: { $ref: "#/components/responses/quoteOrServiceOrderNotFoundError" },
+        409: { $ref: "#/components/responses/quoteDecisionConflictError" },
+        422: { $ref: "#/components/responses/quoteDecisionValidationError" },
+        500: { $ref: "#/components/responses/internalError" },
+    }
+});
+router.post("/quotes/:id/quote-decision", checkAccessToken, authorize("ADMIN", "ATTENDANT"), validate(quoteDecisionSchema), serviceOrderController.quoteDecision);
 
 // GET 
 registry.registerPath({
@@ -658,7 +706,7 @@ registry.registerPath({
         500: { $ref: "#/components/responses/internalError" },
     }
 });
-router.get("/quotes/:id/items", checkAccessToken, serviceOrderController.listQuoteItemsByQuoteId);
+router.get("/quotes/:id/items", checkAccessToken, serviceOrderController.listQuoteItemsWithComponentsByQuoteId);
 
 // PATCH
 registry.registerPath({

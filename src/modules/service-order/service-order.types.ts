@@ -9,6 +9,7 @@ import {
     Quote,
     QuoteStatus,
     QuoteItem,
+    QuoteItemDecision,
     QuoteItemComponent,
     QuoteItemComponentType,
     OutboxQuote,
@@ -112,7 +113,7 @@ interface ListQuotesByServiceOrderIdInput {
     serviceOrderId: string;
 }
 
-interface ListQuoteItemsByQuoteIdInput {
+interface ListQuoteItemsWithComponentsByQuoteIdInput {
     quoteId: string;
 }
 
@@ -185,9 +186,35 @@ interface QuoteEmailPayload {
     }
 }
 
-interface reviseQuoteInput {
+interface ReviseQuoteInput {
     quoteId: string, 
     revisedById: string
+}
+
+interface itemDecision {
+    quoteItemId: string,
+    decision: QuoteItemDecision
+}
+
+interface QuoteDecisionInput {
+    quoteId: string,
+    decisionRegisteredById: string,
+    itemDecisions: Array<{
+        quoteItemId: string,
+        decision: QuoteItemDecision
+    }>,
+}
+
+interface ApplyQuoteItemDecisionsData {
+    quoteId: string,
+    itemDecisions: Array<{
+        quoteItemId: string,
+        decision: QuoteItemDecision
+    }>,
+}
+
+interface ListQuoteItemByQuoteId {
+    quoteId: string, 
 }
 
 export {
@@ -196,6 +223,7 @@ export {
     DiagnosisResult,
     QuoteStatus,
     QuoteItemComponentType,
+    QuoteItemDecision,
 };
 
 export type {
@@ -217,14 +245,18 @@ export type {
     ListFidingsByDiagnosisId,
     Quote as QuoteRecord,
     CreateQuoteInput,
+    QuoteItem as QuoteItemRecord,
     QuoteItemWithComponents,
     CreateQuoteItemAndComponentsInput,
     ListQuotesByServiceOrderIdInput,
-    ListQuoteItemsByQuoteIdInput,
+    ListQuoteItemsWithComponentsByQuoteIdInput,
     UpdateQuoteItemAndComponentsInput,
     RequestQuoteSubmissionInput,
     UpdateQuoteStatusData,
     OutboxQuote as OutboxQuoteRecord,
     QuoteEmailPayload, 
-    reviseQuoteInput,
+    ReviseQuoteInput,
+    QuoteDecisionInput,
+    ApplyQuoteItemDecisionsData,
+    ListQuoteItemByQuoteId,
 };

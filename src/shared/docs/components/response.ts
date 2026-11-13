@@ -770,6 +770,91 @@ const reviseQuoteConflictError = registry.registerComponent("responses", "revise
     },
 });
 
+const quoteDecisionConflictError = registry.registerComponent("responses", "quoteDecisionConflictError", {
+    description: "Quote decision cannot be registered",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            examples: {
+                quoteInvalidStatus: {
+                    summary: "Quote is not in SENT",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Quote is not in a valid status for decision",
+                        },
+                    },
+                },
+                serviceOrderInvalidStatus: {
+                    summary: "Service order is not in AWAITING_APPROVAL",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Service order is not in a valid status for quote decision",
+                        },
+                    },
+                },
+                duplicateQuoteItemIds: {
+                    summary: "Payload contains the same quoteItemId more than once",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Payload contains duplicate quote item ids",
+                        },
+                    },
+                },
+                incompletePayload: {
+                    summary: "Payload is missing decisions or contains unknown item ids",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Payload must include a decision for every quote item and no unknown ids",
+                            details: {
+                                missingIds: ["uuid-1", "uuid-2"],
+                                unknownIds: ["uuid-x"],
+                            },
+                        },
+                    },
+                },
+                quoteDecidedConcurrently: {
+                    summary: "Quote was already decided by another request (race condition)",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Quote is no longer in a valid status for decision",
+                        },
+                    },
+                },
+                quoteItemChangedConcurrently: {
+                    summary: "A quote item disappeared or changed quote between validation and update",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Quote item state changed during decision",
+                        },
+                    },
+                },
+                serviceOrderChangedConcurrently: {
+                    summary: "Service order moved out of AWAITING_APPROVAL by another request (race condition)",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Service order is no longer in a valid status for quote decision",
+                        },
+                    },
+                },
+            },
+        },
+    },
+});
+
 // VALIDATION ERRORS (422)
 const registerValidationError = registry.registerComponent("responses", "registerValidationError", {
     description: "Register validation error",
@@ -1187,6 +1272,27 @@ const updateQuoteItemAndComponentsValidationError = registry.registerComponent("
     },
 });
 
+const quoteDecisionValidationError = registry.registerComponent("responses", "quoteDecisionValidationError", {
+    description: "Quote decision validation error",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/ValidationError" },
+            example: {
+                success: false,
+                error: {
+                    code: "VALIDATION_ERROR",
+                    message: "Validation failed",
+                    details: [
+                        { field: "itemDecisions", message: "At least one item decision is required" },
+                        { field: "itemDecisions.0.quoteItemId", message: "Quote Item ID must be a valid UUID" },
+                        { field: "itemDecisions.1.decision", message: "Invalid option: expected one of \"APPROVED\"|\"DECLINED\"" },
+                    ],
+                },
+            },
+        },
+    },
+});
+
 // 500
 const internalError = registry.registerComponent("responses", "internalError", {
     description: "Internal error",
@@ -1238,6 +1344,7 @@ export {
     updateQuoteItemAndComponentsConflictError,
     requestQuoteSubmissionConflictError,
     reviseQuoteConflictError,
+    quoteDecisionConflictError,
     // 422
     registerValidationError,
     confirmEmailValidationError,
@@ -1256,6 +1363,7 @@ export {
     createQuoteValidationError,
     createQuoteItemAndComponentsValidationError,
     updateQuoteItemAndComponentsValidationError,
+    quoteDecisionValidationError,
     // 500
     internalError,
 };

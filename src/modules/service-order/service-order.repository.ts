@@ -14,18 +14,21 @@ import type {
     CompleteDiagnosisInput,
     QuoteRecord,
     CreateQuoteInput,
+    QuoteItemRecord,
     QuoteItemWithComponents,
     CreateQuoteItemAndComponentsInput,
     ListQuotesByServiceOrderIdInput,
     ListFidingsByDiagnosisId,
-    ListQuoteItemsByQuoteIdInput,
+    ListQuoteItemsWithComponentsByQuoteIdInput,
     UpdateQuoteItemAndComponentsInput,
     UpdateQuoteStatusData,
     RequestQuoteSubmissionInput,
     OutboxQuoteRecord,
-    QuoteEmailPayload
+    QuoteEmailPayload,
+    ListQuoteItemByQuoteId,
+    ApplyQuoteItemDecisionsData
 } from "./service-order.types.ts";
-import { ServiceOrderStatus, QuoteStatus, DiagnosisResult, QuoteItemComponentType } from "./service-order.types.js";
+import { ServiceOrderStatus, QuoteStatus } from "./service-order.types.js";
 import { getPrisma } from "../../shared/config/database.js";
 import { Prisma, PrismaClient } from "../../generated/prisma/client.js";
 import { isNotFoundError } from "../../shared/utils/prisma-error.js";
@@ -560,6 +563,39 @@ const cloneQuote = async (quoteId: string, revisedById: string, tx: Prisma.Trans
     return rows[0];
 };
 
+const markQuoteDecided = async (id: string, tx: Prisma.TransactionClient): Promise<boolean> => {
+    const result = await tx.quote.updateMany({
+        where: {
+            id,
+            status: QuoteStatus.SENT,
+            respondedAt: null,
+        },
+        data: {
+            status: QuoteStatus.DECIDED,
+            respondedAt: new Date(),
+            updatedAt: new Date(),
+        },
+    });
+
+    return result.count > 0;
+};
+
+const applyQuoteItemDecisions = async ( input: ApplyQuoteItemDecisionsData, tx: Prisma.TransactionClient): Promise<boolean> => {
+    // quoteId is part of the WHERE on every update so an item id from a
+    // different quote can't be silently updated. Returns false if any
+    // update matches zero rows — the caller decides what that means.
+    for (const d of input.itemDecisions) {
+        const result = await tx.quoteItem.updateMany({
+            where: { id: d.quoteItemId, quoteId: input.quoteId },
+            data: { decision: d.decision, updatedAt: new Date() },
+        });
+
+        if (result.count === 0) return false;
+    }
+
+    return true;
+};
+
 // Reader
 const findById = async (id: string): Promise<ServiceOrderRecord | null> => {
     const prisma = getPrisma();
@@ -638,7 +674,17 @@ const findQuoteItemById = async (id: string): Promise<QuoteItemWithComponents | 
     });
 };
 
-const listQuoteItemsByQuoteId = async (input: ListQuoteItemsByQuoteIdInput): Promise<QuoteItemWithComponents[]> => {
+const listQuoteItemsByQuoteId = async(input: ListQuoteItemByQuoteId): Promise<QuoteItemRecord[]> => {
+    const prisma = getPrisma();
+    return prisma.quoteItem.findMany({
+        where: { quoteId: input.quoteId },
+        orderBy: {
+            createdAt: "asc",
+        },
+    });
+};
+
+const listQuoteItemsWithComponentsByQuoteId = async (input: ListQuoteItemsWithComponentsByQuoteIdInput): Promise<QuoteItemWithComponents[]> => {
     const prisma = getPrisma();
     return prisma.quoteItem.findMany({
         where: { quoteId: input.quoteId },
@@ -773,6 +819,8 @@ export default {
     lockServiceOrderIfInStatuses,
     supersedeQuote,
     cloneQuote,
+    markQuoteDecided,
+    applyQuoteItemDecisions,
     // Reader
     findById,
     list,
@@ -784,6 +832,7 @@ export default {
     listQuotesByServiceOrderId,
     findQuoteItemById,
     listQuoteItemsByQuoteId,
+    listQuoteItemsWithComponentsByQuoteId,
     listOutboxQuoteUnconsumed,
     findQuoteEmailPayloadById
 };
