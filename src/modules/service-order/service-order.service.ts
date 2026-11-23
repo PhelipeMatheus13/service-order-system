@@ -21,10 +21,14 @@ import {
     UpdateQuoteItemAndComponentsInput,
     ReviseQuoteInput,
     QuoteDecisionInput,
+    CreatePreApprovedServiceOrderInput,
+    CreatePreApprovedServiceOrderResult,
+    CreatePreApprovedQuoteItemAndComponentsInput,
+    FinalizePreApprovedQuoteInput,
 } from "./service-order.types.js";
 import { ServiceOrderStatus, QuoteStatus, QuoteItemDecision } from "./service-order.types.js";
 import { getPrisma } from "../../shared/config/database.js";
-import { notFound, unauthorized, conflict } from "../../shared/errors/errors.js";
+import { internal, notFound, unauthorized, conflict } from "../../shared/errors/errors.js";
 import { isForeignKeyConstraintOn, isUniqueConstraintOn, isNotFoundError } from "../../shared/utils/prisma-error.js";
 import serviceOrderRepository from "./service-order.repository.js";
 
@@ -37,7 +41,6 @@ const createServiceOrder = async (input: CreateServiceOrderInput): Promise<Servi
                 throw notFound({ message: "Device not found" });
             }
 
-            // atomic guard: only succeeds if the service order is still in WAITING_DIAGNOSIS
             await serviceOrderRepository.createServiceOrderStatusHistory(
                 {
                     serviceOrderId: serviceOrder.id,
@@ -397,7 +400,7 @@ const createQuoteItemAndComponents = async (input: CreateQuoteItemAndComponentsI
         throw notFound({ message: "Quote not found" });
     }
 
-    if (quote.status !== "DRAFT") {
+    if (quote.status !== QuoteStatus.DRAFT) {
         throw conflict({ message: "Quote is not in DRAFT status" });
     }
 
@@ -717,7 +720,185 @@ const quoteDecision = async (input: QuoteDecisionInput): Promise<void> => {
                 code: "USER_NOT_FOUND",
             });
         }
-        
+
+        throw error;
+    }
+};
+
+const createPreApprovedServiceOrder = async (input: CreatePreApprovedServiceOrderInput): Promise<CreatePreApprovedServiceOrderResult> => {
+    try {
+        return await getPrisma().$transaction(async (tx) => {
+            const serviceOrder = await serviceOrderRepository.createPreApproved(
+                {
+                    deviceId: input.deviceId,
+                    reportedProblem: input.reportedProblem,
+                    createdById: input.createdById,
+                },
+                tx,
+            );
+
+            if (!serviceOrder) {
+                throw notFound({ message: "Device not found" });
+            }
+
+            await serviceOrderRepository.createServiceOrderStatusHistory(
+                {
+                    serviceOrderId: serviceOrder.id,
+                    fromStatus: null,
+                    toStatus: ServiceOrderStatus.AWAITING_QUOTE,
+                    changeSource: "USER",
+                    changedById: input.createdById,
+                },
+                tx,
+            );
+
+            const quote = await serviceOrderRepository.createPreApprovedQuote(
+                {
+                    serviceOrderId: serviceOrder.id,
+                    createdById: input.createdById,
+                },
+                tx,
+            );
+
+            if (!quote) {
+                throw internal({ message: "Pre-approved quote could not be created" });
+            }
+
+            return { serviceOrder, quote };
+        });
+    } catch (error) {
+        if (isForeignKeyConstraintOn(error, "created_by")) {
+            throw unauthorized({
+                message: "Authenticated user no longer exists",
+                code: "USER_NOT_FOUND",
+            });
+        }
+
+        if (isUniqueConstraintOn(error, "device_id")) {
+            throw conflict({
+                message: "This device already has an active service order",
+            });
+        }
+
+        throw error;
+    }
+};
+
+const createPreApprovedQuoteItemAndComponents = async (input: CreatePreApprovedQuoteItemAndComponentsInput): Promise<QuoteItemWithComponents> => {
+    const quote = await serviceOrderRepository.findQuoteById(input.quoteId);
+    if (!quote) {
+        throw notFound({ message: "Quote not found" });
+    }
+
+    if (quote.status !== QuoteStatus.DRAFT) {
+        throw conflict({ message: "Quote is not in DRAFT status" });
+    }
+
+    // diagnosis_id is the flow discriminator: createQuote always sets it,
+    // createPreApprovedQuote always leaves it null. So a null diagnosis
+    // here means this quote belongs to the pre-approved flow — reject
+    // otherwise, or this route could inject APPROVED items into a standard
+    // quote before the customer decides.
+    if (quote.diagnosisId !== null) {
+        throw conflict({ message: "Pre-approved quote should not have a diagnosis" });
+    }
+
+    try {
+        return await getPrisma().$transaction(async (tx) => {
+            const locked = await serviceOrderRepository.lockQuoteIfDraft(input.quoteId, tx);
+            if (!locked) {
+                throw conflict({ message: "Quote is no longer in DRAFT status" });
+            }
+
+            return await serviceOrderRepository.createPreApprovedQuoteItemAndComponents(input, tx);
+        });
+    } catch (error) {
+        if (isForeignKeyConstraintOn(error, "created_by")) {
+            throw unauthorized({
+                message: "Authenticated user no longer exists",
+                code: "USER_NOT_FOUND",
+            });
+        }
+
+        throw error;
+    }
+};
+
+const finalizePreApprovedQuote = async (input: FinalizePreApprovedQuoteInput): Promise<void> => {
+    const quote = await serviceOrderRepository.findQuoteById(input.quoteId);
+    if (!quote) {
+        throw notFound({ message: "Quote not found" });
+    }
+
+    if (quote.status !== QuoteStatus.DRAFT) {
+        throw conflict({ message: "Quote is not in DRAFT status" });
+    }
+
+    if (quote.diagnosisId !== null) {
+        throw conflict({ message: "Pre-approved quote should not have a diagnosis" });
+    }
+
+    const serviceOrder = await serviceOrderRepository.findById(quote.serviceOrderId);
+    if (!serviceOrder) {
+        throw notFound({ message: "Service order not found" });
+    }
+
+    if (serviceOrder.status !== ServiceOrderStatus.AWAITING_QUOTE) {
+        throw conflict({ message: "Service order is not in AWAITING_QUOTE status" });
+    }
+
+    const quoteItems = await serviceOrderRepository.listQuoteItemsByQuoteId({
+        quoteId: quote.id,
+    });
+
+    if (quoteItems.length === 0) {
+        throw conflict({ message: "Quote must have at least one item to be finalized" });
+    }
+
+    const allApproved = quoteItems.every((item) => item.decision === QuoteItemDecision.APPROVED);
+    if (!allApproved) {
+        throw conflict({ message: "All quote items must be approved to finalize" });
+    }
+
+    try {
+        return await getPrisma().$transaction(async (tx) => {
+            const finalized = await serviceOrderRepository.finalizePreApprovedQuote(quote.id, tx);
+            if (!finalized) {
+                throw conflict({ message: "Quote is no longer in a valid status for finalization" });
+            }
+
+            const statusUpdated = await serviceOrderRepository.updateServiceOrderStatus(
+                {
+                    serviceOrderId: serviceOrder.id,
+                    expectedStatuses: [ServiceOrderStatus.AWAITING_QUOTE],
+                    toStatus: ServiceOrderStatus.AWAITING_MAINTENANCE,
+                },
+                tx,
+            );
+
+            if (!statusUpdated) {
+                throw conflict({ message: "Service order is no longer in a valid status for finalization" });
+            }
+
+            await serviceOrderRepository.createServiceOrderStatusHistory(
+                {
+                    serviceOrderId: serviceOrder.id,
+                    fromStatus: ServiceOrderStatus.AWAITING_QUOTE,
+                    toStatus: ServiceOrderStatus.AWAITING_MAINTENANCE,
+                    changeSource: "USER",
+                    changedById: input.finalizedById,
+                },
+                tx,
+            );
+        });
+    } catch (error) {
+        if (isForeignKeyConstraintOn(error, "changed_by")) {
+            throw unauthorized({
+                message: "Authenticated user no longer exists",
+                code: "USER_NOT_FOUND",
+            });
+        }
+
         throw error;
     }
 };
@@ -746,4 +927,7 @@ export default {
     requestQuoteSubmission,
     reviseQuote,
     quoteDecision,
+    createPreApprovedServiceOrder,
+    createPreApprovedQuoteItemAndComponents,
+    finalizePreApprovedQuote,
 };

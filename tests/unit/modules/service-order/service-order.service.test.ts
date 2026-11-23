@@ -24,6 +24,9 @@ import {
     ReviseQuoteInput,
     QuoteItemRecord,
     QuoteDecisionInput,
+    CreatePreApprovedServiceOrderInput,
+    CreatePreApprovedQuoteItemAndComponentsInput,
+    FinalizePreApprovedQuoteInput,
 } from "../../../../src/modules/service-order/service-order.types.js";
 // (shared)
 import { getPrisma } from "../../../../src/shared/config/database.js";
@@ -3031,6 +3034,643 @@ describe("Service Order Service (Unit)", () => {
                     toStatus: "AWAITING_DELIVERY",
                     changeSource: "USER",
                     changedById: validInput.decisionRegisteredById,
+                },
+                tx,
+            );
+        });
+    });
+
+    describe("createPreApprovedServiceOrder", () => {
+        const validInput: CreatePreApprovedServiceOrderInput = {
+            deviceId: "uuid-device-123",
+            reportedProblem: "Screen is cracked and touch is not responding.",
+            createdById: "uuid-user-123",
+        };
+
+        const mockServiceOrderRecord = {
+            id: "uuid-service-order-123",
+            customerId: "uuid-customer-123",
+            deviceId: validInput.deviceId,
+            reportedProblem: validInput.reportedProblem,
+            status: "AWAITING_QUOTE",
+            createdById: validInput.createdById,
+            cancelledAt: null,
+            cancelReason: null,
+            finishedAt: null,
+            createdAt: new Date(),
+            updatedAt: null,
+        } as ServiceOrderRecord;
+
+        const mockQuoteRecord = {
+            id: "uuid-quote-123",
+            serviceOrderId: mockServiceOrderRecord.id,
+            diagnosisId: null,
+            status: "DRAFT",
+            submittedAt: null,
+            respondedAt: null,
+            createdById: validInput.createdById,
+            createdAt: new Date(),
+            updatedAt: null,
+        } as QuoteRecord;
+
+        const setupCreatePreApprovedMocks = () => {
+            const tx = {} as any;
+
+            vi.mocked(getPrisma).mockReturnValue({
+                $transaction: vi.fn(async (callback) => callback(tx)),
+            } as any);
+            vi.mocked(serviceOrderRepository.createPreApproved).mockResolvedValue(mockServiceOrderRecord);
+            vi.mocked(serviceOrderRepository.createServiceOrderStatusHistory).mockResolvedValue({
+                id: "uuid-history-123",
+                serviceOrderId: mockServiceOrderRecord.id,
+                fromStatus: null,
+                toStatus: "AWAITING_QUOTE",
+                changeSource: "USER",
+                changedById: validInput.createdById,
+                createdAt: new Date(),
+            });
+            vi.mocked(serviceOrderRepository.createPreApprovedQuote).mockResolvedValue(mockQuoteRecord);
+
+            return { tx };
+        };
+
+        it("should throw if serviceOrderRepository.createPreApproved fails", async () => {
+            const error = new Error("fake error");
+            const { tx } = setupCreatePreApprovedMocks();
+            vi.mocked(serviceOrderRepository.createPreApproved).mockRejectedValue(error);
+
+            await expect(serviceOrderService.createPreApprovedServiceOrder(validInput))
+                .rejects.toThrow(error);
+
+            expect(serviceOrderRepository.createPreApproved).toHaveBeenCalledWith(
+                {
+                    deviceId: validInput.deviceId,
+                    reportedProblem: validInput.reportedProblem,
+                    createdById: validInput.createdById,
+                },
+                tx,
+            );
+            expect(serviceOrderRepository.createServiceOrderStatusHistory).not.toHaveBeenCalled();
+            expect(serviceOrderRepository.createPreApprovedQuote).not.toHaveBeenCalled();
+        });
+
+        it("should throw NOT_FOUND if device does not exist", async () => {
+            setupCreatePreApprovedMocks();
+            vi.mocked(serviceOrderRepository.createPreApproved).mockResolvedValue(null);
+
+            await expect(serviceOrderService.createPreApprovedServiceOrder(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 404,
+                    message: "Device not found",
+                });
+
+            expect(serviceOrderRepository.createServiceOrderStatusHistory).not.toHaveBeenCalled();
+            expect(serviceOrderRepository.createPreApprovedQuote).not.toHaveBeenCalled();
+        });
+
+        it("should propagate error when creating the status history fails", async () => {
+            const { tx } = setupCreatePreApprovedMocks();
+            const error = new Error("History creation failed");
+            vi.mocked(serviceOrderRepository.createServiceOrderStatusHistory).mockRejectedValue(error);
+
+            await expect(serviceOrderService.createPreApprovedServiceOrder(validInput))
+                .rejects.toThrow(error);
+
+            expect(serviceOrderRepository.createServiceOrderStatusHistory).toHaveBeenCalledWith(
+                {
+                    serviceOrderId: mockServiceOrderRecord.id,
+                    fromStatus: null,
+                    toStatus: "AWAITING_QUOTE",
+                    changeSource: "USER",
+                    changedById: validInput.createdById,
+                },
+                tx,
+            );
+            expect(serviceOrderRepository.createPreApprovedQuote).not.toHaveBeenCalled();
+        });
+
+        it("should throw INTERNAL if the pre-approved quote could not be created", async () => {
+            setupCreatePreApprovedMocks();
+            vi.mocked(serviceOrderRepository.createPreApprovedQuote).mockResolvedValue(null);
+
+            await expect(serviceOrderService.createPreApprovedServiceOrder(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 500,
+                    message: "Pre-approved quote could not be created",
+                });
+        });
+
+        it("should throw UNAUTHORIZED if created_by foreign key constraint is violated", async () => {
+            const dbError = new Error("Foreign key constraint failed");
+            vi.mocked(getPrisma).mockReturnValue({
+                $transaction: vi.fn(async () => { throw dbError; }),
+            } as any);
+            vi.mocked(isForeignKeyConstraintOn).mockImplementation(
+                (_error, field) => field === "created_by",
+            );
+
+            await expect(serviceOrderService.createPreApprovedServiceOrder(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 401,
+                    code: "USER_NOT_FOUND",
+                    message: "Authenticated user no longer exists",
+                });
+
+            expect(isForeignKeyConstraintOn).toHaveBeenCalledWith(dbError, "created_by");
+        });
+
+        it("should throw CONFLICT if the device already has an active service order", async () => {
+            const dbError = new Error("Unique constraint failed");
+            vi.mocked(getPrisma).mockReturnValue({
+                $transaction: vi.fn(async () => { throw dbError; }),
+            } as any);
+            vi.mocked(isForeignKeyConstraintOn).mockReturnValue(false);
+            vi.mocked(isUniqueConstraintOn).mockImplementation(
+                (_error, field) => field === "device_id",
+            );
+
+            await expect(serviceOrderService.createPreApprovedServiceOrder(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 409,
+                    message: "This device already has an active service order",
+                });
+
+            expect(isUniqueConstraintOn).toHaveBeenCalledWith(dbError, "device_id");
+        });
+
+        it("should propagate error if it is not a known constraint violation", async () => {
+            const error = new Error("fake error");
+            vi.mocked(getPrisma).mockReturnValue({
+                $transaction: vi.fn(async () => { throw error; }),
+            } as any);
+            vi.mocked(isForeignKeyConstraintOn).mockReturnValue(false);
+            vi.mocked(isUniqueConstraintOn).mockReturnValue(false);
+
+            await expect(serviceOrderService.createPreApprovedServiceOrder(validInput))
+                .rejects.toThrow(error);
+        });
+
+        it("should create the service order and pre-approved quote in a transaction", async () => {
+            const { tx } = setupCreatePreApprovedMocks();
+
+            const result = await serviceOrderService.createPreApprovedServiceOrder(validInput);
+
+            expect(serviceOrderRepository.createPreApproved).toHaveBeenCalledWith(
+                {
+                    deviceId: validInput.deviceId,
+                    reportedProblem: validInput.reportedProblem,
+                    createdById: validInput.createdById,
+                },
+                tx,
+            );
+            expect(serviceOrderRepository.createServiceOrderStatusHistory).toHaveBeenCalledWith(
+                {
+                    serviceOrderId: mockServiceOrderRecord.id,
+                    fromStatus: null,
+                    toStatus: "AWAITING_QUOTE",
+                    changeSource: "USER",
+                    changedById: validInput.createdById,
+                },
+                tx,
+            );
+            expect(serviceOrderRepository.createPreApprovedQuote).toHaveBeenCalledWith(
+                {
+                    serviceOrderId: mockServiceOrderRecord.id,
+                    createdById: validInput.createdById,
+                },
+                tx,
+            );
+            expect(result).toEqual({
+                serviceOrder: mockServiceOrderRecord,
+                quote: mockQuoteRecord,
+            });
+        });
+    });
+
+    describe("createPreApprovedQuoteItemAndComponents", () => {
+        const validInput: CreatePreApprovedQuoteItemAndComponentsInput = {
+            quoteId: "uuid-quote-123",
+            description: "Battery replacement",
+            createdById: "uuid-user-123",
+            components: [
+                {
+                    type: "PART",
+                    description: "Battery",
+                    quantity: 1,
+                    unitPrice: 80.0,
+                },
+                {
+                    type: "LABOR",
+                    description: "Battery replacement labor",
+                    quantity: 1,
+                    unitPrice: 20.0,
+                },
+            ],
+        };
+
+        const mockQuoteRecord = {
+            id: validInput.quoteId,
+            serviceOrderId: "uuid-service-order-123",
+            diagnosisId: null,
+            status: "DRAFT",
+            submittedAt: null,
+            respondedAt: null,
+            createdById: "uuid-user-456",
+            createdAt: new Date(),
+            updatedAt: null,
+        } as QuoteRecord;
+
+        const mockQuoteItemRecord = {
+            id: "uuid-quote-item-123",
+            quoteId: validInput.quoteId,
+            findingId: null,
+            description: validInput.description,
+            decision: "APPROVED",
+            createdById: validInput.createdById,
+            createdAt: new Date(),
+            updatedById: null,
+            updatedAt: null,
+            quoteItemComponents: [
+                {
+                    id: "uuid-component-1",
+                    quoteItemId: "uuid-quote-item-123",
+                    type: "PART",
+                    description: "Battery",
+                    quantity: 1,
+                    unitPrice: new Prisma.Decimal(80),
+                    createdAt: new Date(),
+                    updatedAt: null,
+                },
+                {
+                    id: "uuid-component-2",
+                    quoteItemId: "uuid-quote-item-123",
+                    type: "LABOR",
+                    description: "Battery replacement labor",
+                    quantity: 1,
+                    unitPrice: new Prisma.Decimal(20),
+                    createdAt: new Date(),
+                    updatedAt: null,
+                },
+            ],
+        } as QuoteItemWithComponents;
+
+        const setupCreatePreApprovedItemMocks = () => {
+            const tx = {} as any;
+
+            vi.mocked(serviceOrderRepository.findQuoteById).mockResolvedValue(mockQuoteRecord);
+            vi.mocked(getPrisma).mockReturnValue({
+                $transaction: vi.fn(async (callback) => callback(tx)),
+            } as any);
+            vi.mocked(serviceOrderRepository.lockQuoteIfDraft).mockResolvedValue(true);
+            vi.mocked(serviceOrderRepository.createPreApprovedQuoteItemAndComponents).mockResolvedValue(mockQuoteItemRecord);
+
+            return { tx };
+        };
+
+        it("should throw if serviceOrderRepository.findQuoteById fails", async () => {
+            const error = new Error("fake error");
+            vi.mocked(serviceOrderRepository.findQuoteById).mockRejectedValue(error);
+
+            await expect(serviceOrderService.createPreApprovedQuoteItemAndComponents(validInput))
+                .rejects.toThrow(error);
+
+            expect(getPrisma).not.toHaveBeenCalled();
+        });
+
+        it("should throw NOT_FOUND if quote does not exist", async () => {
+            vi.mocked(serviceOrderRepository.findQuoteById).mockResolvedValue(null);
+
+            await expect(serviceOrderService.createPreApprovedQuoteItemAndComponents(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 404,
+                    message: "Quote not found",
+                });
+
+            expect(getPrisma).not.toHaveBeenCalled();
+        });
+
+        it("should throw CONFLICT if quote is not DRAFT", async () => {
+            vi.mocked(serviceOrderRepository.findQuoteById).mockResolvedValue({
+                ...mockQuoteRecord,
+                status: "SENT",
+            });
+
+            await expect(serviceOrderService.createPreApprovedQuoteItemAndComponents(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 409,
+                    message: "Quote is not in DRAFT status",
+                });
+
+            expect(getPrisma).not.toHaveBeenCalled();
+        });
+
+        it("should throw CONFLICT if the quote has a diagnosis (not a pre-approved flow)", async () => {
+            vi.mocked(serviceOrderRepository.findQuoteById).mockResolvedValue({
+                ...mockQuoteRecord,
+                diagnosisId: "uuid-diagnosis-123",
+            });
+
+            await expect(serviceOrderService.createPreApprovedQuoteItemAndComponents(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 409,
+                    message: "Pre-approved quote should not have a diagnosis",
+                });
+
+            expect(getPrisma).not.toHaveBeenCalled();
+            expect(serviceOrderRepository.lockQuoteIfDraft).not.toHaveBeenCalled();
+            expect(serviceOrderRepository.createPreApprovedQuoteItemAndComponents).not.toHaveBeenCalled();
+        });
+
+        it("should throw CONFLICT if lockQuoteIfDraft returns false (race condition)", async () => {
+            const { tx } = setupCreatePreApprovedItemMocks();
+            vi.mocked(serviceOrderRepository.lockQuoteIfDraft).mockResolvedValue(false);
+
+            await expect(serviceOrderService.createPreApprovedQuoteItemAndComponents(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 409,
+                    message: "Quote is no longer in DRAFT status",
+                });
+
+            expect(serviceOrderRepository.lockQuoteIfDraft).toHaveBeenCalledWith(validInput.quoteId, tx);
+            expect(serviceOrderRepository.createPreApprovedQuoteItemAndComponents).not.toHaveBeenCalled();
+        });
+
+        it("should throw UNAUTHORIZED if created_by foreign key is violated", async () => {
+            const dbError = new Error("Foreign key constraint failed");
+            setupCreatePreApprovedItemMocks();
+            vi.mocked(serviceOrderRepository.createPreApprovedQuoteItemAndComponents).mockRejectedValue(dbError);
+            vi.mocked(isForeignKeyConstraintOn).mockImplementation(
+                (_error, field) => field === "created_by",
+            );
+
+            await expect(serviceOrderService.createPreApprovedQuoteItemAndComponents(validInput))
+                .rejects.toMatchObject({
+                    statusCode: 401,
+                    message: "Authenticated user no longer exists",
+                    code: "USER_NOT_FOUND",
+                });
+
+            expect(isForeignKeyConstraintOn).toHaveBeenCalledWith(dbError, "created_by");
+        });
+
+        it("should propagate error if it is not a known constraint violation", async () => {
+            const error = new Error("fake error");
+            setupCreatePreApprovedItemMocks();
+            vi.mocked(serviceOrderRepository.createPreApprovedQuoteItemAndComponents).mockRejectedValue(error);
+            vi.mocked(isForeignKeyConstraintOn).mockReturnValue(false);
+
+            await expect(serviceOrderService.createPreApprovedQuoteItemAndComponents(validInput))
+                .rejects.toThrow(error);
+        });
+
+        it("should create the pre-approved quote item within a transaction", async () => {
+            const { tx } = setupCreatePreApprovedItemMocks();
+
+            const result = await serviceOrderService.createPreApprovedQuoteItemAndComponents(validInput);
+
+            expect(serviceOrderRepository.findQuoteById).toHaveBeenCalledWith(validInput.quoteId);
+            expect(serviceOrderRepository.lockQuoteIfDraft).toHaveBeenCalledWith(validInput.quoteId, tx);
+            expect(serviceOrderRepository.createPreApprovedQuoteItemAndComponents).toHaveBeenCalledWith(validInput, tx);
+            expect(result).toBe(mockQuoteItemRecord);
+        });
+    });
+
+    describe("finalizePreApprovedQuote", () => {
+        const validInput: FinalizePreApprovedQuoteInput = {
+            quoteId: "uuid-quote-123",
+            finalizedById: "uuid-user-123",
+        };
+
+        const mockQuoteRecord = {
+            id: validInput.quoteId,
+            serviceOrderId: "uuid-service-order-123",
+            diagnosisId: null,
+            status: "DRAFT",
+            submittedAt: null,
+            respondedAt: null,
+            createdById: "uuid-user-456",
+            createdAt: new Date(),
+            updatedAt: null,
+        } as QuoteRecord;
+
+        const mockServiceOrderRecord = {
+            id: mockQuoteRecord.serviceOrderId,
+            customerId: "uuid-customer-123",
+            deviceId: "uuid-device-123",
+            reportedProblem: "Screen is cracked.",
+            status: "AWAITING_QUOTE",
+            createdById: "uuid-user-456",
+            cancelledAt: null,
+            cancelReason: null,
+            finishedAt: null,
+            createdAt: new Date(),
+            updatedAt: null,
+        } as ServiceOrderRecord;
+
+        const mockApprovedItems = [
+            { id: "uuid-item-1", decision: "APPROVED" },
+            { id: "uuid-item-2", decision: "APPROVED" },
+        ] as QuoteItemRecord[];
+
+        const setupFinalizeMocks = () => {
+            const tx = {} as any;
+
+            vi.mocked(serviceOrderRepository.findQuoteById).mockResolvedValue(mockQuoteRecord);
+            vi.mocked(serviceOrderRepository.findById).mockResolvedValue(mockServiceOrderRecord);
+            vi.mocked(serviceOrderRepository.listQuoteItemsByQuoteId).mockResolvedValue(mockApprovedItems);
+            vi.mocked(getPrisma).mockReturnValue({
+                $transaction: vi.fn(async (callback) => callback(tx)),
+            } as any);
+            vi.mocked(serviceOrderRepository.finalizePreApprovedQuote).mockResolvedValue(true);
+            vi.mocked(serviceOrderRepository.updateServiceOrderStatus).mockResolvedValue(true);
+            vi.mocked(serviceOrderRepository.createServiceOrderStatusHistory).mockResolvedValue({
+                id: "uuid-history-123",
+                serviceOrderId: mockServiceOrderRecord.id,
+                fromStatus: "AWAITING_QUOTE",
+                toStatus: "AWAITING_MAINTENANCE",
+                changeSource: "USER",
+                changedById: validInput.finalizedById,
+                createdAt: new Date(),
+            });
+
+            return { tx };
+        };
+
+        it("should throw if serviceOrderRepository.findQuoteById fails", async () => {
+            const error = new Error("fake error");
+            vi.mocked(serviceOrderRepository.findQuoteById).mockRejectedValue(error);
+
+            await expect(serviceOrderService.finalizePreApprovedQuote(validInput))
+                .rejects.toThrow(error);
+
+            expect(getPrisma).not.toHaveBeenCalled();
+        });
+
+        it("should throw NOT_FOUND if quote does not exist", async () => {
+            vi.mocked(serviceOrderRepository.findQuoteById).mockResolvedValue(null);
+
+            await expect(serviceOrderService.finalizePreApprovedQuote(validInput))
+                .rejects.toMatchObject({ statusCode: 404, message: "Quote not found" });
+
+            expect(getPrisma).not.toHaveBeenCalled();
+        });
+
+        it("should throw CONFLICT if quote is not DRAFT", async () => {
+            vi.mocked(serviceOrderRepository.findQuoteById).mockResolvedValue({
+                ...mockQuoteRecord,
+                status: "SENT",
+            });
+
+            await expect(serviceOrderService.finalizePreApprovedQuote(validInput))
+                .rejects.toMatchObject({ statusCode: 409, message: "Quote is not in DRAFT status" });
+
+            expect(getPrisma).not.toHaveBeenCalled();
+        });
+
+        it("should throw CONFLICT if quote has a diagnosis (standard flow)", async () => {
+            vi.mocked(serviceOrderRepository.findQuoteById).mockResolvedValue({
+                ...mockQuoteRecord,
+                diagnosisId: "uuid-diagnosis-123",
+            });
+
+            await expect(serviceOrderService.finalizePreApprovedQuote(validInput))
+                .rejects.toMatchObject({ statusCode: 409, message: "Pre-approved quote should not have a diagnosis" });
+
+            expect(getPrisma).not.toHaveBeenCalled();
+        });
+
+        it("should throw if serviceOrderRepository.findById fails", async () => {
+            const error = new Error("fake error");
+            vi.mocked(serviceOrderRepository.findQuoteById).mockResolvedValue(mockQuoteRecord);
+            vi.mocked(serviceOrderRepository.findById).mockRejectedValue(error);
+
+            await expect(serviceOrderService.finalizePreApprovedQuote(validInput))
+                .rejects.toThrow(error);
+        });
+
+        it("should throw NOT_FOUND if service order does not exist", async () => {
+            vi.mocked(serviceOrderRepository.findQuoteById).mockResolvedValue(mockQuoteRecord);
+            vi.mocked(serviceOrderRepository.findById).mockResolvedValue(null);
+
+            await expect(serviceOrderService.finalizePreApprovedQuote(validInput))
+                .rejects.toMatchObject({ statusCode: 404, message: "Service order not found" });
+        });
+
+        it("should throw CONFLICT if service order is not AWAITING_QUOTE", async () => {
+            vi.mocked(serviceOrderRepository.findQuoteById).mockResolvedValue(mockQuoteRecord);
+            vi.mocked(serviceOrderRepository.findById).mockResolvedValue({
+                ...mockServiceOrderRecord,
+                status: "WAITING_DIAGNOSIS",
+            });
+
+            await expect(serviceOrderService.finalizePreApprovedQuote(validInput))
+                .rejects.toMatchObject({ statusCode: 409, message: "Service order is not in AWAITING_QUOTE status" });
+
+            expect(getPrisma).not.toHaveBeenCalled();
+        });
+
+        it("should throw CONFLICT if the quote has no items", async () => {
+            setupFinalizeMocks();
+            vi.mocked(serviceOrderRepository.listQuoteItemsByQuoteId).mockResolvedValue([]);
+
+            await expect(serviceOrderService.finalizePreApprovedQuote(validInput))
+                .rejects.toMatchObject({ statusCode: 409, message: "Quote must have at least one item to be finalized" });
+
+            expect(getPrisma).not.toHaveBeenCalled();
+        });
+
+        it("should throw CONFLICT if any quote item is not APPROVED", async () => {
+            setupFinalizeMocks();
+            vi.mocked(serviceOrderRepository.listQuoteItemsByQuoteId).mockResolvedValue([
+                { id: "uuid-item-1", decision: "APPROVED" },
+                { id: "uuid-item-2", decision: "PENDING" },
+            ] as QuoteItemRecord[]);
+
+            await expect(serviceOrderService.finalizePreApprovedQuote(validInput))
+                .rejects.toMatchObject({ statusCode: 409, message: "All quote items must be approved to finalize" });
+
+            expect(getPrisma).not.toHaveBeenCalled();
+        });
+
+        it("should throw CONFLICT if finalizePreApprovedQuote returns false (race)", async () => {
+            const { tx } = setupFinalizeMocks();
+            vi.mocked(serviceOrderRepository.finalizePreApprovedQuote).mockResolvedValue(false);
+
+            await expect(serviceOrderService.finalizePreApprovedQuote(validInput))
+                .rejects.toMatchObject({ statusCode: 409, message: "Quote is no longer in a valid status for finalization" });
+
+            expect(serviceOrderRepository.finalizePreApprovedQuote).toHaveBeenCalledWith(mockQuoteRecord.id, tx);
+            expect(serviceOrderRepository.updateServiceOrderStatus).not.toHaveBeenCalled();
+        });
+
+        it("should throw CONFLICT if updateServiceOrderStatus returns false (race)", async () => {
+            setupFinalizeMocks();
+            vi.mocked(serviceOrderRepository.updateServiceOrderStatus).mockResolvedValue(false);
+
+            await expect(serviceOrderService.finalizePreApprovedQuote(validInput))
+                .rejects.toMatchObject({ statusCode: 409, message: "Service order is no longer in a valid status for finalization" });
+
+            expect(serviceOrderRepository.createServiceOrderStatusHistory).not.toHaveBeenCalled();
+        });
+
+        it("should propagate error when createServiceOrderStatusHistory fails", async () => {
+            setupFinalizeMocks();
+            const error = new Error("fake error");
+            vi.mocked(serviceOrderRepository.createServiceOrderStatusHistory).mockRejectedValue(error);
+
+            await expect(serviceOrderService.finalizePreApprovedQuote(validInput))
+                .rejects.toThrow(error);
+        });
+
+        it("should throw UNAUTHORIZED if changed_by foreign key is violated", async () => {
+            const dbError = new Error("Foreign key constraint failed");
+            setupFinalizeMocks();
+            vi.mocked(getPrisma).mockReturnValue({
+                $transaction: vi.fn(async () => { throw dbError; }),
+            } as any);
+            vi.mocked(isForeignKeyConstraintOn).mockImplementation(
+                (_error, field) => field === "changed_by",
+            );
+
+            await expect(serviceOrderService.finalizePreApprovedQuote(validInput))
+                .rejects.toMatchObject({ statusCode: 401, code: "USER_NOT_FOUND", message: "Authenticated user no longer exists" });
+
+            expect(isForeignKeyConstraintOn).toHaveBeenCalledWith(dbError, "changed_by");
+        });
+
+        it("should propagate error if it is not a known constraint violation", async () => {
+            const error = new Error("fake error");
+            setupFinalizeMocks();
+            vi.mocked(getPrisma).mockReturnValue({
+                $transaction: vi.fn(async () => { throw error; }),
+            } as any);
+            vi.mocked(isForeignKeyConstraintOn).mockReturnValue(false);
+
+            await expect(serviceOrderService.finalizePreApprovedQuote(validInput))
+                .rejects.toThrow(error);
+        });
+
+        it("should finalize the quote and move the service order to AWAITING_MAINTENANCE", async () => {
+            const { tx } = setupFinalizeMocks();
+
+            await serviceOrderService.finalizePreApprovedQuote(validInput);
+
+            expect(serviceOrderRepository.finalizePreApprovedQuote).toHaveBeenCalledWith(mockQuoteRecord.id, tx);
+            expect(serviceOrderRepository.updateServiceOrderStatus).toHaveBeenCalledWith(
+                {
+                    serviceOrderId: mockServiceOrderRecord.id,
+                    expectedStatuses: ["AWAITING_QUOTE"],
+                    toStatus: "AWAITING_MAINTENANCE",
+                },
+                tx,
+            );
+            expect(serviceOrderRepository.createServiceOrderStatusHistory).toHaveBeenCalledWith(
+                {
+                    serviceOrderId: mockServiceOrderRecord.id,
+                    fromStatus: "AWAITING_QUOTE",
+                    toStatus: "AWAITING_MAINTENANCE",
+                    changeSource: "USER",
+                    changedById: validInput.finalizedById,
                 },
                 tx,
             );

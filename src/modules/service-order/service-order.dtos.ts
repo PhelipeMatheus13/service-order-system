@@ -8,6 +8,8 @@ import {
     CreateQuoteItemAndComponentsRequest,
     UpdateQuoteItemAndComponentsRequest,
     QuoteDecisionRequest,
+    CreatePreApprovedServiceOrderRequest,
+    CreatePreApprovedQuoteItemAndComponentsRequest,
 } from "./service-order.schemas.js";
 import {
     CreateServiceOrderInput,
@@ -20,6 +22,8 @@ import {
     CreateQuoteItemAndComponentsInput,
     UpdateQuoteItemAndComponentsInput,
     QuoteDecisionInput,
+    CreatePreApprovedServiceOrderInput,
+    CreatePreApprovedQuoteItemAndComponentsInput,
 } from "./service-order.types.js";
 
 const createServiceOrderDTO = (body: CreateServiceOrderRequest, createdById: string): CreateServiceOrderInput => ({
@@ -73,7 +77,7 @@ const createQuoteItemAndComponentsDTO = (body: CreateQuoteItemAndComponentsReque
     components: body.components
 });
 
-const UpdateQuoteItemAndComponentsDTO = (body: UpdateQuoteItemAndComponentsRequest, quoteItemId: string, updatedById: string): UpdateQuoteItemAndComponentsInput => ({
+const updateQuoteItemAndComponentsDTO = (body: UpdateQuoteItemAndComponentsRequest, quoteItemId: string, updatedById: string): UpdateQuoteItemAndComponentsInput => ({
     quoteItemId,
     description: body.description,
     updatedById,
@@ -86,6 +90,22 @@ const quoteDecisionDTO = (body: QuoteDecisionRequest, quoteId: string, decisionR
     decisionRegisteredById
 });
 
+const createPreApprovedServiceOrderDTO = (body: CreatePreApprovedServiceOrderRequest, createdById: string): CreatePreApprovedServiceOrderInput => ({
+    reportedProblem: body.reportedProblem,
+    deviceId: body.deviceId,
+    createdById
+});
+
+const createPreApprovedQuoteItemAndComponentsDTO = (
+    body: CreatePreApprovedQuoteItemAndComponentsRequest, 
+    quoteId: string, 
+    createdById: string
+): CreatePreApprovedQuoteItemAndComponentsInput => ({
+    quoteId,
+    description: body.description,
+    createdById,
+    components: body.components
+});
 
 export default {
     createServiceOrderDTO,
@@ -96,6 +116,8 @@ export default {
     completeDiagnosisDTO,
     createQuoteDTO,
     createQuoteItemAndComponentsDTO,
-    UpdateQuoteItemAndComponentsDTO,
+    updateQuoteItemAndComponentsDTO,
     quoteDecisionDTO,
+    createPreApprovedServiceOrderDTO,
+    createPreApprovedQuoteItemAndComponentsDTO,
 };

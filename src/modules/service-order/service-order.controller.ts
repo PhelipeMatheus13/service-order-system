@@ -173,7 +173,7 @@ const getQuoteById = asyncHandler(async (req, res) => {
     const quote = await serviceOrderService.getQuoteById(String(id));
     res.status(200).json({
         success: true,
-        data: quote, 
+        data: quote,
     });
 });
 
@@ -185,7 +185,7 @@ const listQuotesByServiceOrderId = asyncHandler(async (req, res) => {
     });
     res.status(200).json({
         success: true,
-        data: quotes, 
+        data: quotes,
     });
 });
 
@@ -195,7 +195,7 @@ const getQuoteItemById = asyncHandler(async (req, res) => {
     const quoteItemWithComponents = await serviceOrderService.getQuoteItemById(String(id));
     res.status(200).json({
         success: true,
-        data: quoteItemWithComponents, 
+        data: quoteItemWithComponents,
     });
 });
 
@@ -207,25 +207,25 @@ const listQuoteItemsWithComponentsByQuoteId = asyncHandler(async (req, res) => {
     });
     res.status(200).json({
         success: true,
-        data: quoteItemsWithComponents, 
+        data: quoteItemsWithComponents,
     });
 });
 
 const updateQuoteItemAndComponents = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    if (!id) throw badRequest({ message: "Quote item ID is required"  });
-    const input = serviceOrderDTO.UpdateQuoteItemAndComponentsDTO(req.body, String(id), String(req.user?.id))
+    if (!id) throw badRequest({ message: "Quote item ID is required" });
+    const input = serviceOrderDTO.updateQuoteItemAndComponentsDTO(req.body, String(id), String(req.user?.id))
     const quoteItemsWithComponents = await serviceOrderService.updateQuoteItemAndComponents(input);
     res.status(200).json({
         success: true,
-        data: quoteItemsWithComponents, 
+        data: quoteItemsWithComponents,
         message: "Quote item successfully updated",
     });
 });
 
 const deleteQuoteItem = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    if (!id) throw badRequest({ message: "Quote item ID is required"  });
+    if (!id) throw badRequest({ message: "Quote item ID is required" });
     await serviceOrderService.deleteQuoteItem(String(id));
     res.status(200).json({
         success: true,
@@ -238,7 +238,7 @@ const requestQuoteSubmission = asyncHandler(async (req, res) => {
     const { id } = req.params;
     if (!id) throw badRequest({ message: "Quote ID is required" });
     await serviceOrderService.requestQuoteSubmission({
-        quoteId: String(id), 
+        quoteId: String(id),
         submissionRequestedBy: String(req.user?.id),
     });
     res.status(200).json({
@@ -272,6 +272,41 @@ const quoteDecision = asyncHandler(async (req, res) => {
     });
 });
 
+const createPreApprovedServiceOrder = asyncHandler(async (req, res) => {
+    const input = serviceOrderDTO.createPreApprovedServiceOrderDTO(req.body, String(req.user?.id));
+    const result = await serviceOrderService.createPreApprovedServiceOrder(input);
+    res.status(201).json({
+        success: true,
+        data: result,
+        message: "Pre-approved service order created successfully",
+    });
+});
+
+const createPreApprovedQuoteItemAndComponents = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (!id) throw badRequest({ message: "Quote ID is required" });
+    const input = serviceOrderDTO.createPreApprovedQuoteItemAndComponentsDTO(req.body, String(id), String(req.user?.id))
+    const quoteItemWithComponents = await serviceOrderService.createPreApprovedQuoteItemAndComponents(input);
+    res.status(201).json({
+        success: true,
+        data: quoteItemWithComponents,
+        message: "Pre-approved quote item and components created successfully",
+    });
+});
+
+const finalizePreApprovedQuote = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (!id) throw badRequest({ message: "Quote ID is required" });
+    await serviceOrderService.finalizePreApprovedQuote({
+        quoteId: String(id),
+        finalizedById: String(req.user?.id),
+    });
+    res.status(200).json({
+        success: true,
+        message: "Pre-approved quote finalized successfully",
+    });
+});
+
 export default {
     createServiceOrder,
     getServiceOrderById,
@@ -295,4 +330,7 @@ export default {
     requestQuoteSubmission,
     reviseQuote,
     quoteDecision,
+    createPreApprovedServiceOrder,
+    createPreApprovedQuoteItemAndComponents,
+    finalizePreApprovedQuote,
 };

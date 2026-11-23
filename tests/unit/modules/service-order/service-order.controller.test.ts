@@ -1488,4 +1488,270 @@ describe("Service Order Controller (Unit)", () => {
             expect(res.status).not.toHaveBeenCalled();
         });
     });
+
+    describe("createPreApprovedServiceOrder", () => {
+        it("should return 201 on successful creation", async () => {
+            req.user = { id: "uuid-user-123" };
+            req.body = {
+                deviceId: "uuid-device-123",
+                reportedProblem: "Screen is cracked and touch is not responding.",
+            };
+
+            const mockServiceOrderRecord = {
+                id: "uuid-service-order-123",
+                customerId: "uuid-customer-123",
+                deviceId: "uuid-device-123",
+                reportedProblem: "Screen is cracked and touch is not responding.",
+                status: "AWAITING_QUOTE",
+                createdById: "uuid-user-123",
+                cancelledAt: null,
+                cancelReason: null,
+                finishedAt: null,
+                createdAt: new Date(),
+                updatedAt: null,
+            } as ServiceOrderRecord;
+
+            const mockQuoteRecord = {
+                id: "uuid-quote-123",
+                serviceOrderId: "uuid-service-order-123",
+                diagnosisId: null,
+                status: "DRAFT",
+                submittedAt: null,
+                respondedAt: null,
+                createdById: "uuid-user-123",
+                createdAt: new Date(),
+                updatedAt: null,
+            } as QuoteRecord;
+
+            const mockResult = {
+                serviceOrder: mockServiceOrderRecord,
+                quote: mockQuoteRecord,
+            };
+
+            vi.mocked(serviceOrderService).createPreApprovedServiceOrder.mockResolvedValue(mockResult);
+
+            await serviceOrderController.createPreApprovedServiceOrder(req, res, next);
+
+            expect(serviceOrderService.createPreApprovedServiceOrder).toHaveBeenCalledWith({
+                deviceId: "uuid-device-123",
+                reportedProblem: "Screen is cracked and touch is not responding.",
+                createdById: "uuid-user-123",
+            });
+
+            expect(res.status).toHaveBeenCalledWith(201);
+            expect(res.json).toHaveBeenCalledWith({
+                success: true,
+                data: mockResult,
+                message: "Pre-approved service order created successfully",
+            });
+            expect(next).not.toHaveBeenCalled();
+        });
+
+        it("should propagate error when service fails", async () => {
+            req.user = { id: "uuid-user-123" };
+            req.body = {
+                deviceId: "uuid-device-123",
+                reportedProblem: "Screen is cracked and touch is not responding.",
+            };
+
+            const error = new Error("Service error");
+            vi.mocked(serviceOrderService).createPreApprovedServiceOrder.mockRejectedValue(error);
+
+            await serviceOrderController.createPreApprovedServiceOrder(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(error);
+            expect(res.status).not.toHaveBeenCalled();
+        });
+    });
+
+    describe("createPreApprovedQuoteItemAndComponents", () => {
+        it("should return 201 on successful creation", async () => {
+            req.params.id = "uuid-quote-123";
+            req.user = { id: "uuid-user-123" };
+            req.body = {
+                description: "Battery replacement",
+                components: [
+                    {
+                        type: "PART",
+                        description: "Battery",
+                        quantity: 1,
+                        unitPrice: 80.0,
+                    },
+                    {
+                        type: "LABOR",
+                        description: "Battery replacement labor",
+                        quantity: 1,
+                        unitPrice: 20.0,
+                    },
+                ],
+            };
+
+            const mockQuoteItem = {
+                id: "uuid-quote-item-123",
+                quoteId: "uuid-quote-123",
+                findingId: null,
+                description: "Battery replacement",
+                decision: "APPROVED",
+                createdById: "uuid-user-123",
+                createdAt: new Date(),
+                updatedById: null,
+                updatedAt: null,
+                quoteItemComponents: [
+                    {
+                        id: "uuid-component-1",
+                        quoteItemId: "uuid-quote-item-123",
+                        type: "PART",
+                        description: "Battery",
+                        quantity: 1,
+                        unitPrice: new Prisma.Decimal(80),
+                        createdAt: new Date(),
+                        updatedAt: null,
+                    },
+                    {
+                        id: "uuid-component-2",
+                        quoteItemId: "uuid-quote-item-123",
+                        type: "LABOR",
+                        description: "Battery replacement labor",
+                        quantity: 1,
+                        unitPrice: new Prisma.Decimal(20),
+                        createdAt: new Date(),
+                        updatedAt: null,
+                    },
+                ],
+            } as QuoteItemWithComponents;
+
+            vi.mocked(serviceOrderService).createPreApprovedQuoteItemAndComponents.mockResolvedValue(mockQuoteItem);
+
+            await serviceOrderController.createPreApprovedQuoteItemAndComponents(req, res, next);
+
+            expect(serviceOrderService.createPreApprovedQuoteItemAndComponents).toHaveBeenCalledWith({
+                quoteId: "uuid-quote-123",
+                description: "Battery replacement",
+                createdById: "uuid-user-123",
+                components: [
+                    {
+                        type: "PART",
+                        description: "Battery",
+                        quantity: 1,
+                        unitPrice: 80.0,
+                    },
+                    {
+                        type: "LABOR",
+                        description: "Battery replacement labor",
+                        quantity: 1,
+                        unitPrice: 20.0,
+                    },
+                ],
+            });
+
+            expect(res.status).toHaveBeenCalledWith(201);
+            expect(res.json).toHaveBeenCalledWith({
+                success: true,
+                data: mockQuoteItem,
+                message: "Pre-approved quote item and components created successfully",
+            });
+            expect(next).not.toHaveBeenCalled();
+        });
+
+        it("should call next with badRequest error if id is missing", async () => {
+            req.params = {};
+            req.user = { id: "uuid-user-123" };
+            req.body = {
+                description: "Battery replacement",
+                components: [
+                    {
+                        type: "PART",
+                        description: "Battery",
+                        quantity: 1,
+                        unitPrice: 80.0,
+                    },
+                ],
+            };
+
+            await serviceOrderController.createPreApprovedQuoteItemAndComponents(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(expect.objectContaining({
+                statusCode: 400,
+                code: "BAD_REQUEST",
+                message: "Quote ID is required",
+            }));
+            expect(serviceOrderService.createPreApprovedQuoteItemAndComponents).not.toHaveBeenCalled();
+            expect(res.status).not.toHaveBeenCalled();
+        });
+
+        it("should propagate error when service fails", async () => {
+            req.params.id = "uuid-quote-123";
+            req.user = { id: "uuid-user-123" };
+            req.body = {
+                description: "Battery replacement",
+                components: [
+                    {
+                        type: "PART",
+                        description: "Battery",
+                        quantity: 1,
+                        unitPrice: 80.0,
+                    },
+                ],
+            };
+
+            const error = new Error("Service error");
+            vi.mocked(serviceOrderService).createPreApprovedQuoteItemAndComponents.mockRejectedValue(error);
+
+            await serviceOrderController.createPreApprovedQuoteItemAndComponents(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(error);
+            expect(res.status).not.toHaveBeenCalled();
+        });
+    });
+
+    describe("finalizePreApprovedQuote", () => {
+        it("should return 200 on successful finalization", async () => {
+            req.params.id = "uuid-quote-123";
+            req.user = { id: "uuid-user-123" };
+
+            vi.mocked(serviceOrderService).finalizePreApprovedQuote.mockResolvedValue(undefined);
+
+            await serviceOrderController.finalizePreApprovedQuote(req, res, next);
+
+            expect(serviceOrderService.finalizePreApprovedQuote).toHaveBeenCalledWith({
+                quoteId: "uuid-quote-123",
+                finalizedById: "uuid-user-123",
+            });
+
+            expect(res.status).toHaveBeenCalledWith(200);
+            expect(res.json).toHaveBeenCalledWith({
+                success: true,
+                message: "Pre-approved quote finalized successfully",
+            });
+            expect(next).not.toHaveBeenCalled();
+        });
+
+        it("should call next with badRequest error if id is missing", async () => {
+            req.params = {};
+            req.user = { id: "uuid-user-123" };
+
+            await serviceOrderController.finalizePreApprovedQuote(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(expect.objectContaining({
+                statusCode: 400,
+                code: "BAD_REQUEST",
+                message: "Quote ID is required",
+            }));
+            expect(serviceOrderService.finalizePreApprovedQuote).not.toHaveBeenCalled();
+            expect(res.status).not.toHaveBeenCalled();
+        });
+
+        it("should propagate error when service fails", async () => {
+            req.params.id = "uuid-quote-123";
+            req.user = { id: "uuid-user-123" };
+
+            const error = new Error("Service error");
+            vi.mocked(serviceOrderService).finalizePreApprovedQuote.mockRejectedValue(error);
+
+            await serviceOrderController.finalizePreApprovedQuote(req, res, next);
+
+            expect(next).toHaveBeenCalledWith(error);
+            expect(res.status).not.toHaveBeenCalled();
+        });
+    });
 });

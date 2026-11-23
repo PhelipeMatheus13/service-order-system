@@ -440,6 +440,233 @@ describe("Service Order Routes (Integration)", () => {
         });
     });
 
+    describe("POST /service-orders/pre-approved", () => {
+        it("should create a pre-approved service order successfully", async () => {
+            const { user, customer, device } = await new ServiceOrderBuilder(prisma)
+                .withUser({ role: "ATTENDANT" })
+                .withCustomer()
+                .withDevice()
+                .build();
+
+            const accessToken = generateAccessToken(user.id, "ATTENDANT");
+
+            const res = await request(app)
+                .post("/service-orders/pre-approved")
+                .set("Authorization", `Bearer ${accessToken}`)
+                .send({
+                    deviceId: device.id,
+                    reportedProblem: "Screen is cracked and touch is not responding.",
+                });
+
+            expect(res.statusCode).toBe(201);
+            expect(res.body.success).toBe(true);
+            expect(res.body.message).toBe("Pre-approved service order created successfully");
+            expect(res.body.data.serviceOrder).toBeTruthy();
+            expect(res.body.data.quote).toBeTruthy();
+
+            const so = await prisma.serviceOrder.findUnique({
+                where: { id: res.body.data.serviceOrder.id },
+            });
+            expect(so?.status).toBe("AWAITING_QUOTE");
+            expect(so?.deviceId).toBe(device.id);
+            expect(so?.customerId).toBe(customer.id);
+            expect(so?.createdById).toBe(user.id);
+
+            const quote = await prisma.quote.findUnique({
+                where: { id: res.body.data.quote.id },
+            });
+            expect(quote?.status).toBe("DRAFT");
+            expect(quote?.diagnosisId).toBeNull();
+            expect(quote?.serviceOrderId).toBe(so!.id);
+            expect(quote?.createdById).toBe(user.id);
+
+            const history = await prisma.serviceOrderStatusHistory.findFirst({
+                where: { serviceOrderId: so!.id },
+                orderBy: { createdAt: "desc" },
+            });
+            expect(history?.fromStatus).toBeNull();
+            expect(history?.toStatus).toBe("AWAITING_QUOTE");
+            expect(history?.changeSource).toBe("USER");
+            expect(history?.changedById).toBe(user.id);
+        });
+
+        it("should return 401 when the access token is missing", async () => {
+            const { device } = await new ServiceOrderBuilder(prisma)
+                .withUser({ role: "ATTENDANT" })
+                .withCustomer()
+                .withDevice()
+                .build();
+
+            const res = await request(app)
+                .post("/service-orders/pre-approved")
+                .send({
+                    deviceId: device.id,
+                    reportedProblem: "Screen is cracked and touch is not responding.",
+                });
+
+            expect(res.statusCode).toBe(401);
+        });
+    });
+
+    describe("POST /service-orders/quotes/:id/pre-approved/items", () => {
+        it("should create a pre-approved quote item with components successfully", async () => {
+            const { user, quotes } = await new ServiceOrderBuilder(prisma)
+                .withUser({ role: "ATTENDANT" })
+                .withCustomer()
+                .withDevice()
+                .withServiceOrder({ status: "AWAITING_QUOTE" })
+                .withQuote({ status: "DRAFT" })
+                .build();
+
+            const accessToken = generateAccessToken(user.id, "ATTENDANT");
+            const quoteId = quotes[0]!.id;
+
+            const res = await request(app)
+                .post(`/service-orders/quotes/${quoteId}/pre-approved/items`)
+                .set("Authorization", `Bearer ${accessToken}`)
+                .send({
+                    description: "Battery replacement",
+                    components: [
+                        {
+                            type: "PART",
+                            description: "Battery",
+                            quantity: 1,
+                            unitPrice: 80.0,
+                        },
+                        {
+                            type: "LABOR",
+                            description: "Battery replacement labor",
+                            quantity: 1,
+                            unitPrice: 20.0,
+                        },
+                    ],
+                });
+
+            expect(res.statusCode).toBe(201);
+            expect(res.body.success).toBe(true);
+            expect(res.body.message).toBe("Pre-approved quote item and components created successfully");
+            expect(res.body.data).toMatchObject({
+                quoteId,
+                findingId: null,
+                description: "Battery replacement",
+                decision: "APPROVED",
+                createdById: user.id,
+            });
+            expect(res.body.data.id).toBeTruthy();
+            expect(res.body.data.quoteItemComponents).toHaveLength(2);
+
+            const partComponent = res.body.data.quoteItemComponents.find(
+                (c: any) => c.type === "PART",
+            );
+            expect(partComponent.unitPrice).toBe("80");
+
+            const laborComponent = res.body.data.quoteItemComponents.find(
+                (c: any) => c.type === "LABOR",
+            );
+            expect(laborComponent.unitPrice).toBe("20");
+
+            const quoteItemFound = await prisma.quoteItem.findUnique({
+                where: { id: res.body.data.id },
+                include: { quoteItemComponents: true },
+            });
+            expect(quoteItemFound?.decision).toBe("APPROVED");
+            expect(quoteItemFound?.findingId).toBeNull();
+            expect(quoteItemFound?.quoteItemComponents).toHaveLength(2);
+        });
+
+        it("should return 401 when the access token is missing", async () => {
+            const { quotes } = await new ServiceOrderBuilder(prisma)
+                .withUser({ role: "ATTENDANT" })
+                .withCustomer()
+                .withDevice()
+                .withServiceOrder({ status: "AWAITING_QUOTE" })
+                .withQuote({ status: "DRAFT" })
+                .build();
+
+            const res = await request(app)
+                .post(`/service-orders/quotes/${quotes[0]!.id}/pre-approved/items`)
+                .send({
+                    description: "Battery replacement",
+                    components: [
+                        { type: "PART", description: "Battery", quantity: 1, unitPrice: 80 },
+                    ],
+                });
+
+            expect(res.statusCode).toBe(401);
+        });
+    });
+
+    describe("POST /service-orders/quotes/:id/finalize", () => {
+        it("should finalize the pre-approved quote and move the service order to AWAITING_MAINTENANCE", async () => {
+            const { user, serviceOrder, quotes, quoteItems } = await new ServiceOrderBuilder(prisma)
+                .withUser({ role: "ATTENDANT" })
+                .withCustomer()
+                .withDevice()
+                .withServiceOrder({ status: "AWAITING_QUOTE" })
+                .withQuote({ status: "DRAFT" })
+                .withQuoteItem({
+                    quoteIndex: 0,
+                    description: "Battery replacement",
+                    components: [
+                        { type: "PART", description: "Battery", quantity: 1, unitPrice: 80 },
+                    ],
+                })
+                .build();
+
+            // Builder defaults to PENDING — flip to APPROVED to mirror what
+            // createPreApprovedQuoteItemAndComponents produces in this flow.
+            await prisma.quoteItem.updateMany({
+                where: { id: { in: quoteItems.map((i) => i.id) } },
+                data: { decision: "APPROVED" },
+            });
+
+            const accessToken = generateAccessToken(user.id, "ATTENDANT");
+            const quoteId = quotes[0]!.id;
+
+            const res = await request(app)
+                .post(`/service-orders/quotes/${quoteId}/finalize`)
+                .set("Authorization", `Bearer ${accessToken}`);
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(res.body.message).toBe("Pre-approved quote finalized successfully");
+
+            const quoteFound = await prisma.quote.findUnique({ where: { id: quoteId } });
+            expect(quoteFound?.status).toBe("DECIDED");
+            expect(quoteFound?.respondedAt).toBeTruthy();
+            expect(quoteFound?.submittedAt).toBeNull();
+
+            const soFound = await prisma.serviceOrder.findUnique({
+                where: { id: serviceOrder!.id },
+            });
+            expect(soFound?.status).toBe("AWAITING_MAINTENANCE");
+
+            const history = await prisma.serviceOrderStatusHistory.findFirst({
+                where: { serviceOrderId: serviceOrder!.id },
+                orderBy: { createdAt: "desc" },
+            });
+            expect(history?.fromStatus).toBe("AWAITING_QUOTE");
+            expect(history?.toStatus).toBe("AWAITING_MAINTENANCE");
+            expect(history?.changeSource).toBe("USER");
+            expect(history?.changedById).toBe(user.id);
+        });
+
+        it("should return 401 when the access token is missing", async () => {
+            const { quotes } = await new ServiceOrderBuilder(prisma)
+                .withUser({ role: "ATTENDANT" })
+                .withCustomer()
+                .withDevice()
+                .withServiceOrder({ status: "AWAITING_QUOTE" })
+                .withQuote({ status: "DRAFT" })
+                .build();
+
+            const res = await request(app)
+                .post(`/service-orders/quotes/${quotes[0]!.id}/finalize`);
+
+            expect(res.statusCode).toBe(401);
+        });
+    });
+
     describe("GET /service-orders/:id", () => {
         it("should return the service order data", async () => {
             const { user, customer, device, serviceOrder } = await new ServiceOrderBuilder(prisma)

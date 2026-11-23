@@ -26,9 +26,12 @@ import type {
     OutboxQuoteRecord,
     QuoteEmailPayload,
     ListQuoteItemByQuoteId,
-    ApplyQuoteItemDecisionsData
+    ApplyQuoteItemDecisionsData,
+    CreatePreApprovedServiceOrderData,
+    CreatePreApprovedQuoteData,
+    CreatePreApprovedQuoteItemAndComponentsInput,
 } from "./service-order.types.ts";
-import { ServiceOrderStatus, QuoteStatus } from "./service-order.types.js";
+import { ServiceOrderStatus, QuoteStatus, QuoteItemDecision } from "./service-order.types.js";
 import { getPrisma } from "../../shared/config/database.js";
 import { Prisma, PrismaClient } from "../../generated/prisma/client.js";
 import { isNotFoundError } from "../../shared/utils/prisma-error.js";
@@ -320,6 +323,8 @@ const createQuoteItemAndComponents = async (input: CreateQuoteItemAndComponentsI
     });
 };
 
+
+
 const updateQuoteItemAndComponents = async (
     input: UpdateQuoteItemAndComponentsInput,
     tx: Prisma.TransactionClient
@@ -580,7 +585,7 @@ const markQuoteDecided = async (id: string, tx: Prisma.TransactionClient): Promi
     return result.count > 0;
 };
 
-const applyQuoteItemDecisions = async ( input: ApplyQuoteItemDecisionsData, tx: Prisma.TransactionClient): Promise<boolean> => {
+const applyQuoteItemDecisions = async (input: ApplyQuoteItemDecisionsData, tx: Prisma.TransactionClient): Promise<boolean> => {
     // quoteId is part of the WHERE on every update so an item id from a
     // different quote can't be silently updated. Returns false if any
     // update matches zero rows — the caller decides what that means.
@@ -594,6 +599,117 @@ const applyQuoteItemDecisions = async ( input: ApplyQuoteItemDecisionsData, tx: 
     }
 
     return true;
+};
+
+const createPreApproved = async (input: CreatePreApprovedServiceOrderData, tx: Prisma.TransactionClient): Promise<ServiceOrderRecord | null> => {
+    // Same rationale as `create`: derive customer_id from the device
+    // atomically. The only difference is the initial status — pre-approved
+    // service orders skip diagnosis and approval, so they start at
+    // AWAITING_QUOTE.
+    const rows = await tx.$queryRaw<ServiceOrderRecord[]>`
+        INSERT INTO service_orders (device_id, customer_id, reported_problem, status, created_by)
+        SELECT d.id, d.customer_id, ${input.reportedProblem}, 'AWAITING_QUOTE', ${input.createdById}::uuid
+        FROM devices d
+        WHERE d.id = ${input.deviceId}::uuid
+        RETURNING
+            id,
+            customer_id      AS "customerId",
+            device_id        AS "deviceId",
+            reported_problem AS "reportedProblem",
+            status,
+            created_by       AS "createdBy",
+            cancelled_at     AS "cancelledAt",
+            cancel_reason    AS "cancelReason",
+            finished_at      AS "finishedAt",
+            created_at       AS "createdAt",
+            updated_at       AS "updatedAt"
+    `;
+
+    return rows[0] ?? null;
+};
+
+const createPreApprovedQuote = async (input: CreatePreApprovedQuoteData, tx: Prisma.TransactionClient): Promise<QuoteRecord | null> => {
+    const rows = await tx.$queryRaw<QuoteRecord[]>`
+        INSERT INTO quotes (service_order_id, diagnosis_id, status, created_by)
+        SELECT
+            ${input.serviceOrderId}::uuid,
+            NULL, -- diagnosis is null in direct flow
+            'DRAFT', 
+            ${input.createdById}::uuid
+        WHERE EXISTS (
+            SELECT 1
+            FROM service_orders so
+            WHERE so.id = ${input.serviceOrderId}::uuid
+              AND so.status = 'AWAITING_QUOTE' -- Guarantee that the service order is in the correct state for creating a pre-approved quote
+        )
+        RETURNING
+            id,
+            service_order_id AS "serviceOrderId",
+            diagnosis_id     AS "diagnosisId",
+            status,
+            submitted_at     AS "submittedAt",
+            responded_at     AS "respondedAt",
+            created_by       AS "createdById",
+            created_at       AS "createdAt",
+            updated_at       AS "updatedAt"
+    `;
+
+    return rows[0] ?? null;
+};
+
+const createPreApprovedQuoteItemAndComponents = async (
+    input: CreatePreApprovedQuoteItemAndComponentsInput,
+    tx: Prisma.TransactionClient,
+): Promise<QuoteItemWithComponents> => {
+    return tx.quoteItem.create({
+        data: {
+            quoteId: input.quoteId,
+            findingId: null, // Pre-approved quote items do not have an associated finding
+            description: input.description,
+            decision: QuoteItemDecision.APPROVED, // Pre-approved quote items are automatically approved
+            createdById: input.createdById,
+            quoteItemComponents: {
+                create: input.components.map((component) => ({
+                    type: component.type,
+                    description: component.description,
+                    quantity: component.quantity,
+                    unitPrice: component.unitPrice,
+                })),
+            },
+        },
+        include: {
+            quoteItemComponents: true,
+        },
+    });
+};
+
+
+const finalizePreApprovedQuote = async (
+    quoteId: string,
+    tx: Prisma.TransactionClient,
+): Promise<boolean> => {
+    // diagnosis_id = null is the atomic flow guard: only pre-approved
+    // quotes (direct flow) can be finalized this way. The EXISTS on
+    // quote_items guarantees at least one item atomically with the status
+    // transition — closes the window where an item could be deleted
+    // between the service-level count and this update.
+    const rows = await tx.$queryRaw<{ id: string }[]>`
+        UPDATE quotes
+        SET status       = 'DECIDED',
+            responded_at = NOW(),
+            updated_at   = NOW()
+        WHERE id = ${quoteId}::uuid
+          AND status = 'DRAFT'
+          AND diagnosis_id IS NULL
+          AND EXISTS (
+              SELECT 1
+              FROM quote_items qi
+              WHERE qi.quote_id = ${quoteId}::uuid
+          )
+        RETURNING id
+    `;
+
+    return rows.length > 0;
 };
 
 // Reader
@@ -674,7 +790,7 @@ const findQuoteItemById = async (id: string): Promise<QuoteItemWithComponents | 
     });
 };
 
-const listQuoteItemsByQuoteId = async(input: ListQuoteItemByQuoteId): Promise<QuoteItemRecord[]> => {
+const listQuoteItemsByQuoteId = async (input: ListQuoteItemByQuoteId): Promise<QuoteItemRecord[]> => {
     const prisma = getPrisma();
     return prisma.quoteItem.findMany({
         where: { quoteId: input.quoteId },
@@ -821,6 +937,9 @@ export default {
     cloneQuote,
     markQuoteDecided,
     applyQuoteItemDecisions,
+    createPreApproved,
+    createPreApprovedQuote,
+    createPreApprovedQuoteItemAndComponents,
     // Reader
     findById,
     list,
@@ -834,5 +953,6 @@ export default {
     listQuoteItemsByQuoteId,
     listQuoteItemsWithComponentsByQuoteId,
     listOutboxQuoteUnconsumed,
-    findQuoteEmailPayloadById
+    findQuoteEmailPayloadById,
+    finalizePreApprovedQuote,
 };

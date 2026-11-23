@@ -22,6 +22,9 @@ import {
     quoteItemWithComponentsSchema,
     updateQuoteItemAndComponentsSchema,
     quoteDecisionSchema,
+    createPreApprovedServiceOrderSchema,
+    createPreApprovedServiceOrderResponseSchema,
+    createPreApprovedQuoteItemAndComponentsSchema,
 } from "./service-order.schemas.js";
 import serviceOrderController from "./service-order.controller.js";
 
@@ -383,6 +386,172 @@ registry.registerPath({
     }
 });
 router.post("/quotes/:id/quote-decision", checkAccessToken, authorize("ADMIN", "ATTENDANT"), validate(quoteDecisionSchema), serviceOrderController.quoteDecision);
+
+registry.registerPath({
+    tags: ["Service-order"],
+    method: "post",
+    path: "/service-orders/pre-approved",
+    summary: "Creates a pre-approved service order (requires ADMIN or ATTENDANT role)",
+    security: [{ bearerAuth: [] }],
+    request: {
+        body: {
+            content: { "application/json": { schema: createPreApprovedServiceOrderSchema } },
+        },
+    },
+    responses: {
+        201: {
+            description: "Pre-approved service order created successfully",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        success: z.boolean().openapi({ example: true }),
+                        data: createPreApprovedServiceOrderResponseSchema,
+                        message: z.string().openapi({ example: "Pre-approved service order created successfully" }),
+                    }),
+                },
+            },
+        },
+        401: {
+            description: "Authentication failed or because the authenticated user no longer exists",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
+                        invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
+                        accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
+                        authenticatedUserNoLongerExists: { $ref: "#/components/examples/authenticatedUserNoLongerExists" },
+                    },
+                },
+            },
+        },
+        403: {
+            description: "Forbidden, user does not have the required role",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    example: {
+                        success: false,
+                        error: {
+                            code: "FORBIDDEN",
+                            message: "Access denied",
+                        },
+                    },
+                },
+            },
+        },
+        404: { $ref: "#/components/responses/deviceNotFoundError" },
+        409: {
+            description: "This device already has an active service order",
+            content: {
+                "application/json": {
+                    schema: { $ref: "#/components/schemas/Error" },
+                    example: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "This device already has an active service order",
+                        },
+                    },
+                },
+            },
+        },
+        422: { $ref: "#/components/responses/createPreApprovedServiceOrderValidationError" },
+        500: { $ref: "#/components/responses/internalError" },
+    }
+});
+router.post("/pre-approved", checkAccessToken, authorize("ADMIN", "ATTENDANT"), validate(createPreApprovedServiceOrderSchema), serviceOrderController.createPreApprovedServiceOrder);
+
+registry.registerPath({
+    tags: ["Quote"],
+    method: "post",
+    path: "/quotes/:id/pre-approved/items",
+    summary: "create a pre-approved quote item with components (requires ADMIN or ATTENDANT role)",
+    security: [{ bearerAuth: [] }],
+    request: {
+        params: z.object({ id: z.string() }),
+        body: {
+            content: { "application/json": { schema: createPreApprovedQuoteItemAndComponentsSchema } },
+        },
+    },
+    responses: {
+        201: {
+            description: "Pre-approved quote item and components created successfully",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        success: z.boolean().openapi({ example: true }),
+                        data: quoteItemWithComponentsSchema,
+                        message: z.string().openapi({ example: "Pre-approved quote item and components created successfully" }),
+                    }),
+                },
+            },
+        },
+        400: { $ref: "#/components/responses/missingQuoteIdError" },
+        401: {
+            description: "Authentication failed or because the authenticated user no longer exists",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
+                        invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
+                        accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
+                        authenticatedUserNoLongerExists: { $ref: "#/components/examples/authenticatedUserNoLongerExists" },
+                    },
+                },
+            },
+        },
+        404: { $ref: "#/components/responses/quoteNotFoundError" },
+        409: { $ref: "#/components/responses/createPreApprovedQuoteItemAndComponentsConflictError" },
+        422: { $ref: "#/components/responses/createPreApprovedQuoteItemAndComponentsValidationError" },
+        500: { $ref: "#/components/responses/internalError" },
+    }
+});
+router.post("/quotes/:id/pre-approved/items", checkAccessToken, authorize("ADMIN", "ATTENDANT"), validate(createPreApprovedQuoteItemAndComponentsSchema), serviceOrderController.createPreApprovedQuoteItemAndComponents);
+
+registry.registerPath({
+    tags: ["Quote"],
+    method: "post",
+    path: "/service-orders/quotes/:id/finalize",
+    summary: "Finalize a quote (requires ADMIN or ATTENDANT role)",
+    security: [{ bearerAuth: [] }],
+    request: {
+        params: z.object({ id: z.string() }),
+    },
+    responses: {
+        200: {
+            description: "Pre-approved quote finalized successfully",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        success: z.boolean().openapi({ example: true }),
+                        message: z.string().openapi({ example: "Pre-approved quote finalized successfully" }),
+                    }),
+                },
+            },
+        },
+        400: { $ref: "#/components/responses/missingQuoteIdError" },
+        401: {
+            description: "Authentication failed or because the authenticated user no longer exists",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
+                        invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
+                        accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
+                        authenticatedUserNoLongerExists: { $ref: "#/components/examples/authenticatedUserNoLongerExists" },
+                    },
+                },
+            },
+        },
+        404: { $ref: "#/components/responses/quoteOrServiceOrderNotFoundError" },
+        409: { $ref: "#/components/responses/finalizePreApprovedQuoteConflictError" },
+        500: { $ref: "#/components/responses/internalError" },
+    }
+});
+router.post("/quotes/:id/finalize", checkAccessToken, authorize("ADMIN", "ATTENDANT"), serviceOrderController.finalizePreApprovedQuote);
 
 // GET 
 registry.registerPath({
@@ -1066,6 +1235,6 @@ registry.registerPath({
         500: { $ref: "#/components/responses/internalError" },
     }
 });
-router.delete("/quote-items/:id",  checkAccessToken, authorize("ADMIN", "ATTENDANT"), serviceOrderController.deleteQuoteItem);
+router.delete("/quote-items/:id", checkAccessToken, authorize("ADMIN", "ATTENDANT"), serviceOrderController.deleteQuoteItem);
 
 export default router;

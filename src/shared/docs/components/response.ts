@@ -273,7 +273,7 @@ const quoteOrFindingNotFoundError = registry.registerComponent("responses", "quo
     },
 });
 
-const quoteItemNotFoundError  = registry.registerComponent("responses", "quoteItemNotFoundError", {
+const quoteItemNotFoundError = registry.registerComponent("responses", "quoteItemNotFoundError", {
     description: "Quote item not found or does not exist",
     content: {
         "application/json": {
@@ -855,6 +855,118 @@ const quoteDecisionConflictError = registry.registerComponent("responses", "quot
     },
 });
 
+const createPreApprovedQuoteItemAndComponentsConflictError = registry.registerComponent("responses", "createPreApprovedQuoteItemAndComponentsConflictError", {
+    description: "Pre-approved quote item and components cannot be created",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            examples: {
+                quoteNotDraft: {
+                    summary: "Quote is not in DRAFT status",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Quote is not in DRAFT status",
+                        },
+                    },
+                },
+                quoteNoLongerDraft: {
+                    summary: "Quote status changed during the request (race condition)",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Quote is no longer in DRAFT status",
+                        },
+                    },
+                },
+            },
+        },
+    },
+});
+
+const finalizePreApprovedQuoteConflictError = registry.registerComponent("responses", "finalizePreApprovedQuoteConflictError", {
+    description: "Pre-approved quote cannot be finalized",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            examples: {
+                quoteNotDraft: {
+                    summary: "Quote is not in DRAFT status",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Quote is not in DRAFT status",
+                        },
+                    },
+                },
+                quoteHasDiagnosis: {
+                    summary: "Quote belongs to the standard flow (has a diagnosis)",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Pre-approved quote should not have a diagnosis",
+                        },
+                    },
+                },
+                serviceOrderNotAwaitingQuote: {
+                    summary: "Service order is not in AWAITING_QUOTE status",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Service order is not in AWAITING_QUOTE status",
+                        },
+                    },
+                },
+                quoteHasNoItems: {
+                    summary: "Quote has no items to finalize",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Quote must have at least one item to be finalized",
+                        },
+                    },
+                },
+                quoteHasNonApprovedItems: {
+                    summary: "At least one quote item is not APPROVED",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "All quote items must be approved to finalize",
+                        },
+                    },
+                },
+                quoteChangedConcurrently: {
+                    summary: "Quote status changed during the request (race condition)",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Quote is no longer in a valid status for finalization",
+                        },
+                    },
+                },
+                serviceOrderChangedConcurrently: {
+                    summary: "Service order status changed during the request (race condition)",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Service order is no longer in a valid status for finalization",
+                        },
+                    },
+                },
+            },
+        },
+    },
+});
+
 // VALIDATION ERRORS (422)
 const registerValidationError = registry.registerComponent("responses", "registerValidationError", {
     description: "Register validation error",
@@ -1221,6 +1333,7 @@ const createQuoteItemAndComponentsValidationError = registry.registerComponent("
                     details: [
                         { field: "findingId", message: "Finding ID must be a valid UUID" },
                         { field: "description", message: "Description is required" },
+                        { field: "components.0.description", message: "Component description is required" },
                         { field: "components.0.type", message: "Invalid option: expected one of \"PART\"|\"LABOR\"|\"OTHER\"" },
                         { field: "components.0.quantity", message: "Quantity must be greater than zero" },
                         { field: "components.0.unitPrice", message: "Unit price must have at most 2 decimal places" },
@@ -1293,6 +1406,49 @@ const quoteDecisionValidationError = registry.registerComponent("responses", "qu
     },
 });
 
+const createPreApprovedServiceOrderValidationError = registry.registerComponent("responses", "createPreApprovedServiceOrderValidationError", {
+    description: "Create a pre-approved service order validation error",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/ValidationError" },
+            example: {
+                success: false,
+                error: {
+                    code: "VALIDATION_ERROR",
+                    message: "Validation failed",
+                    details: [
+                        { field: "deviceId", message: "Device ID must be a valid UUID" },
+                        { field: "reportedProblem", message: "Reported problem must be at least 10 characters long" },
+                    ],
+                },
+            },
+        },
+    },
+});
+
+const createPreApprovedQuoteItemAndComponentsValidationError = registry.registerComponent("responses", "createPreApprovedQuoteItemAndComponentsValidationError", {
+    description: "create pre-approved quote item and components validation error",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/ValidationError" },
+            example: {
+                success: false,
+                error: {
+                    code: "VALIDATION_ERROR",
+                    message: "Validation failed",
+                    details: [
+                        { field: "description", message: "Description is required" },
+                        { field: "components.0.description", message: "Component description is required" },
+                        { field: "components.0.type", message: "Invalid option: expected one of \"PART\"|\"LABOR\"|\"OTHER\"" },
+                        { field: "components.0.quantity", message: "Quantity must be greater than zero" },
+                        { field: "components.0.unitPrice", message: "Unit price must have at most 2 decimal places" },
+                    ],
+                },
+            },
+        },
+    },
+});
+
 // 500
 const internalError = registry.registerComponent("responses", "internalError", {
     description: "Internal error",
@@ -1309,6 +1465,7 @@ const internalError = registry.registerComponent("responses", "internalError", {
         },
     },
 });
+
 
 export {
     // 400
@@ -1345,6 +1502,8 @@ export {
     requestQuoteSubmissionConflictError,
     reviseQuoteConflictError,
     quoteDecisionConflictError,
+    createPreApprovedQuoteItemAndComponentsConflictError,
+    finalizePreApprovedQuoteConflictError,
     // 422
     registerValidationError,
     confirmEmailValidationError,
@@ -1364,6 +1523,8 @@ export {
     createQuoteItemAndComponentsValidationError,
     updateQuoteItemAndComponentsValidationError,
     quoteDecisionValidationError,
+    createPreApprovedServiceOrderValidationError,
+    createPreApprovedQuoteItemAndComponentsValidationError,
     // 500
     internalError,
 };

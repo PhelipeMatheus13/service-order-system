@@ -15,7 +15,6 @@ import {
     OutboxQuote,
 } from "../../generated/prisma/client.js";
 
-
 interface CreateServiceOrderInput {
     deviceId: string;
     reportedProblem: string;
@@ -187,14 +186,10 @@ interface QuoteEmailPayload {
 }
 
 interface ReviseQuoteInput {
-    quoteId: string, 
+    quoteId: string,
     revisedById: string
 }
 
-interface itemDecision {
-    quoteItemId: string,
-    decision: QuoteItemDecision
-}
 
 interface QuoteDecisionInput {
     quoteId: string,
@@ -214,7 +209,46 @@ interface ApplyQuoteItemDecisionsData {
 }
 
 interface ListQuoteItemByQuoteId {
-    quoteId: string, 
+    quoteId: string,
+}
+
+interface CreatePreApprovedServiceOrderInput {
+    deviceId: string;
+    reportedProblem: string;
+    createdById: string;
+}
+
+interface CreatePreApprovedServiceOrderData {
+    deviceId: string;
+    reportedProblem: string;
+    createdById: string;
+}
+
+interface CreatePreApprovedQuoteData {
+    serviceOrderId: string,
+    createdById: string,
+}
+
+type CreatePreApprovedServiceOrderResult = {
+    serviceOrder: ServiceOrder;
+    quote: Quote;
+}
+
+interface CreatePreApprovedQuoteItemAndComponentsInput {
+    quoteId: string;
+    description: string;
+    components: Array<{
+        type: QuoteItemComponentType;
+        description: string;
+        quantity: number;
+        unitPrice: number;
+    }>;
+    createdById: string,
+}
+
+interface FinalizePreApprovedQuoteInput {
+    quoteId: string;
+    finalizedById: string;
 }
 
 export {
@@ -254,9 +288,15 @@ export type {
     RequestQuoteSubmissionInput,
     UpdateQuoteStatusData,
     OutboxQuote as OutboxQuoteRecord,
-    QuoteEmailPayload, 
+    QuoteEmailPayload,
     ReviseQuoteInput,
     QuoteDecisionInput,
+    CreatePreApprovedServiceOrderInput,
     ApplyQuoteItemDecisionsData,
     ListQuoteItemByQuoteId,
+    CreatePreApprovedServiceOrderData,
+    CreatePreApprovedQuoteData,
+    CreatePreApprovedServiceOrderResult,
+    CreatePreApprovedQuoteItemAndComponentsInput,
+    FinalizePreApprovedQuoteInput,
 };

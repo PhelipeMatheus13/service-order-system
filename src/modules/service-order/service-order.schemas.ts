@@ -90,6 +90,14 @@ const quoteItemWithComponentsSchema = registry.register(
     })
 );
 
+const createPreApprovedServiceOrderResponseSchema = registry.register(
+    "CreatePreApprovedServiceOrderResponseSchema",
+    z.object({
+        serviceOrder: serviceOrderSchema,
+        quote: quoteSchema,
+    })
+);
+
 const createServiceOrderSchema = registry.register(
     "CreateServiceOrderSchema",
     z.object({
@@ -176,10 +184,10 @@ const updateFindingSchema = registry.register(
             description: "Whether this finding can be repaired.",
         }),
     })
-    .refine(
-        (data) => data.description !== null || data.repairable !== null,
-        { path: ["body"], message: "At least one field must be provided for update" }
-    )
+        .refine(
+            (data) => data.description !== null || data.repairable !== null,
+            { path: ["body"], message: "At least one field must be provided for update" }
+        )
 );
 
 type UpdateFindingRequest = z.infer<typeof updateFindingSchema>;
@@ -342,18 +350,18 @@ const updateQuoteItemAndComponentsSchema = registry.register(
                 description: "Components to update. Send an empty array to leave components untouched.",
             }),
     })
-    .refine(
-        (data) =>
-            data.description !== null ||
-            data.components.some(
-                (c) =>
-                    c.type !== null ||
-                    c.description !== null ||
-                    c.quantity !== null ||
-                    c.unitPrice !== null,
-            ),
-        { path: ["body"], message: "At least one field must be provided for update" },
-    ),
+        .refine(
+            (data) =>
+                data.description !== null ||
+                data.components.some(
+                    (c) =>
+                        c.type !== null ||
+                        c.description !== null ||
+                        c.quantity !== null ||
+                        c.unitPrice !== null,
+                ),
+            { path: ["body"], message: "At least one field must be provided for update" },
+        ),
 );
 
 type UpdateQuoteItemAndComponentsRequest = z.infer<typeof updateQuoteItemAndComponentsSchema>;
@@ -388,6 +396,80 @@ const quoteDecisionSchema = registry.register(
 
 type QuoteDecisionRequest = z.infer<typeof quoteDecisionSchema>;
 
+const createPreApprovedServiceOrderSchema = registry.register(
+    "CreatePreApprovedServiceOrderSchema",
+    z.object({
+        deviceId: z
+            .string()
+            .uuid("Device ID must be a valid UUID")
+            .openapi({ example: "550e8400-e29b-41d4-a716-446655440000" }),
+
+        reportedProblem: z
+            .string()
+            .trim()
+            .min(10, "Reported problem must be at least 10 characters long")
+            .max(2000, "Reported problem must contain at most 2000 characters")
+            .openapi({
+                example: "Phone won't charge",
+            }),
+    })
+);
+
+type CreatePreApprovedServiceOrderRequest = z.infer<typeof createPreApprovedServiceOrderSchema>;
+
+const createPreApprovedQuoteItemComponentSchema = registry.register(
+    "QuoteItemComponentInput",
+    z.object({
+        type: z
+            .enum(["PART", "LABOR", "OTHER"])
+            .openapi({
+                example: "PART",
+                description: "Type of the cost component",
+            }),
+        description: z
+            .string()
+            .trim()
+            .min(1, "Component description is required")
+            .max(255, "Component description must be at most 255 characters")
+            .openapi({ example: "Battery" }),
+
+        quantity: z
+            .number()
+            .int("Quantity must be an integer")
+            .positive("Quantity must be greater than zero")
+            .openapi({ example: 1 }),
+
+        unitPrice: z
+            .number()
+            .positive("Unit price must be greater than zero")
+            .refine(
+                (n) => /^\d+(\.\d{1,2})?$/.test(n.toString()),
+                "Unit price must have at most 2 decimal places",
+            )
+            .openapi({ example: 80.00 }),
+    }),
+);
+
+const createPreApprovedQuoteItemAndComponentsSchema = registry.register(
+    "CreatePreApprovedQuoteItemAndComponentsSchema",
+    z.object({
+        description: z
+            .string()
+            .trim()
+            .min(1, "Description is required")
+            .max(255, "Description must be at most 255 characters")
+            .openapi({ example: "Battery replacement" }),
+
+        components: z
+            .array(createPreApprovedQuoteItemComponentSchema)
+            .min(1, "At least one component is required")
+            .openapi({
+                description: "Cost breakdown for this quote item. At least one component is required.",
+            }),
+    })
+);
+
+type CreatePreApprovedQuoteItemAndComponentsRequest = z.infer<typeof createPreApprovedQuoteItemAndComponentsSchema>;
 
 export {
     serviceOrderSchema,
@@ -404,6 +486,9 @@ export {
     createQuoteItemAndComponentsSchema,
     updateQuoteItemAndComponentsSchema,
     quoteDecisionSchema,
+    createPreApprovedServiceOrderSchema,
+    createPreApprovedQuoteItemAndComponentsSchema,
+    createPreApprovedServiceOrderResponseSchema,
 };
 
 export type {
@@ -416,4 +501,6 @@ export type {
     CreateQuoteItemAndComponentsRequest,
     UpdateQuoteItemAndComponentsRequest,
     QuoteDecisionRequest,
+    CreatePreApprovedServiceOrderRequest,
+    CreatePreApprovedQuoteItemAndComponentsRequest,
 };
