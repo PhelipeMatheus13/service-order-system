@@ -297,7 +297,7 @@ router.post("/quotes/:id/items", checkAccessToken, authorize("ADMIN", "ATTENDANT
 registry.registerPath({
     tags: ["Quote"],
     method: "post",
-    path: "/service-orders/quotes/:id/revise",
+    path: "/service-orders/quotes/{id}/revise",
     summary: "Revise a quote (requires ADMIN or ATTENDANT role)",
     security: [{ bearerAuth: [] }],
     request: {
@@ -343,7 +343,7 @@ router.post("/quotes/:id/revise", checkAccessToken, authorize("ADMIN", "ATTENDAN
 registry.registerPath({
     tags: ["Quote"],
     method: "post",
-    path: "/service-orders/quotes/:id/quote-decision",
+    path: "/service-orders/quotes/{id}quote-decision",
     summary: "Submit a quote decision (requires ADMIN or ATTENDANT role)",
     security: [{ bearerAuth: [] }],
     request: {
@@ -465,8 +465,8 @@ router.post("/pre-approved", checkAccessToken, authorize("ADMIN", "ATTENDANT"), 
 registry.registerPath({
     tags: ["Quote"],
     method: "post",
-    path: "/quotes/:id/pre-approved/items",
-    summary: "create a pre-approved quote item with components (requires ADMIN or ATTENDANT role)",
+    path: "/service-orders/quotes/{id}/pre-approved/items",
+    summary: "Create a pre-approved quote item with components (requires ADMIN or ATTENDANT role)",
     security: [{ bearerAuth: [] }],
     request: {
         params: z.object({ id: z.string() }),
@@ -513,8 +513,8 @@ router.post("/quotes/:id/pre-approved/items", checkAccessToken, authorize("ADMIN
 registry.registerPath({
     tags: ["Quote"],
     method: "post",
-    path: "/service-orders/quotes/:id/finalize",
-    summary: "Finalize a quote (requires ADMIN or ATTENDANT role)",
+    path: "/service-orders/quotes/{id}/pre-approved/finalize",
+    summary: "Finalize a pre-approved quote (requires ADMIN or ATTENDANT role)",
     security: [{ bearerAuth: [] }],
     request: {
         params: z.object({ id: z.string() }),
@@ -551,7 +551,7 @@ registry.registerPath({
         500: { $ref: "#/components/responses/internalError" },
     }
 });
-router.post("/quotes/:id/finalize", checkAccessToken, authorize("ADMIN", "ATTENDANT"), serviceOrderController.finalizePreApprovedQuote);
+router.post("/quotes/:id/pre-approved/finalize", checkAccessToken, authorize("ADMIN", "ATTENDANT"), serviceOrderController.finalizePreApprovedQuote);
 
 // GET 
 registry.registerPath({

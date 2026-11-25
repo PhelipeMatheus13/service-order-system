@@ -596,7 +596,7 @@ describe("Service Order Routes (Integration)", () => {
         });
     });
 
-    describe("POST /service-orders/quotes/:id/finalize", () => {
+    describe("POST /service-orders/quotes/:id/pre-approved/finalize", () => {
         it("should finalize the pre-approved quote and move the service order to AWAITING_MAINTENANCE", async () => {
             const { user, serviceOrder, quotes, quoteItems } = await new ServiceOrderBuilder(prisma)
                 .withUser({ role: "ATTENDANT" })
@@ -624,7 +624,7 @@ describe("Service Order Routes (Integration)", () => {
             const quoteId = quotes[0]!.id;
 
             const res = await request(app)
-                .post(`/service-orders/quotes/${quoteId}/finalize`)
+                .post(`/service-orders/quotes/${quoteId}/pre-approved/finalize`)
                 .set("Authorization", `Bearer ${accessToken}`);
 
             expect(res.statusCode).toBe(200);
@@ -661,7 +661,7 @@ describe("Service Order Routes (Integration)", () => {
                 .build();
 
             const res = await request(app)
-                .post(`/service-orders/quotes/${quotes[0]!.id}/finalize`);
+                .post(`/service-orders/quotes/${quotes[0]!.id}/pre-approved/finalize`);
 
             expect(res.statusCode).toBe(401);
         });
