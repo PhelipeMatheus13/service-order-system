@@ -2,6 +2,8 @@ import { getSubscriberChannel } from "./connection.js";
 import PubsubError from "./error.js";
 import logger from "../config/logger.js";
 
+// TODO: implements maxRetries
+
 interface Message {
     topic: string;
     content: unknown;

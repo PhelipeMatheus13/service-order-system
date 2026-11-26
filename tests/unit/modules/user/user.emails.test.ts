@@ -15,6 +15,8 @@ describe("User Emails (Unit)", () => {
     });
 
     describe("sendConfirmationCode", () => {
+        const idempotencyKey = "idem-key-123";
+
         it("should propagate the error when sending the email fails", async () => {
             const error = new Error("Fake error");
 
@@ -25,6 +27,7 @@ describe("User Emails (Unit)", () => {
                     to: "user@example.com",
                     name: "John Doe",
                     code: "123456",
+                    idempotencyKey,
                 }),
             ).rejects.toThrow(error);
         });
@@ -36,6 +39,7 @@ describe("User Emails (Unit)", () => {
                 to: "user@example.com",
                 name: "John Doe",
                 code: "123456",
+                idempotencyKey,
             });
 
             const [mail] = sendMailMock.mock.calls[0];
@@ -43,6 +47,7 @@ describe("User Emails (Unit)", () => {
             expect(mail).toMatchObject({
                 to: "user@example.com",
                 subject: "Confirm your registration",
+                idempotencyKey,
             });
 
             expect(mail.html).toContain("<p>Hi, John Doe!</p>");
@@ -82,6 +87,7 @@ describe("User Emails (Unit)", () => {
                 to: "user@example.com",
                 subject: "Resend: Confirm your registration",
             });
+
 
             expect(mail.html).toContain("<p>Hi, John Doe!</p>");
             expect(mail.html).toContain("<p>We're sending you a new activation code as you requested.</p>");

@@ -97,6 +97,38 @@ const missingFindingIdError = registry.registerComponent("responses", "missingFi
     },
 });
 
+const missingQuoteIdError = registry.registerComponent("responses", "missingQuoteIdError", {
+    description: "Invalid request, missing Quote id",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            example: {
+                success: false,
+                error: {
+                    code: "BAD_REQUEST",
+                    message: "Quote ID is required",
+                },
+            },
+        },
+    },
+});
+
+const missingQuoteItemIdError = registry.registerComponent("responses", "missingQuoteItemIdError", {
+    description: "Invalid request, missing Quote item id",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            example: {
+                success: false,
+                error: {
+                    code: "BAD_REQUEST",
+                    message: "Quote Item ID is required",
+                },
+            },
+        },
+    },
+});
+
 // 404
 const userNotFoundError = registry.registerComponent("responses", "userNotFoundError", {
     description: "User not found or does not exist",
@@ -193,6 +225,142 @@ const findingNotFoundError = registry.registerComponent("responses", "findingNot
         },
     },
 });
+
+const quoteNotFoundError = registry.registerComponent("responses", "quoteNotFoundError", {
+    description: "Quote not found or does not exist",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            example: {
+                success: false,
+                error: {
+                    code: "NOT_FOUND",
+                    message: "Quote not found",
+                },
+            },
+        },
+    },
+});
+
+const quoteOrFindingNotFoundError = registry.registerComponent("responses", "quoteOrFindingNotFoundError", {
+    description: "Finding not found or does not exist",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            examples: {
+                quoteNotFound: {
+                    summary: "Quote not found",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "NOT_FOUND",
+                            message: "Quote not found",
+                        },
+                    },
+                },
+                findingNotFound: {
+                    summary: "Finding not found",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "NOT_FOUND",
+                            message: "Finding not found",
+                        },
+                    },
+                },
+            },
+        },
+    },
+});
+
+const quoteItemNotFoundError = registry.registerComponent("responses", "quoteItemNotFoundError", {
+    description: "Quote item not found or does not exist",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            example: {
+                success: false,
+                error: {
+                    code: "NOT_FOUND",
+                    message: "Quote item not found",
+                },
+            },
+        },
+    },
+});
+
+const updateQuoteItemAndComponentsNotFoundError = registry.registerComponent("responses", "updateQuoteItemAndComponentsNotFoundError", {
+    description: "Quote item or component not found",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            examples: {
+                quoteItemNotFound: {
+                    summary: "Quote item not found",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "NOT_FOUND",
+                            message: "Quote item not found",
+                        },
+                    },
+                },
+                quoteNotFound: {
+                    summary: "Quote not found",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "NOT_FOUND",
+                            message: "Quote not found",
+                        },
+                    },
+                },
+                quoteItemOrComponentNotFound: {
+                    summary: "Quote item or component deleted between read and update (race condition)",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "NOT_FOUND",
+                            message: "Quote item or component not found",
+                        },
+                    },
+                },
+            },
+        },
+    },
+});
+
+const quoteOrServiceOrderNotFoundError = registry.registerComponent("responses", "quoteOrServiceOrderNotFoundError", {
+    description: "Quote or service order not found or does not exist",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            examples: {
+                quoteNotFound: {
+                    summary: "Quote not found",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "NOT_FOUND",
+                            message: "Quote not found",
+                        },
+                    },
+                },
+                findingNotFound: {
+                    summary: "Service order not found",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "NOT_FOUND",
+                            message: "Service order not found",
+                        },
+                    },
+                },
+            },
+        },
+    },
+});
+
 // 409
 const emailAlreadyExistsError = registry.registerComponent("responses", "emailAlreadyExistsError", {
     description: "Email already in use",
@@ -389,6 +557,408 @@ const completeDiagnosisConflictError = registry.registerComponent("responses", "
                         error: {
                             code: "CONFLICT",
                             message: "Service order is no longer in diagnosis",
+                        },
+                    },
+                },
+            },
+        },
+    },
+});
+
+const createQuoteConflictError = registry.registerComponent("responses", "createQuoteConflictError", {
+    description: "Quote cannot be created",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            examples: {
+                diagnosisDoesNotBelongToServiceOrder: {
+                    summary: "Diagnosis belongs to a different service order",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Diagnosis does not belong to this service order",
+                        },
+                    },
+                },
+                serviceOrderNoLongerAwaitingQuote: {
+                    summary: "Service order status changed during the request (race condition)",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Service order is no longer awaiting quote",
+                        },
+                    },
+                },
+                currentQuoteAlreadyExists: {
+                    summary: "Service order already has a current (non-superseded) quote",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Service order already has a current quote",
+                        },
+                    },
+                },
+            },
+        },
+    },
+});
+
+const createQuoteItemAndComponentsConflictError = registry.registerComponent("responses", "createQuoteItemAndComponentsConflictError", {
+    description: "Quote item and components cannot be created",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            examples: {
+                quoteNotDraft: {
+                    summary: "Quote is not in DRAFT status",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Quote is not in DRAFT status",
+                        },
+                    },
+                },
+                findingDoesNotBelongToDiagnosis: {
+                    summary: "Finding does not belong to the quote's diagnosis",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Finding does not belong to this quote's diagnosis",
+                        },
+                    },
+                },
+                findingNotRepairable: {
+                    summary: "Finding is not repairable",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Finding is not repairable",
+                        },
+                    },
+                },
+                quoteNoLongerDraft: {
+                    summary: "Quote status changed during the request (race condition)",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Quote is no longer in DRAFT status",
+                        },
+                    },
+                },
+            },
+        },
+    },
+});
+
+const updateQuoteItemAndComponentsConflictError = registry.registerComponent("responses", "updateQuoteItemAndComponentsConflictError", {
+    description: "Quote item cannot be updated",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            examples: {
+                quoteNotDraft: {
+                    summary: "Quote is not in DRAFT status",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Quote is not in DRAFT status",
+                        },
+                    },
+                },
+                quoteNoLongerDraft: {
+                    summary: "Quote status changed during the request (race condition)",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Quote is no longer in DRAFT status",
+                        },
+                    },
+                },
+            },
+        },
+    },
+});
+
+const requestQuoteSubmissionConflictError = registry.registerComponent("responses", "requestQuoteSubmissionConflictError", {
+    description: "Quote submission cannot be requested",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            examples: {
+                quoteNotDraft: {
+                    summary: "Quote is not in DRAFT status",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Quote is not in DRAFT status",
+                        },
+                    },
+                },
+                quoteNoLongerDraft: {
+                    summary: "Quote status changed during the request (race condition)",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Quote is no longer in DRAFT status",
+                        },
+                    },
+                },
+            },
+        },
+    },
+});
+
+const reviseQuoteConflictError = registry.registerComponent("responses", "reviseQuoteConflictError", {
+    description: "Quote cannot be revised",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            examples: {
+                quoteInvalidStatus: {
+                    summary: "Quote is not in SENT or SUBMISSION_PENDING",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Quote is not in a valid status for revision",
+                        },
+                    },
+                },
+                serviceOrderInvalidStatus: {
+                    summary: "Service order is not in AWAITING_QUOTE or AWAITING_APPROVAL",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Service order is not in a valid status for quote revision",
+                        },
+                    },
+                },
+                quoteSupersededConcurrently: {
+                    summary: "Quote was superseded or decided by another request (race condition)",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Quote is no longer in a valid status for revision",
+                        },
+                    },
+                },
+                serviceOrderLockFailed: {
+                    summary: "Service order moved out of the accepted statuses under lock (race condition)",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Service order is no longer available for quote revision",
+                        },
+                    },
+                },
+            },
+        },
+    },
+});
+
+const quoteDecisionConflictError = registry.registerComponent("responses", "quoteDecisionConflictError", {
+    description: "Quote decision cannot be registered",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            examples: {
+                quoteInvalidStatus: {
+                    summary: "Quote is not in SENT",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Quote is not in a valid status for decision",
+                        },
+                    },
+                },
+                serviceOrderInvalidStatus: {
+                    summary: "Service order is not in AWAITING_APPROVAL",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Service order is not in a valid status for quote decision",
+                        },
+                    },
+                },
+                duplicateQuoteItemIds: {
+                    summary: "Payload contains the same quoteItemId more than once",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Payload contains duplicate quote item ids",
+                        },
+                    },
+                },
+                incompletePayload: {
+                    summary: "Payload is missing decisions or contains unknown item ids",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Payload must include a decision for every quote item and no unknown ids",
+                            details: {
+                                missingIds: ["uuid-1", "uuid-2"],
+                                unknownIds: ["uuid-x"],
+                            },
+                        },
+                    },
+                },
+                quoteDecidedConcurrently: {
+                    summary: "Quote was already decided by another request (race condition)",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Quote is no longer in a valid status for decision",
+                        },
+                    },
+                },
+                quoteItemChangedConcurrently: {
+                    summary: "A quote item disappeared or changed quote between validation and update",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Quote item state changed during decision",
+                        },
+                    },
+                },
+                serviceOrderChangedConcurrently: {
+                    summary: "Service order moved out of AWAITING_APPROVAL by another request (race condition)",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Service order is no longer in a valid status for quote decision",
+                        },
+                    },
+                },
+            },
+        },
+    },
+});
+
+const createPreApprovedQuoteItemAndComponentsConflictError = registry.registerComponent("responses", "createPreApprovedQuoteItemAndComponentsConflictError", {
+    description: "Pre-approved quote item and components cannot be created",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            examples: {
+                quoteNotDraft: {
+                    summary: "Quote is not in DRAFT status",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Quote is not in DRAFT status",
+                        },
+                    },
+                },
+                quoteNoLongerDraft: {
+                    summary: "Quote status changed during the request (race condition)",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Quote is no longer in DRAFT status",
+                        },
+                    },
+                },
+            },
+        },
+    },
+});
+
+const finalizePreApprovedQuoteConflictError = registry.registerComponent("responses", "finalizePreApprovedQuoteConflictError", {
+    description: "Pre-approved quote cannot be finalized",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            examples: {
+                quoteNotDraft: {
+                    summary: "Quote is not in DRAFT status",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Quote is not in DRAFT status",
+                        },
+                    },
+                },
+                quoteHasDiagnosis: {
+                    summary: "Quote belongs to the standard flow (has a diagnosis)",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Pre-approved quote should not have a diagnosis",
+                        },
+                    },
+                },
+                serviceOrderNotAwaitingQuote: {
+                    summary: "Service order is not in AWAITING_QUOTE status",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Service order is not in AWAITING_QUOTE status",
+                        },
+                    },
+                },
+                quoteHasNoItems: {
+                    summary: "Quote has no items to finalize",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Quote must have at least one item to be finalized",
+                        },
+                    },
+                },
+                quoteHasNonApprovedItems: {
+                    summary: "At least one quote item is not APPROVED",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "All quote items must be approved to finalize",
+                        },
+                    },
+                },
+                quoteChangedConcurrently: {
+                    summary: "Quote status changed during the request (race condition)",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Quote is no longer in a valid status for finalization",
+                        },
+                    },
+                },
+                serviceOrderChangedConcurrently: {
+                    summary: "Service order status changed during the request (race condition)",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Service order is no longer in a valid status for finalization",
                         },
                     },
                 },
@@ -719,8 +1289,8 @@ const completeDiagnosisValidationError = registry.registerComponent("responses",
                     code: "VALIDATION_ERROR",
                     message: "Validation failed",
                     details: [
-                        { 
-                            field: "result", 
+                        {
+                            field: "result",
                             message: "Invalid enum value. Expected 'FAULT_FOUND' | 'NO_FAULT_FOUND' | 'INCONCLUSIVE', received 'DONE'",
                         },
                     ],
@@ -730,6 +1300,154 @@ const completeDiagnosisValidationError = registry.registerComponent("responses",
     },
 });
 
+const createQuoteValidationError = registry.registerComponent("responses", "createQuoteValidationError", {
+    description: "create quote validation error",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/ValidationError" },
+            example: {
+                success: false,
+                error: {
+                    code: "VALIDATION_ERROR",
+                    message: "Validation failed",
+                    details: [
+                        { field: "diagnosisId", message: "Diagnosis ID must be a valid UUID", },
+                    ],
+                },
+            },
+        },
+    },
+});
+
+
+const createQuoteItemAndComponentsValidationError = registry.registerComponent("responses", "createQuoteItemAndComponentsValidationError", {
+    description: "create quote item and components validation error",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/ValidationError" },
+            example: {
+                success: false,
+                error: {
+                    code: "VALIDATION_ERROR",
+                    message: "Validation failed",
+                    details: [
+                        { field: "findingId", message: "Finding ID must be a valid UUID" },
+                        { field: "description", message: "Description is required" },
+                        { field: "components.0.description", message: "Component description is required" },
+                        { field: "components.0.type", message: "Invalid option: expected one of \"PART\"|\"LABOR\"|\"OTHER\"" },
+                        { field: "components.0.quantity", message: "Quantity must be greater than zero" },
+                        { field: "components.0.unitPrice", message: "Unit price must have at most 2 decimal places" },
+                    ],
+                },
+            },
+        },
+    },
+});
+
+const updateQuoteItemAndComponentsValidationError = registry.registerComponent("responses", "updateQuoteItemAndComponentsValidationError", {
+    description: "Update quote item validation error",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/ValidationError" },
+            examples: {
+                invalidFields: {
+                    summary: "Invalid field values",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "VALIDATION_ERROR",
+                            message: "Validation failed",
+                            details: [
+                                { field: "description", message: "Description must be at most 255 characters" },
+                                { field: "components.0.componentId", message: "Component ID must be a valid UUID" },
+                                { field: "components.0.type", message: "Invalid option: expected one of \"PART\"|\"LABOR\"|\"OTHER\"" },
+                                { field: "components.0.quantity", message: "Quantity must be greater than zero" },
+                                { field: "components.0.unitPrice", message: "Unit price must have at most 2 decimal places" },
+                            ],
+                        },
+                    },
+                },
+                noFieldsProvided: {
+                    summary: "No fields provided for update",
+                    value: {
+                        success: false,
+                        error: {
+                            code: "VALIDATION_ERROR",
+                            message: "Validation failed",
+                            details: [
+                                { field: "body", message: "At least one field must be provided for update" },
+                            ],
+                        },
+                    },
+                },
+            },
+        },
+    },
+});
+
+const quoteDecisionValidationError = registry.registerComponent("responses", "quoteDecisionValidationError", {
+    description: "Quote decision validation error",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/ValidationError" },
+            example: {
+                success: false,
+                error: {
+                    code: "VALIDATION_ERROR",
+                    message: "Validation failed",
+                    details: [
+                        { field: "itemDecisions", message: "At least one item decision is required" },
+                        { field: "itemDecisions.0.quoteItemId", message: "Quote Item ID must be a valid UUID" },
+                        { field: "itemDecisions.1.decision", message: "Invalid option: expected one of \"APPROVED\"|\"DECLINED\"" },
+                    ],
+                },
+            },
+        },
+    },
+});
+
+const createPreApprovedServiceOrderValidationError = registry.registerComponent("responses", "createPreApprovedServiceOrderValidationError", {
+    description: "Create a pre-approved service order validation error",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/ValidationError" },
+            example: {
+                success: false,
+                error: {
+                    code: "VALIDATION_ERROR",
+                    message: "Validation failed",
+                    details: [
+                        { field: "deviceId", message: "Device ID must be a valid UUID" },
+                        { field: "reportedProblem", message: "Reported problem must be at least 10 characters long" },
+                    ],
+                },
+            },
+        },
+    },
+});
+
+const createPreApprovedQuoteItemAndComponentsValidationError = registry.registerComponent("responses", "createPreApprovedQuoteItemAndComponentsValidationError", {
+    description: "create pre-approved quote item and components validation error",
+    content: {
+        "application/json": {
+            schema: { $ref: "#/components/schemas/ValidationError" },
+            example: {
+                success: false,
+                error: {
+                    code: "VALIDATION_ERROR",
+                    message: "Validation failed",
+                    details: [
+                        { field: "description", message: "Description is required" },
+                        { field: "components.0.description", message: "Component description is required" },
+                        { field: "components.0.type", message: "Invalid option: expected one of \"PART\"|\"LABOR\"|\"OTHER\"" },
+                        { field: "components.0.quantity", message: "Quantity must be greater than zero" },
+                        { field: "components.0.unitPrice", message: "Unit price must have at most 2 decimal places" },
+                    ],
+                },
+            },
+        },
+    },
+});
 
 // 500
 const internalError = registry.registerComponent("responses", "internalError", {
@@ -748,6 +1466,7 @@ const internalError = registry.registerComponent("responses", "internalError", {
     },
 });
 
+
 export {
     // 400
     missingUserIdError,
@@ -756,6 +1475,8 @@ export {
     missingServiceOrderIdError,
     missingDiagnosisIdError,
     missingFindingIdError,
+    missingQuoteIdError,
+    missingQuoteItemIdError,
     // 404
     userNotFoundError,
     customerNotFoundError,
@@ -763,6 +1484,11 @@ export {
     serviceOrderNotFoundError,
     diagnosisNotFoundError,
     findingNotFoundError,
+    quoteNotFoundError,
+    quoteOrFindingNotFoundError,
+    quoteItemNotFoundError,
+    updateQuoteItemAndComponentsNotFoundError,
+    quoteOrServiceOrderNotFoundError,
     // 409
     emailAlreadyExistsError,
     deviceUniqueConstraintError,
@@ -770,6 +1496,14 @@ export {
     startDiagnosisConflictError,
     createFindingConflictError,
     completeDiagnosisConflictError,
+    createQuoteConflictError,
+    createQuoteItemAndComponentsConflictError,
+    updateQuoteItemAndComponentsConflictError,
+    requestQuoteSubmissionConflictError,
+    reviseQuoteConflictError,
+    quoteDecisionConflictError,
+    createPreApprovedQuoteItemAndComponentsConflictError,
+    finalizePreApprovedQuoteConflictError,
     // 422
     registerValidationError,
     confirmEmailValidationError,
@@ -785,6 +1519,12 @@ export {
     createFindingValidationError,
     updateFindingValidationError,
     completeDiagnosisValidationError,
+    createQuoteValidationError,
+    createQuoteItemAndComponentsValidationError,
+    updateQuoteItemAndComponentsValidationError,
+    quoteDecisionValidationError,
+    createPreApprovedServiceOrderValidationError,
+    createPreApprovedQuoteItemAndComponentsValidationError,
     // 500
     internalError,
 };

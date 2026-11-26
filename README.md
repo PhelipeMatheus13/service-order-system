@@ -1,19 +1,21 @@
 # Service Order System
 
-REST API for a service order management system. The application's core
-infrastructure is complete and validated end-to-end through a full user
-lifecycle module — registration, asynchronous email confirmation, and
-account activation — backed by an outbox-driven messaging pipeline, plus
-JWT authentication with refresh token rotation. The business domain has
-started with customers and their devices; the service orders themselves
-(and order status/history) have not been implemented yet.
+REST API for a service order management system. The core infrastructure
+(authentication, messaging, logging, documentation, tests, CI) is in place and
+the business domain is partially implemented: customers, devices, service
+orders, the diagnosis stage (diagnoses and findings), and the quote stage
+(creation, revision, submission, and customer decision) are working
+end-to-end. The later stages of a service order (maintenance, delivery) have
+not been implemented yet.
 
 ## Current Status
 
-The `user` module covers the full account lifecycle used to validate the
-architecture before implementing the real business domain:
+### Infrastructure / account lifecycle
 
-- User registration
+The `user` module covers the full account lifecycle, originally used to
+validate the architecture before implementing the business domain:
+
+- User registration (ADMIN only)
 - Asynchronous email confirmation (outbox pattern + RabbitMQ pub/sub)
 - Resend confirmation code
 - Account activation (password creation via a short-lived activation token)
@@ -30,23 +32,82 @@ The `auth` module implements the authentication flow:
 
 Refresh tokens are persisted as SHA-256 hashes, never in plain text.
 
-The first business domain modules are in place:
+### Business domain
 
 - `customer`: create, update, retrieval, and listing
 - `device`: create, update, retrieval, and listing — each device belongs to
   a customer and may carry a unique serial number and/or IMEI
+- `service-order`:
+  - Create a service order for a device (the customer is derived from the
+    device) and cancel it with a reason
+  - Status history: every status transition is recorded
+  - Diagnosis: start a diagnosis (moves the order to `IN_DIAGNOSIS`),
+    complete it with a result (`FAULT_FOUND`, `NO_FAULT_FOUND` or
+    `INCONCLUSIVE`) and retrieve it
+  - Findings: create, update, delete, and list the findings of a diagnosis
+  - On diagnosis completion the order moves to `AWAITING_QUOTE` when the
+    result is `FAULT_FOUND` and there is at least one repairable finding;
+    otherwise it moves to `AWAITING_DELIVERY`
+  - Pre-approved flow: create a service order directly in `AWAITING_QUOTE`
+    with an empty `DRAFT` quote, skipping diagnosis and approval
+- `quote`:
+  - Create a quote for a service order (`AWAITING_QUOTE`), and create,
+    update, delete and list its items and item components
+  - Submit a quote (`DRAFT → SUBMISSION_PENDING`); delivery is handled
+    by an outbox-driven subscriber that marks the quote `SENT` and moves
+    the order to `AWAITING_APPROVAL`
+  - Revise a submitted quote before the customer decides: the current
+    quote is superseded and a new `DRAFT` revision is cloned from it
+    (items and components are cloned; decisions are reset to `PENDING`)
+  - Register the customer's decision for every item of the quote at once
+    (`APPROVED`/`DECLINED`): the quote moves to `DECIDED` and the order
+    moves to `AWAITING_MAINTENANCE` when at least one item is approved,
+    otherwise to `AWAITING_DELIVERY`
+  - Pre-approved quotes: items are created already `APPROVED` and the
+    finalization moves the quote to `DECIDED` and the order directly to
+    `AWAITING_MAINTENANCE`
 
-Write operations on customers and devices are restricted to the `ADMIN` and
-`ATTENDANT` roles; read operations only require a valid access token.
+Business rules enforced at the database level:
+
+- Only one active service order (`finished_at IS NULL`) per device
+- Only one non-superseded quote per service order (partial unique index)
+- A service order's `(device_id, customer_id)` pair must match an existing
+  device (composite foreign key)
+- A diagnosis is unique per service order
+
+State-sensitive writes (cancel, status updates, finding create/update/delete,
+diagnosis completion, quote submit/revise/decision, pre-approved finalize)
+use atomic guards — the validation runs as part of the
+`UPDATE`/`INSERT`/`DELETE` itself, so concurrent requests cannot overwrite
+each other's state transitions.
+
+### Access control
+
+| Area | Write | Read |
+| --- | --- | --- |
+| Users | `ADMIN` (register, delete); activation via activation token | `ADMIN` (list); `ADMIN` or the owner (by id) |
+| Customers / Devices | `ADMIN`, `ATTENDANT` | any authenticated user |
+| Service orders (create, cancel) | `ADMIN`, `ATTENDANT` | any authenticated user |
+| Diagnoses / Findings (create, update, complete, delete) | `ADMIN`, `TECHNICIAN` | any authenticated user |
+| Quotes / Quote items (create, update, delete, submit, revise, decision) | `ADMIN`, `ATTENDANT` | any authenticated user |
+
+### Not implemented yet
+
+Statuses such as `IN_MAINTENANCE` and `DELIVERED` already exist in the data
+model, but the flows that drive a service order through them (maintenance,
+delivery) are not implemented.
+
+### Tests and CI
 
 The automated test suite (Vitest) covers the shared infrastructure and the
-`user`, `auth`, `refresh-token`, `customer`, and `device` modules with unit
-and integration tests. Integration tests use an ephemeral PostgreSQL
-database through Testcontainers and apply the Prisma migrations before
-running.
+`user`, `auth`, `refresh-token`, `customer`, `device`, and `service-order`
+modules with unit and integration tests. Integration tests use an ephemeral
+PostgreSQL database through Testcontainers and apply the Prisma migrations
+before running.
 
-The next step is to model and implement the remaining business domain
-(service orders and order status/history).
+GitHub Actions runs the unit and integration test suites on pull requests and
+pushes to `main` (`.github/workflows/test.yml`). Dependabot checks npm
+dependencies weekly.
 
 ## Features
 
@@ -71,16 +132,18 @@ The next step is to model and implement the remaining business domain
 - Pub/sub messaging via RabbitMQ (topic exchange), running fully decoupled
   from the HTTP server in its own process (`src/pubsub.ts`)
 - Email delivery via SMTP (Nodemailer), used for account confirmation codes
+  and quote submission to the customer
 - Database seeding through Prisma (seed files under `prisma/seeds/`), used
   to create the initial admin user
 - Strict TypeScript (`strict: true` from the start, ESM/`nodenext` module
   resolution)
 - Type-safe database access with Prisma 7 and the PostgreSQL driver adapter
-  (`@prisma/adapter-pg`)
+  (`@prisma/adapter-pg`), with raw SQL where atomicity requires it
 - Runtime request validation with Zod, including fully inferred TypeScript
   types shared between validation and DTO mapping
 - Unit and integration tests with Vitest, Supertest, and Testcontainers
   (ephemeral PostgreSQL, schema applied via `prisma migrate deploy`)
+- Continuous integration with GitHub Actions
 
 ## Technologies
 
@@ -100,6 +163,7 @@ The next step is to model and implement the remaining business domain
 - express-rate-limit
 - Pino / pino-http
 - Vitest, Supertest, testcontainers
+- GitHub Actions, Dependabot
 
 ## Project Conventions
 
@@ -170,9 +234,8 @@ npm install
 ## Running Tests
 
 ```bash
-npm test              # watch mode
-npm run test:ci       # single run, CI-style
-npm run test:unit     # unit tests only
+npm test                  # watch mode (with coverage)
+npm run test:unit         # unit tests only
 npm run test:integration  # integration tests only (spins up ephemeral Postgres)
 ```
 
@@ -213,6 +276,12 @@ npm run test:integration  # integration tests only (spins up ephemeral Postgres)
 > subscriber, for instance, checks for an existing, unexpired validation
 > record before generating a new code, so a redelivered event doesn't
 > produce duplicate confirmation codes.
+
+> Service order creation, status updates, and finding writes use raw SQL
+> (`$queryRaw`) in a few places because Prisma's query API cannot express
+> `INSERT ... SELECT` or conditional writes guarded by joined state in a
+> single atomic statement. Doing a read followed by a write would open a race
+> window between the check and the write.
 
 > Unit tests intentionally focus on application behavior rather than
 > duplicating guarantees already provided by external libraries. For

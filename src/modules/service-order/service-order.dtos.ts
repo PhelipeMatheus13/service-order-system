@@ -3,7 +3,13 @@ import {
     CancelServiceOrderRequest,
     CreateFindingRequest,
     UpdateFindingRequest,
-    CompleteDiagnosisRequest
+    CompleteDiagnosisRequest,
+    CreateQuoteRequest,
+    CreateQuoteItemAndComponentsRequest,
+    UpdateQuoteItemAndComponentsRequest,
+    QuoteDecisionRequest,
+    CreatePreApprovedServiceOrderRequest,
+    CreatePreApprovedQuoteItemAndComponentsRequest,
 } from "./service-order.schemas.js";
 import {
     CreateServiceOrderInput,
@@ -11,7 +17,13 @@ import {
     StartDiagnosisInput,
     CreateFindingInput,
     UpdateFindingInput,
-    CompleteDiagnosisInput
+    CompleteDiagnosisInput,
+    CreateQuoteInput,
+    CreateQuoteItemAndComponentsInput,
+    UpdateQuoteItemAndComponentsInput,
+    QuoteDecisionInput,
+    CreatePreApprovedServiceOrderInput,
+    CreatePreApprovedQuoteItemAndComponentsInput,
 } from "./service-order.types.js";
 
 const createServiceOrderDTO = (body: CreateServiceOrderRequest, createdById: string): CreateServiceOrderInput => ({
@@ -51,6 +63,50 @@ const completeDiagnosisDTO = (body: CompleteDiagnosisRequest, diagnosisId: strin
     completedById,
 });
 
+const createQuoteDTO = (body: CreateQuoteRequest, serviceOrderId: string, createdById: string): CreateQuoteInput => ({
+    diagnosisId: body.diagnosisId,
+    serviceOrderId,
+    createdById,
+});
+
+const createQuoteItemAndComponentsDTO = (body: CreateQuoteItemAndComponentsRequest, quoteId: string, createdById: string): CreateQuoteItemAndComponentsInput => ({
+    quoteId,
+    findingId: body.findingId,
+    description: body.description,
+    createdById,
+    components: body.components
+});
+
+const updateQuoteItemAndComponentsDTO = (body: UpdateQuoteItemAndComponentsRequest, quoteItemId: string, updatedById: string): UpdateQuoteItemAndComponentsInput => ({
+    quoteItemId,
+    description: body.description,
+    updatedById,
+    components: body.components
+});
+
+const quoteDecisionDTO = (body: QuoteDecisionRequest, quoteId: string, decisionRegisteredById: string): QuoteDecisionInput => ({
+    quoteId,
+    itemDecisions: body.itemDecisions,
+    decisionRegisteredById
+});
+
+const createPreApprovedServiceOrderDTO = (body: CreatePreApprovedServiceOrderRequest, createdById: string): CreatePreApprovedServiceOrderInput => ({
+    reportedProblem: body.reportedProblem,
+    deviceId: body.deviceId,
+    createdById
+});
+
+const createPreApprovedQuoteItemAndComponentsDTO = (
+    body: CreatePreApprovedQuoteItemAndComponentsRequest, 
+    quoteId: string, 
+    createdById: string
+): CreatePreApprovedQuoteItemAndComponentsInput => ({
+    quoteId,
+    description: body.description,
+    createdById,
+    components: body.components
+});
+
 export default {
     createServiceOrderDTO,
     cancelServiceOrderDTO,
@@ -58,4 +114,10 @@ export default {
     createFindingDTO,
     updateFindingDTO,
     completeDiagnosisDTO,
+    createQuoteDTO,
+    createQuoteItemAndComponentsDTO,
+    updateQuoteItemAndComponentsDTO,
+    quoteDecisionDTO,
+    createPreApprovedServiceOrderDTO,
+    createPreApprovedQuoteItemAndComponentsDTO,
 };

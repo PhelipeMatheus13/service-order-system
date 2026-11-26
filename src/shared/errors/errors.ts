@@ -92,6 +92,13 @@ const unprocessable = (options: AppErrorOptions = {}): AppError => new AppError(
     ...options,
 });
 
+const tooManyRequests = (options: AppErrorOptions = {}): AppError => new AppError({
+    statusCode: 429,
+    code: "TOO_MANY_REQUESTS",
+    message: "Too many requests",
+    ...options,
+});
+
 const internal = (options: AppErrorOptions = {}): AppError => new AppError({
     statusCode: 500,
     code: "INTERNAL_ERROR",
@@ -108,5 +115,6 @@ export {
     conflict,
     alreadyExists,
     unprocessable,
+    tooManyRequests,
     internal,
 };

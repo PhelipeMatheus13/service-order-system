@@ -16,6 +16,15 @@ import {
     createFindingSchema,
     updateFindingSchema,
     completeDiagnosisSchema,
+    createQuoteSchema,
+    quoteSchema,
+    createQuoteItemAndComponentsSchema,
+    quoteItemWithComponentsSchema,
+    updateQuoteItemAndComponentsSchema,
+    quoteDecisionSchema,
+    createPreApprovedServiceOrderSchema,
+    createPreApprovedServiceOrderResponseSchema,
+    createPreApprovedQuoteItemAndComponentsSchema,
 } from "./service-order.schemas.js";
 import serviceOrderController from "./service-order.controller.js";
 
@@ -134,15 +143,15 @@ registry.registerPath({
                 },
             },
         },
-        409: { $ref: "#/components/responses/startDiagnosisConflictError" },
         404: { $ref: "#/components/responses/serviceOrderNotFoundError" },
+        409: { $ref: "#/components/responses/startDiagnosisConflictError" },
         500: { $ref: "#/components/responses/internalError" },
     }
 });
 router.post("/:id/diagnoses", checkAccessToken, authorize("ADMIN", "TECHNICIAN"), serviceOrderController.startDiagnosis);
 
 registry.registerPath({
-    tags: ["Findings"],
+    tags: ["Diagnosis"],
     method: "post",
     path: "/service-orders/diagnoses/{id}/findings",
     summary: "create a new finding (requires ADMIN or TECHNICIAN role)",
@@ -181,13 +190,365 @@ registry.registerPath({
                 },
             },
         },
-        409: { $ref: "#/components/responses/createFindingConflictError" },
         404: { $ref: "#/components/responses/diagnosisNotFoundError" },
+        409: { $ref: "#/components/responses/createFindingConflictError" },
         422: { $ref: "#/components/responses/createFindingValidationError" },
         500: { $ref: "#/components/responses/internalError" },
     }
 });
 router.post("/diagnoses/:id/findings", checkAccessToken, authorize("ADMIN", "TECHNICIAN"), serviceOrderController.createFinding);
+
+registry.registerPath({
+    tags: ["Quote"],
+    method: "post",
+    path: "/service-orders/{id}/quotes",
+    summary: "create a new quote (requires ADMIN or ATTENDANT role)",
+    security: [{ bearerAuth: [] }],
+    request: {
+        params: z.object({ id: z.string() }),
+        body: {
+            content: { "application/json": { schema: createQuoteSchema } },
+        },
+    },
+    responses: {
+        201: {
+            description: "Quote successfully created",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        success: z.boolean().openapi({ example: true }),
+                        data: quoteSchema,
+                        message: z.string().openapi({ example: "Quote successfully created" }),
+                    }),
+                },
+            },
+        },
+        400: { $ref: "#/components/responses/missingServiceOrderIdError" },
+        401: {
+            description: "Authentication failed or because the authenticated user no longer exists",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
+                        invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
+                        accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
+                        authenticatedUserNoLongerExists: { $ref: "#/components/examples/authenticatedUserNoLongerExists" },
+                    },
+                },
+            },
+        },
+        404: { $ref: "#/components/responses/diagnosisNotFoundError" },
+        409: { $ref: "#/components/responses/createQuoteConflictError" },
+        422: { $ref: "#/components/responses/createQuoteValidationError" },
+        500: { $ref: "#/components/responses/internalError" },
+    }
+});
+router.post("/:id/quotes", checkAccessToken, authorize("ADMIN", "ATTENDANT"), validate(createQuoteSchema), serviceOrderController.createQuote);
+
+registry.registerPath({
+    tags: ["Quote"],
+    method: "post",
+    path: "/service-orders/quotes/{id}/items",
+    summary: "create a new quote item with components (requires ADMIN or ATTENDANT role)",
+    security: [{ bearerAuth: [] }],
+    request: {
+        params: z.object({ id: z.string() }),
+        body: {
+            content: { "application/json": { schema: createQuoteItemAndComponentsSchema } },
+        },
+    },
+    responses: {
+        201: {
+            description: "Quote item successfully created",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        success: z.boolean().openapi({ example: true }),
+                        data: quoteItemWithComponentsSchema,
+                        message: z.string().openapi({ example: "Quote item successfully created" }),
+                    }),
+                },
+            },
+        },
+        400: { $ref: "#/components/responses/missingQuoteIdError" },
+        401: {
+            description: "Authentication failed or because the authenticated user no longer exists",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
+                        invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
+                        accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
+                        authenticatedUserNoLongerExists: { $ref: "#/components/examples/authenticatedUserNoLongerExists" },
+                    },
+                },
+            },
+        },
+        404: { $ref: "#/components/responses/quoteOrFindingNotFoundError" },
+        409: { $ref: "#/components/responses/createQuoteItemAndComponentsConflictError" },
+        422: { $ref: "#/components/responses/createQuoteItemAndComponentsValidationError" },
+        500: { $ref: "#/components/responses/internalError" },
+    }
+});
+router.post("/quotes/:id/items", checkAccessToken, authorize("ADMIN", "ATTENDANT"), validate(createQuoteItemAndComponentsSchema), serviceOrderController.createQuoteItem);
+
+registry.registerPath({
+    tags: ["Quote"],
+    method: "post",
+    path: "/service-orders/quotes/{id}/revise",
+    summary: "Revise a quote (requires ADMIN or ATTENDANT role)",
+    security: [{ bearerAuth: [] }],
+    request: {
+        params: z.object({ id: z.string() }),
+    },
+    responses: {
+        201: {
+            description: "Quote successfully revised",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        success: z.boolean().openapi({ example: true }),
+                        data: quoteSchema,
+                        message: z.string().openapi({ example: "Quote successfully revised" }),
+                    }),
+                },
+            },
+        },
+        400: { $ref: "#/components/responses/missingQuoteIdError" },
+        401: {
+            description: "Authentication failed",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
+                        invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
+                        accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
+                    },
+                },
+            },
+        },
+        404: { $ref: "#/components/responses/quoteOrServiceOrderNotFoundError" },
+        409: { $ref: "#/components/responses/reviseQuoteConflictError" },
+        500: { $ref: "#/components/responses/internalError" },
+    }
+});
+router.post("/quotes/:id/revise", checkAccessToken, authorize("ADMIN", "ATTENDANT"), serviceOrderController.reviseQuote);
+
+registry.registerPath({
+    tags: ["Quote"],
+    method: "post",
+    path: "/service-orders/quotes/{id}/quote-decision",
+    summary: "Submit a quote decision (requires ADMIN or ATTENDANT role)",
+    security: [{ bearerAuth: [] }],
+    request: {
+        params: z.object({ id: z.string() }),
+        body: {
+            content: { "application/json": { schema: quoteDecisionSchema } },
+        },
+    },
+    responses: {
+        201: {
+            description: "Quote decision successfully processed",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        success: z.boolean().openapi({ example: true }),
+                        message: z.string().openapi({ example: "Quote decision successfully processed" }),
+                    }),
+                },
+            },
+        },
+        400: { $ref: "#/components/responses/missingQuoteIdError" },
+        401: {
+            description: "Authentication failed or because the authenticated user no longer exists",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
+                        invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
+                        accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
+                        authenticatedUserNoLongerExists: { $ref: "#/components/examples/authenticatedUserNoLongerExists" },
+                    },
+                },
+            },
+        },
+        404: { $ref: "#/components/responses/quoteOrServiceOrderNotFoundError" },
+        409: { $ref: "#/components/responses/quoteDecisionConflictError" },
+        422: { $ref: "#/components/responses/quoteDecisionValidationError" },
+        500: { $ref: "#/components/responses/internalError" },
+    }
+});
+router.post("/quotes/:id/quote-decision", checkAccessToken, authorize("ADMIN", "ATTENDANT"), validate(quoteDecisionSchema), serviceOrderController.quoteDecision);
+
+registry.registerPath({
+    tags: ["Service-order"],
+    method: "post",
+    path: "/service-orders/pre-approved",
+    summary: "Creates a pre-approved service order (requires ADMIN or ATTENDANT role)",
+    security: [{ bearerAuth: [] }],
+    request: {
+        body: {
+            content: { "application/json": { schema: createPreApprovedServiceOrderSchema } },
+        },
+    },
+    responses: {
+        201: {
+            description: "Pre-approved service order created successfully",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        success: z.boolean().openapi({ example: true }),
+                        data: createPreApprovedServiceOrderResponseSchema,
+                        message: z.string().openapi({ example: "Pre-approved service order created successfully" }),
+                    }),
+                },
+            },
+        },
+        401: {
+            description: "Authentication failed or because the authenticated user no longer exists",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
+                        invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
+                        accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
+                        authenticatedUserNoLongerExists: { $ref: "#/components/examples/authenticatedUserNoLongerExists" },
+                    },
+                },
+            },
+        },
+        403: {
+            description: "Forbidden, user does not have the required role",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    example: {
+                        success: false,
+                        error: {
+                            code: "FORBIDDEN",
+                            message: "Access denied",
+                        },
+                    },
+                },
+            },
+        },
+        404: { $ref: "#/components/responses/deviceNotFoundError" },
+        409: {
+            description: "This device already has an active service order",
+            content: {
+                "application/json": {
+                    schema: { $ref: "#/components/schemas/Error" },
+                    example: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "This device already has an active service order",
+                        },
+                    },
+                },
+            },
+        },
+        422: { $ref: "#/components/responses/createPreApprovedServiceOrderValidationError" },
+        500: { $ref: "#/components/responses/internalError" },
+    }
+});
+router.post("/pre-approved", checkAccessToken, authorize("ADMIN", "ATTENDANT"), validate(createPreApprovedServiceOrderSchema), serviceOrderController.createPreApprovedServiceOrder);
+
+registry.registerPath({
+    tags: ["Quote"],
+    method: "post",
+    path: "/service-orders/quotes/{id}/pre-approved/items",
+    summary: "Create a pre-approved quote item with components (requires ADMIN or ATTENDANT role)",
+    security: [{ bearerAuth: [] }],
+    request: {
+        params: z.object({ id: z.string() }),
+        body: {
+            content: { "application/json": { schema: createPreApprovedQuoteItemAndComponentsSchema } },
+        },
+    },
+    responses: {
+        201: {
+            description: "Pre-approved quote item and components created successfully",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        success: z.boolean().openapi({ example: true }),
+                        data: quoteItemWithComponentsSchema,
+                        message: z.string().openapi({ example: "Pre-approved quote item and components created successfully" }),
+                    }),
+                },
+            },
+        },
+        400: { $ref: "#/components/responses/missingQuoteIdError" },
+        401: {
+            description: "Authentication failed or because the authenticated user no longer exists",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
+                        invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
+                        accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
+                        authenticatedUserNoLongerExists: { $ref: "#/components/examples/authenticatedUserNoLongerExists" },
+                    },
+                },
+            },
+        },
+        404: { $ref: "#/components/responses/quoteNotFoundError" },
+        409: { $ref: "#/components/responses/createPreApprovedQuoteItemAndComponentsConflictError" },
+        422: { $ref: "#/components/responses/createPreApprovedQuoteItemAndComponentsValidationError" },
+        500: { $ref: "#/components/responses/internalError" },
+    }
+});
+router.post("/quotes/:id/pre-approved/items", checkAccessToken, authorize("ADMIN", "ATTENDANT"), validate(createPreApprovedQuoteItemAndComponentsSchema), serviceOrderController.createPreApprovedQuoteItemAndComponents);
+
+registry.registerPath({
+    tags: ["Quote"],
+    method: "post",
+    path: "/service-orders/quotes/{id}/pre-approved/finalize",
+    summary: "Finalize a pre-approved quote (requires ADMIN or ATTENDANT role)",
+    security: [{ bearerAuth: [] }],
+    request: {
+        params: z.object({ id: z.string() }),
+    },
+    responses: {
+        200: {
+            description: "Pre-approved quote finalized successfully",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        success: z.boolean().openapi({ example: true }),
+                        message: z.string().openapi({ example: "Pre-approved quote finalized successfully" }),
+                    }),
+                },
+            },
+        },
+        400: { $ref: "#/components/responses/missingQuoteIdError" },
+        401: {
+            description: "Authentication failed or because the authenticated user no longer exists",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
+                        invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
+                        accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
+                        authenticatedUserNoLongerExists: { $ref: "#/components/examples/authenticatedUserNoLongerExists" },
+                    },
+                },
+            },
+        },
+        404: { $ref: "#/components/responses/quoteOrServiceOrderNotFoundError" },
+        409: { $ref: "#/components/responses/finalizePreApprovedQuoteConflictError" },
+        500: { $ref: "#/components/responses/internalError" },
+    }
+});
+router.post("/quotes/:id/pre-approved/finalize", checkAccessToken, authorize("ADMIN", "ATTENDANT"), serviceOrderController.finalizePreApprovedQuote);
 
 // GET 
 registry.registerPath({
@@ -309,7 +670,7 @@ registry.registerPath({
 router.get("/diagnoses/:id", checkAccessToken, serviceOrderController.getDiagnosisById);
 
 registry.registerPath({
-    tags: ["Findings"],
+    tags: ["Diagnosis"],
     method: "get",
     path: "/service-orders/diagnoses/{id}/findings",
     summary: "Get findings by diagnosis ID",
@@ -348,6 +709,170 @@ registry.registerPath({
     }
 });
 router.get("/diagnoses/:id/findings", checkAccessToken, serviceOrderController.listFindingsByDiagnosisId);
+
+registry.registerPath({
+    tags: ["Quote"],
+    method: "get",
+    path: "/service-orders/{id}/quotes",
+    summary: "List quotes by service order ID",
+    security: [{ bearerAuth: [] }],
+    request: {
+        params: z.object({ id: z.string() }),
+    },
+    responses: {
+        200: {
+            description: "Quotes retrieved successfully",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        success: z.boolean().openapi({ example: true }),
+                        data: z.array(quoteSchema),
+                    }),
+                },
+            },
+        },
+        400: { $ref: "#/components/responses/missingServiceOrderIdError" },
+        401: {
+            description: "Missing, invalid or expired access token",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
+                        invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
+                        accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
+                    },
+                },
+            },
+        },
+        404: { $ref: "#/components/responses/serviceOrderNotFoundError" },
+        500: { $ref: "#/components/responses/internalError" },
+    }
+});
+router.get("/:id/quotes", checkAccessToken, serviceOrderController.listQuotesByServiceOrderId);
+
+registry.registerPath({
+    tags: ["Quote"],
+    method: "get",
+    path: "/service-orders/quotes/{id}",
+    summary: "Get quote by ID",
+    security: [{ bearerAuth: [] }],
+    request: {
+        params: z.object({ id: z.string() }),
+    },
+    responses: {
+        200: {
+            description: "Quote retrieved successfully",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        success: z.boolean().openapi({ example: true }),
+                        data: quoteSchema,
+                    }),
+                },
+            },
+        },
+        400: { $ref: "#/components/responses/missingQuoteIdError" },
+        401: {
+            description: "Missing, invalid or expired access token",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
+                        invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
+                        accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
+                    },
+                },
+            },
+        },
+        404: { $ref: "#/components/responses/quoteNotFoundError" },
+        500: { $ref: "#/components/responses/internalError" },
+    }
+});
+router.get("/quotes/:id", checkAccessToken, serviceOrderController.getQuoteById);
+
+registry.registerPath({
+    tags: ["Quote"],
+    method: "get",
+    path: "/service-orders/quote-items/{id}",
+    summary: "Get quote item by ID",
+    security: [{ bearerAuth: [] }],
+    request: {
+        params: z.object({ id: z.string() }),
+    },
+    responses: {
+        200: {
+            description: "Quote items retrieved successfully",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        success: z.boolean().openapi({ example: true }),
+                        data: quoteItemWithComponentsSchema,
+                    }),
+                },
+            },
+        },
+        400: { $ref: "#/components/responses/missingQuoteItemIdError" },
+        401: {
+            description: "Missing, invalid or expired access token",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
+                        invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
+                        accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
+                    },
+                },
+            },
+        },
+        404: { $ref: "#/components/responses/quoteItemNotFoundError" },
+        500: { $ref: "#/components/responses/internalError" },
+    }
+});
+router.get("/quote-items/:id", checkAccessToken, serviceOrderController.getQuoteItemById);
+
+registry.registerPath({
+    tags: ["Quote"],
+    method: "get",
+    path: "/service-orders/quotes/{id}/items",
+    summary: "List quote items by quote ID",
+    security: [{ bearerAuth: [] }],
+    request: {
+        params: z.object({ id: z.string() }),
+    },
+    responses: {
+        200: {
+            description: "Quote items retrieved successfully",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        success: z.boolean().openapi({ example: true }),
+                        data: z.array(quoteItemWithComponentsSchema),
+                    }),
+                },
+            },
+        },
+        400: { $ref: "#/components/responses/missingQuoteIdError" },
+        401: {
+            description: "Missing, invalid or expired access token",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
+                        invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
+                        accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
+                    },
+                },
+            },
+        },
+        404: { $ref: "#/components/responses/quoteNotFoundError" },
+        500: { $ref: "#/components/responses/internalError" },
+    }
+});
+router.get("/quotes/:id/items", checkAccessToken, serviceOrderController.listQuoteItemsWithComponentsByQuoteId);
 
 // PATCH
 registry.registerPath({
@@ -397,7 +922,7 @@ registry.registerPath({
 router.patch("/:id/cancel", checkAccessToken, authorize("ADMIN", "ATTENDANT"), validate(cancelServiceOrderSchema), serviceOrderController.cancelServiceOrder);
 
 registry.registerPath({
-    tags: ["Findings"],
+    tags: ["Diagnosis"],
     method: "patch",
     path: "/service-orders/findings/{id}",
     summary: "Update findings by ID (requires ADMIN or TECHNICIAN role)",
@@ -506,9 +1031,99 @@ registry.registerPath({
 });
 router.patch("/diagnoses/:id/complete", checkAccessToken, authorize("ADMIN", "TECHNICIAN"), validate(completeDiagnosisSchema), serviceOrderController.completeDiagnosis);
 
+registry.registerPath({
+    tags: ["Quote"],
+    method: "patch",
+    path: "/service-orders/quote-items/{id}",
+    summary: "Update quote item by ID (requires ADMIN or ATTENDANT role)",
+    security: [{ bearerAuth: [] }],
+    request: {
+        params: z.object({ id: z.string() }),
+        body: {
+            content: { "application/json": { schema: updateQuoteItemAndComponentsSchema } },
+        },
+    },
+    responses: {
+        200: {
+            description: "Quote items updated successfully",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        success: z.boolean().openapi({ example: true }),
+                        data: quoteItemWithComponentsSchema,
+                        message: z.string().openapi({ example: "Quote items updated successfully" }),
+                    }),
+                },
+            },
+        },
+        400: { $ref: "#/components/responses/missingQuoteItemIdError" },
+        401: {
+            description: "Authentication failed or because the authenticated user no longer exists",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
+                        invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
+                        accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
+                        authenticatedUserNoLongerExists: { $ref: "#/components/examples/authenticatedUserNoLongerExists" },
+                    },
+                },
+            },
+        },
+        404: { $ref: "#/components/responses/updateQuoteItemAndComponentsNotFoundError" },
+        409: { $ref: "#/components/responses/updateQuoteItemAndComponentsConflictError" },
+        422: { $ref: "#/components/responses/updateQuoteItemAndComponentsValidationError" },
+        500: { $ref: "#/components/responses/internalError" },
+    }
+});
+router.patch("/quote-items/:id", checkAccessToken, authorize("ADMIN", "ATTENDANT"), validate(updateQuoteItemAndComponentsSchema), serviceOrderController.updateQuoteItemAndComponents);
+
+registry.registerPath({
+    tags: ["Quote"],
+    method: "patch",
+    path: "/service-orders/quotes/{id}/submit",
+    summary: "Request quote submission (requires ADMIN or ATTENDANT role)",
+    security: [{ bearerAuth: [] }],
+    request: {
+        params: z.object({ id: z.string() }),
+    },
+    responses: {
+        200: {
+            description: "Quote submission requested successfully",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        success: z.boolean().openapi({ example: true }),
+                        message: z.string().openapi({ example: "Quote submission requested successfully" }),
+                    }),
+                },
+            },
+        },
+        400: { $ref: "#/components/responses/missingQuoteIdError" },
+        401: {
+            description: "Missing, invalid or expired access token",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
+                        invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
+                        accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
+                    },
+                },
+            },
+        },
+        404: { $ref: "#/components/responses/quoteNotFoundError" },
+        409: { $ref: "#/components/responses/requestQuoteSubmissionConflictError" },
+        500: { $ref: "#/components/responses/internalError" },
+    }
+});
+router.patch("/quotes/:id/submit", checkAccessToken, authorize("ADMIN", "ATTENDANT"), serviceOrderController.requestQuoteSubmission);
+
 // DELETE
 registry.registerPath({
-    tags: ["Findings"],
+    tags: ["Diagnosis"],
     method: "delete",
     path: "/service-orders/findings/{id}",
     summary: "Delete findings by ID (requires ADMIN or TECHNICIAN role)",
@@ -562,5 +1177,61 @@ registry.registerPath({
     }
 });
 router.delete("/findings/:id", checkAccessToken, authorize("ADMIN", "TECHNICIAN"), serviceOrderController.deleteFinding);
+
+registry.registerPath({
+    tags: ["Quote"],
+    method: "delete",
+    path: "/service-orders/quote-items/{id}",
+    summary: "Delete quote item by ID (requires ADMIN or ATTENDANT role)",
+    security: [{ bearerAuth: [] }],
+    request: {
+        params: z.object({ id: z.string() }),
+    },
+    responses: {
+        200: {
+            description: "Quote item successfully deleted",
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        success: z.boolean().openapi({ example: true }),
+                        message: z.string().openapi({ example: "Quote item successfully deleted" }),
+                    }),
+                },
+            },
+        },
+        400: { $ref: "#/components/responses/missingQuoteItemIdError" },
+        401: {
+            description: "Missing, invalid or expired access token",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                    examples: {
+                        missingAccessToken: { $ref: "#/components/examples/missingAccessToken" },
+                        invalidAccessToken: { $ref: "#/components/examples/invalidAccessToken" },
+                        accessTokenExpired: { $ref: "#/components/examples/accessTokenExpired" },
+                    },
+                },
+            },
+        },
+        404: { $ref: "#/components/responses/quoteItemNotFoundError" },
+        409: {
+            description: "Quote is no longer in DRAFT status",
+            content: {
+                "application/json": {
+                    schema: { $ref: "#/components/schemas/Error" },
+                    example: {
+                        success: false,
+                        error: {
+                            code: "CONFLICT",
+                            message: "Quote is no longer in DRAFT status",
+                        },
+                    },
+                },
+            },
+        },
+        500: { $ref: "#/components/responses/internalError" },
+    }
+});
+router.delete("/quote-items/:id", checkAccessToken, authorize("ADMIN", "ATTENDANT"), serviceOrderController.deleteQuoteItem);
 
 export default router;
