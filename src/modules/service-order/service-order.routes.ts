@@ -302,9 +302,6 @@ registry.registerPath({
     security: [{ bearerAuth: [] }],
     request: {
         params: z.object({ id: z.string() }),
-        body: {
-            content: { "application/json": { schema: createQuoteItemAndComponentsSchema } },
-        },
     },
     responses: {
         201: {
@@ -343,13 +340,13 @@ router.post("/quotes/:id/revise", checkAccessToken, authorize("ADMIN", "ATTENDAN
 registry.registerPath({
     tags: ["Quote"],
     method: "post",
-    path: "/service-orders/quotes/{id}quote-decision",
+    path: "/service-orders/quotes/{id}/quote-decision",
     summary: "Submit a quote decision (requires ADMIN or ATTENDANT role)",
     security: [{ bearerAuth: [] }],
     request: {
         params: z.object({ id: z.string() }),
         body: {
-            content: { "application/json": { schema: createQuoteItemAndComponentsSchema } },
+            content: { "application/json": { schema: quoteDecisionSchema } },
         },
     },
     responses: {

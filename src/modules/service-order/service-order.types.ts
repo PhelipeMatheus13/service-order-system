@@ -190,7 +190,6 @@ interface ReviseQuoteInput {
     revisedById: string
 }
 
-
 interface QuoteDecisionInput {
     quoteId: string,
     decisionRegisteredById: string,
