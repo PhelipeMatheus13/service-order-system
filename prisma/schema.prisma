@@ -109,6 +109,7 @@ model User {
   quoteCreatedBy               Quote[]                     @relation("QuoteCreatedBy")
   quoteItemCreatedBy           QuoteItem[]                 @relation("QuoteItemCreatedBy")
   quoteItemUpdatedBy           QuoteItem[]                 @relation("QuoteItemUpdatedBy")
+  serviceExecutions            ServiceExecutions[]
 
   @@index([createdAt(sort: Desc)])
   @@map("users")
@@ -223,6 +224,7 @@ model ServiceOrder {
   serviceOrderStatusHistories ServiceOrderStatusHistory[]
   diagnosis                   Diagnosis?
   quotes                      Quote[]
+  serviceExecutions           ServiceExecutions[]
 
   @@index([customerId])
   @@index([deviceId])
@@ -329,6 +331,7 @@ model QuoteItem {
   createdBy           User                 @relation("QuoteItemCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   updatedBy           User?                @relation("QuoteItemUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
   quoteItemComponents QuoteItemComponent[]
+  executedItems       ExecutedItems[]
 
   @@index([quoteId])
   @@index([findingId])
@@ -364,4 +367,34 @@ model OutboxQuote {
   consumedAt  DateTime?          @map("consumed_at") @db.Timestamptz()
 
   @@map("outbox_quotes")
+}
+
+model ServiceExecutions {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  serviceOrderId String    @map("service_order_id") @db.Uuid
+  performedById  String    @map("performed_by") @db.Uuid
+  startedAt      DateTime  @default(now()) @map("started_at") @db.Timestamptz()
+  completedAt    DateTime? @map("completed_at") @db.Timestamptz()
+
+  serviceOrder  ServiceOrder    @relation(fields: [serviceOrderId], references: [id], onDelete: Cascade)
+  performedBy   User            @relation(fields: [performedById], references: [id], onDelete: Restrict)
+  executedItems ExecutedItems[]
+
+  @@index([serviceOrderId])
+  @@index([performedById])  
+  @@map("service_executions")
+}
+
+model ExecutedItems {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  serviceExecutionId String    @map("service_execution_id") @db.Uuid
+  quoteItemId        String    @unique @map("quote_item_id") @db.Uuid
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  completedAt        DateTime? @map("completed_at") @db.Timestamptz()
+
+  serviceExecution ServiceExecutions @relation(fields: [serviceExecutionId], references: [id], onDelete: Cascade)
+  quoteItem        QuoteItem         @relation(fields: [quoteItemId], references: [id], onDelete: Cascade)
+
+  @@index([serviceExecutionId])
+  @@map("executed_items")
 }
